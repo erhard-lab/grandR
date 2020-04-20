@@ -1,0 +1,21 @@
+Package: grandR
+Version: 0.1
+Date: 2020-04-01
+Title: Grand3 R package
+Description: Downstream analysis for (sc-) SLAM/TimeLapse/TUC-seq experiments
+Author: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
+Maintainer: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
+License: Apache License (>= 2.0)
+Depends: stats,
+    ggplot2,
+    cowplot,
+    labeling,
+    scales,
+    reshape2,
+    plyr,
+    lfc,
+    gsl
+Suggests: knitr,
+    rmarkdown,
+    DESeq2,
+    SummarizedExperiment
