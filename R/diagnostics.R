@@ -13,13 +13,13 @@ PlotMismatchPositionForCondition.grandR=function(data,...) {
 
 
 
-PlotMismatchPositionForCondition.data.frame=function(tab,condition,clip=c(Inferred1=NA,Inferred2=NA,Used1=NA,Used2=NA),Sense=NA,Category=NA,Corrected=NA) {
+PlotMismatchPositionForCondition.data.frame=function(tab,condition,clip=NA,Sense=NA,Category=NA,Corrected=NA) {
 	if (!is.na(Sense)) tab=tab[tab$Sense==Sense,]
 	if (!is.na(Category)) tab=tab[tab$Category==Category,]
 	if (!is.na(Corrected)) tab=tab[tab$Corrected==Corrected,]
 	tab$`Mismatch frequency`=tab[,condition]
-	max1=max(tab$Position[tab$First.read==1])
-	max2=max(tab$Position[tab$First.read==1])
+	max1=max(c(0,tab$Position[tab$First.read==1]))
+	max2=max(c(0,tab$Position[tab$First.read==0]))
 	offset=round(max1*1.2)
 	tab$x=ifelse(tab$First.read==1,tab$Position,max2-tab$Position+offset)
 	tab$Corrected=factor(c("Uncorrected","Retained")[tab$Corrected+1],levels=c("Retained","Uncorrected"))
@@ -36,11 +36,21 @@ PlotMismatchPositionForCondition.data.frame=function(tab,condition,clip=c(Inferr
 	
 	ymax=quantile(tab$`Mismatch frequency`,0.99,na.rm=T)*1.2
 	g=ggplot(tab,aes(x,`Mismatch frequency`,color=SenseCat,linetype=factor(Corrected),group=interaction(SenseCat,Corrected)))
-	if (!is.na(clip["Used1"])) g=g+geom_rect(xmin=clip["Used1"],xmax=max1,ymin=0,ymax=Inf,color="gray",fill="gray")
-	if (!is.na(clip["Used2"])) g=g+geom_rect(xmin=offset,xmax=max2+offset-clip["Used2"],ymin=0,ymax=Inf,color="gray",fill="gray")
-	if (!is.na(clip["Inferred1"])) g=g+geom_vline(xintercept=clip["Inferred1"])
-	if (!is.na(clip["Inferred2"])) g=g+geom_vline(xintercept=max2-clip["Inferred2"]+offset)
-	g=g+geom_line()+facet_grid(Read~Genomic)+scale_linetype_discrete(NULL,guide=if(length(unique(tab$Corrected))<=1) F else guide_legend())+scale_color_brewer(NULL,palette="Dark2")+scale_x_continuous(breaks=c(lab1,max2-lab2+offset),labels=c(lab1,lab2))+geom_vline(xintercept=max(tab$x+1)/2,color="gray")+coord_cartesian(ylim=c(0,ymax))+xlab(NULL)+ggtitle(condition)
+	if (!is.na(clip["Used 5p1"]) || !is.na(clip["Used 3p1"])) {
+		xmin=if (!is.na(clip["Used 5p1"])) clip["Used 5p1"]+1 else 1
+		xmax=if (!is.na(clip["Used 3p1"])) max1-clip["Used 3p1"] else max1
+		g=g+geom_rect(xmin=xmin,xmax=xmax,ymin=0,ymax=Inf,color="gray",fill="gray")
+	}
+	if (max2>0 && (!is.na(clip["Used 5p2"]) || !is.na(clip["Used 3p2"]))) {
+		xmin=if (!is.na(clip["Used 3p2"])) clip["Used 3p2"]+offset else offset
+		xmax=if (!is.na(clip["Used 5p2"])) max2+offset-clip["Used 5p2"]-1 else max2+offset
+		g=g+geom_rect(xmin=xmin,xmax=xmax,ymin=0,ymax=Inf,color="gray",fill="gray")
+	}
+	if (!is.na(clip["Inferred 5p1"])) g=g+geom_vline(xintercept=clip["Inferred 5p1"]+1)
+	if (!is.na(clip["Inferred 3p1"])) g=g+geom_vline(xintercept=max1-clip["Inferred 3p1"])
+	if (max2>0 && !is.na(clip["Inferred 5p2"])) g=g+geom_vline(xintercept=max2-clip["Inferred 5p2"]+offset-1)
+	if (max2>0 && !is.na(clip["Inferred 3p2"])) g=g+geom_vline(xintercept=offset+clip["Inferred 3p2"])
+	g=g+geom_line()+facet_grid(Read~Genomic)+scale_linetype_discrete(NULL,guide=if(length(unique(tab$Corrected))<=1) F else guide_legend())+scale_color_brewer(NULL,palette="Dark2")+scale_x_continuous(breaks=c(lab1,max2-lab2+offset),labels=c(lab1,lab2))+coord_cartesian(ylim=c(0,ymax))+xlab(NULL)+ggtitle(condition)
 	g
 }
 
@@ -59,8 +69,8 @@ PlotMismatchPositionForType.data.frame=function(tab,genomic,read,clip=c(Inferred
 	if (!is.na(Sense)) tab=tab[tab$Sense==Sense,]
 	if (!is.na(Category)) tab=tab[tab$Category==Category,]
 	if (!is.na(Corrected)) tab=tab[tab$Corrected==Corrected,]
-	max1=max(tab$Position[tab$First.read==1])
-	max2=max(tab$Position[tab$First.read==1])
+	max1=max(c(0,tab$Position[tab$First.read==1]))
+	max2=max(c(0,tab$Position[tab$First.read==0]))
 	offset=round(max1*1.2)
 	tab$Corrected=factor(c("Uncorrected","Retained")[tab$Corrected+1],levels=c("Retained","Uncorrected"))
 	tab$Sense=factor(c("Antisense","Sense")[tab$Sense+1],levels=c("Sense","Antisense"))
@@ -77,13 +87,23 @@ PlotMismatchPositionForType.data.frame=function(tab,genomic,read,clip=c(Inferred
 	lab1=labeling::extended(1,max1,5)
 	lab2=labeling::extended(1,max2,5)
 	
-	ymax=quantile(tab$`Mismatch frequency`,0.99,na.rm=T)*1.2
+	ymax=max(ddply(tab,.(Sample),function(s) quantile(s$`Mismatch frequency`,0.95,na.rm=TRUE)*1.2)[,2])
 	g=ggplot(tab,aes(x,`Mismatch frequency`,color=Sample,linetype=factor(Corrected)))
-	if (!is.na(clip["Used1"])) g=g+geom_rect(xmin=clip["Used1"]+1,xmax=max1,ymin=0,ymax=Inf,color="gray",fill="gray")
-	if (!is.na(clip["Used2"])) g=g+geom_rect(xmin=offset,xmax=max2+offset-clip["Used2"]-1,ymin=0,ymax=Inf,color="gray",fill="gray")
-	if (!is.na(clip["Inferred1"])) g=g+geom_vline(xintercept=clip["Inferred1"]+1)
-	if (!is.na(clip["Inferred2"])) g=g+geom_vline(xintercept=max2-clip["Inferred2"]-1+offset)
-	g=g+geom_line()+facet_grid(Category~Sense)+scale_linetype_discrete(NULL,guide=if(length(unique(tab$Corrected))<=1) F else guide_legend())+scale_x_continuous(breaks=c(lab1,max2-lab2+offset),labels=c(lab1,lab2))+geom_vline(xintercept=max(tab$x+1)/2,color="gray")+coord_cartesian(ylim=c(0,ymax))+xlab(NULL)+ggtitle(paste0(genomic,">",read))
+	if (!is.na(clip["Used 5p1"]) || !is.na(clip["Used 3p1"])) {
+		xmin=if (!is.na(clip["Used 5p1"])) clip["Used 5p1"]+1 else 1
+		xmax=if (!is.na(clip["Used 3p1"])) max1-clip["Used 3p1"] else max1
+		g=g+geom_rect(xmin=xmin,xmax=xmax,ymin=0,ymax=Inf,color="gray",fill="gray")
+	}
+	if (max2>0 && (!is.na(clip["Used 5p2"]) || !is.na(clip["Used 3p2"]))) {
+		xmin=if (!is.na(clip["Used 3p2"])) clip["Used 3p2"]+offset else offset
+		xmax=if (!is.na(clip["Used 5p2"])) max2+offset-clip["Used 5p2"]-1 else max2+offset
+		g=g+geom_rect(xmin=xmin,xmax=xmax,ymin=0,ymax=Inf,color="gray",fill="gray")
+	}
+	if (!is.na(clip["Inferred 5p1"])) g=g+geom_vline(xintercept=clip["Inferred 5p1"]+1)
+	if (!is.na(clip["Inferred 3p1"])) g=g+geom_vline(xintercept=max1-clip["Inferred 3p1"])
+	if (max2>0 && !is.na(clip["Inferred 5p2"])) g=g+geom_vline(xintercept=max2-clip["Inferred 5p2"]+offset-1)
+	if (max2>0 && !is.na(clip["Inferred 3p2"])) g=g+geom_vline(xintercept=offset+clip["Inferred 3p2"])
+	g=g+geom_line()+facet_grid(Category~Sense)+scale_linetype_discrete(NULL,guide=if(length(unique(tab$Corrected))<=1) F else guide_legend())+scale_x_continuous(breaks=c(lab1,max2-lab2+offset),labels=c(lab1,lab2))+coord_cartesian(ylim=c(0,ymax))+xlab(NULL)+ggtitle(paste0(genomic,">",read))
 	g
 }
 
@@ -98,7 +118,7 @@ PlotMismatchFreq.grandR=function(data,...) {
 	subr$Semantic=factor(as.character(subr$Semantic),levels=subr$Semantic)
 	t=merge(tab,subr,by="Subread")
 
-	PlotMismatchPositionForType(t,...)
+	PlotMismatchFreq(t,...)
 }
 
 PlotMismatchFreq.data.frame=function(tab,category,ncond.boxplot=120) {
@@ -123,12 +143,18 @@ PlotModelNtr.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelNtr(t,label,...)
 }
-PlotModelNtr.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
-	if ("Lower TB-Binom ntr" %in% names(tab)) {
-		ggplot(tab,aes(Condition,`TB-Binom ntr`,color=Subread,ymin=`Lower TB-Binom ntr`,ymax=`Upper TB-Binom ntr`))+geom_errorbar(width=0.1,position=position_dodge(w=0.2))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab$`Upper TB-Binom ntr`)))+ylab("Global NTR")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+PlotModelNtr.data.frame=function(tab,label="4sU",estimator="Separate",model=c("Binom","TB-Binom")) {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
+
+	param=paste(model[1],"ntr")	
+	lower=paste("Lower",model[1],"ntr")	
+	upper=paste("Upper",model[1],"ntr")	
+	qq=function(s) paste0("`",s,"`")
+
+	if (lower %in% names(tab)) {
+		ggplot(tab,aes_string("Condition",qq(param),color="Subread",ymin=qq(lower),ymax=qq(upper)))+geom_errorbar(width=0.1,position=position_dodge(w=0.2))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("Global NTR")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}else{
-		ggplot(tab,aes(Condition,`TB-Binom ntr`,color=Subread))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab$`TB-Binom ntr`)))+ylab("Global NTR")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+		ggplot(tab,aes_string("Condition",qq(param),color="Subread"))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("Global NTR")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}
 }
 
@@ -140,18 +166,37 @@ PlotModelConv.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelConv(t,label,...)
 }
-PlotModelConv.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
-	tab2=tab
-	tab2$`TB-Binom p.mconv`=etbeta(tab2$`TB-Binom p.err`,tab2$`TB-Binom p.mconv`,exp(tab$`TB-Binom shape`),exp(-tab$`TB-Binom shape`))
-	if ("Lower TB-Binom p.mconv" %in% names(tab)) {
-		tab2$`Lower TB-Binom p.mconv`=etbeta(tab2$`Lower TB-Binom p.err`,tab2$`Lower TB-Binom p.mconv`,exp(tab2$`Lower TB-Binom shape`),exp(-tab2$`Lower TB-Binom shape`))
-		tab2$`Upper TB-Binom p.mconv`=etbeta(tab2$`Upper TB-Binom p.err`,tab2$`Upper TB-Binom p.mconv`,exp(tab2$`Upper TB-Binom shape`),exp(-tab2$`Upper TB-Binom shape`))
-		tab=rbind(cbind(Type="Max",tab),cbind(Type="Mean",tab2))
-		ggplot(tab,aes(Condition,`TB-Binom p.mconv`,color=Subread,shape=Type,ymin=`Lower TB-Binom p.mconv`,ymax=`Upper TB-Binom p.mconv`))+geom_errorbar(width=0.1,position=position_dodge(w=0.2))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab$`Upper TB-Binom p.mconv`)))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_shape_manual(NULL,values=c(Max=1,Mean=19))
+PlotModelConv.data.frame=function(tab,label="4sU",estimator="Separate",model=c("Binom","TB-Binom")) {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
+
+	if (model[1]=="TB-Binom") {
+		param=paste(model[1],"p.mconv")	
+		lower=paste("Lower",model[1],"p.mconv")	
+		upper=paste("Upper",model[1],"p.mconv")	
+		qq=function(s) paste0("`",s,"`")
+
+		tab2=tab
+		tab2$`TB-Binom p.mconv`=etbeta(tab2$`TB-Binom p.err`,tab2$`TB-Binom p.mconv`,exp(tab$`TB-Binom shape`),exp(-tab$`TB-Binom shape`))
+		if (lower %in% names(tab)) {
+			tab2$`Lower TB-Binom p.mconv`=etbeta(tab2$`Lower TB-Binom p.err`,tab2$`Lower TB-Binom p.mconv`,exp(tab2$`Lower TB-Binom shape`),exp(-tab2$`Lower TB-Binom shape`))
+			tab2$`Upper TB-Binom p.mconv`=etbeta(tab2$`Upper TB-Binom p.err`,tab2$`Upper TB-Binom p.mconv`,exp(tab2$`Upper TB-Binom shape`),exp(-tab2$`Upper TB-Binom shape`))
+			tab=rbind(cbind(Type="Max",tab),cbind(Type="Mean",tab2))
+			ggplot(tab,aes_string("Condition",qq(param),color="Subread",shape="Type",ymin=qq(lower),ymax=qq(upper)))+geom_errorbar(width=0.1,position=position_dodge(w=0.2))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_shape_manual(NULL,values=c(Max=1,Mean=19))
+		} else {
+			tab=rbind(cbind(Type="Max",tab),cbind(Type="Mean",tab2))
+			ggplot(tab,aes_string("Condition",qq(param),color="Subread",shape="Type"))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_shape_manual(NULL,values=c(Max=1,Mean=19))
+		}
 	} else {
-		tab=rbind(cbind(Type="Max",tab),cbind(Type="Mean",tab2))
-		ggplot(tab,aes(Condition,`TB-Binom p.mconv`,color=Subread,shape=Type))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab$`TB-Binom p.mconv`)))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_shape_manual(NULL,values=c(Max=1,Mean=19))
+		param=paste(model[1],"p.conv")	
+		lower=paste("Lower",model[1],"p.conv")	
+		upper=paste("Upper",model[1],"p.conv")	
+		qq=function(s) paste0("`",s,"`")
+
+		if (lower %in% names(tab)) {
+			ggplot(tab,aes_string("Condition",qq(param),color="Subread",ymin=qq(lower),ymax=qq(upper)))+geom_errorbar(width=0.1,position=position_dodge(w=0.2))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+		} else {
+			ggplot(tab,aes_string("Condition",qq(param),color="Subread"))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+		}
 	}
 }
 
@@ -162,12 +207,18 @@ PlotModelErr.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelErr(t,label,...)
 }
-PlotModelErr.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
-	if ("Lower TB-Binom p.err" %in% names(tab)) {
-		ggplot(tab,aes(Condition,`TB-Binom p.err`,color=Subread,ymin=`Lower TB-Binom p.err`,ymax=`Upper TB-Binom p.err`))+geom_errorbar(width=0.1,position=position_dodge(w=0.2))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab$`Upper TB-Binom p.err`)))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+PlotModelErr.data.frame=function(tab,label="4sU",estimator="Separate",model=c("Binom","TB-Binom")) {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
+
+	param=paste(model[1],"p.err")	
+	lower=paste("Lower",model[1],"p.err")
+	upper=paste("Upper",model[1],"p.err")	
+	qq=function(s) paste0("`",s,"`")
+
+	if (lower %in% names(tab)) {
+		ggplot(tab,aes_string("Condition",qq(param),color="Subread",ymin=qq(lower),ymax=qq(upper)))+geom_errorbar(width=0.1,position=position_dodge(w=0.2))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}else{
-		ggplot(tab,aes(Condition,`TB-Binom p.err`,color=Subread))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab$`TB-Binom p.err`)))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+		ggplot(tab,aes_string("Condition",qq(param),color="Subread"))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}
 }
 
@@ -179,8 +230,8 @@ PlotModelShape.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelShape(t,label,...)
 }
-PlotModelShape.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
+PlotModelShape.data.frame=function(tab,label="4sU",estimator="Separate") {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 	if ("Lower TB-Binom shape" %in% names(tab)) {
 		ggplot(tab,aes(Condition,`TB-Binom shape`,color=Subread,ymin=`Lower TB-Binom shape`,ymax=`Upper TB-Binom shape`))+geom_errorbar(width=0.1,position=position_dodge(w=0.2))+geom_point(position=position_dodge(w=0.2))+ylab("shape")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}else{
@@ -197,8 +248,8 @@ PlotModelLabelTimeCourse.grandR=function(data,label="4sU",...) {
 	e=read.tsv(paste0(data$prefix,".experimentalDesign.tsv"))
 	PlotModelLabelTimeCourse(t,e,label,...)
 }
-PlotModelLabelTimeCourse.data.frame=function(tab,e,label="4sU") {
-	tab=tab[tab$Label==label,]
+PlotModelLabelTimeCourse.data.frame=function(tab,e,label="4sU",estimator="Separate") {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 	e$Condition=if (all(is.na(e$Barcode))) e$Sample else paste(e$Sample,e$Barcode,sep="_")
 	e=cbind(Condition=e$Condition,e[,grep(label,names(e))])
 	names(e)=gsub(paste0(label," "),"",names(e))
@@ -220,9 +271,13 @@ PlotModelCompareErrPrior.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelCompareErrPrior(t,e,label,...)
 }
-PlotModelCompareErrPrior.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
-	ggplot(tab,aes((`Lower prior p.err`+`Upper prior p.err`)/2,`TB-Binom p.err`,color=Subread,xmin=`Lower prior p.err`,xmax=`Upper prior p.err`))+geom_point()+geom_errorbarh(height=0.2)+geom_abline()+scale_color_brewer(NULL,palette="Dark2")
+PlotModelCompareErrPrior.data.frame=function(tab,label="4sU",estimator="Separate",model=c("Binom","TB-Binom")) {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
+
+	param=paste(model[1],"p.err")	
+	qq=function(s) paste0("`",s,"`")
+
+	ggplot(tab,aes_string("(`Lower prior p.err`+`Upper prior p.err`)/2",qq(param),color="Subread",xmin="`Lower prior p.err`",xmax="`Upper prior p.err`"))+geom_point()+geom_errorbarh()+geom_abline()+scale_color_brewer(NULL,palette="Dark2")+xlab("Prior p.err")
 }
 
 PlotModelCompareNtr=function(x,...)  {
@@ -232,8 +287,8 @@ PlotModelCompareNtr.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelCompareNtr(t,e,label,...)
 }
-PlotModelCompareNtr.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
+PlotModelCompareNtr.data.frame=function(tab,label="4sU",estimator="Separate") {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 	ggplot(tab,aes(`Binom ntr`,`TB-Binom ntr`,color=Subread))+geom_point()+geom_abline()+scale_color_brewer(NULL,palette="Dark2")
 }
 
@@ -244,8 +299,8 @@ PlotModelCompareErr.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelCompareErr(t,e,label,...)
 }
-PlotModelCompareErr.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
+PlotModelCompareErr.data.frame=function(tab,label="4sU",estimator="Separate") {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 	ggplot(tab,aes(`Binom p.err`,`TB-Binom p.err`,color=Subread))+geom_point()+geom_abline()+scale_color_brewer(NULL,palette="Dark2")
 }
 
@@ -257,8 +312,8 @@ PlotModelCompareConv.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelCompareConv(t,e,label,...)
 }
-PlotModelCompareConv.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
+PlotModelCompareConv.data.frame=function(tab,label="4sU",estimator="Separate") {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 	ggplot(tab,aes(`Binom p.conv`,etbeta(`TB-Binom p.err`,`TB-Binom p.mconv`,exp(`TB-Binom shape`),exp(-`TB-Binom shape`)),color=Subread))+geom_point()+geom_abline()+scale_color_brewer(NULL,palette="Dark2")+ylab("Mean TB-Binom p.conv")
 }
 
@@ -270,8 +325,8 @@ PlotModelCompareLL.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
 	PlotModelCompareLL(t,e,label,...)
 }
-PlotModelCompareLL.data.frame=function(tab,label="4sU") {
-	tab=tab[tab$Label==label,]
+PlotModelCompareLL.data.frame=function(tab,label="4sU",estimator="Separate") {
+	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 	ggplot(tab,aes(Condition,`Binom log likelihood`-`TB-Binom log likelihood`,color=Subread))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(min(tab$`Binom log likelihood`-tab$`TB-Binom log likelihood`),0))+ylab("log likelihood ratio Binom/TB-Binom")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+geom_hline(yintercept=0)+geom_hline(yintercept=-qchisq(0.95,df=1),linetype=2)
 }
 
