@@ -74,7 +74,7 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,log=FALSE,log.x=log,log.y=log) 
 	g
 }
 
-PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC) {
+PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
 	w=GetData(data,"count",conditions=w4sU,table=T)[,1]
 	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,"count",conditions=no4sU,table=T)[,1]
 	ntr=GetData(data,"ntr",conditions=w4sU,table=T)[,1]
@@ -85,8 +85,7 @@ PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC) {
 
 	phl=comp.hl(ntr,1)	
 	df=data.frame(lfc=LFC.fun(w,n),PHL=phl)[ntr<1,]
-	df=df[df$PHL<quantile(df$PHL[is.finite(df$PHL)],0.8),]
-	df=df[df$PHL<24,]
+	df=df[df$PHL<quantile(df$PHL[is.finite(df$PHL)],hl.quantile),]
 	ggplot(df,aes(PHL,lfc,color=density2d(PHL, lfc, n = 100)))+
 			scale_color_viridis_c(name = "Density",guide=FALSE)+
 			geom_point(alpha=1)+
