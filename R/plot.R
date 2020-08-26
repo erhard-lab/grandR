@@ -3,17 +3,17 @@ Kinetics=function(a0,HL,steady) KineticsRates(a0,steady*log(2)/HL,log(2)/HL)
 KineticsRates=function(a0,s,d) function(t) (a0-s/d)*exp(-t*d)+s/d
 
 
-# Get density of points in 2 dimensions.
-# @param x A numeric vector.
-# @param y A numeric vector.
-# @param n Create a square n by n grid to compute density.
-# @return The density within each square.
-density.color=function(x, y, ...) {
-  use=is.finite(x+y)
-  d=MASS::kde2d(x[use], y[use], ...)
-  r=rep(NA,length(x))
-  r[use]=d$z[cbind(findInterval(x[use], d$x),findInterval(y[use], d$y))]
-  r
+density2d=function(x, y, facet=NULL, n=100) {
+    if (is.null(facet)) {
+        use=is.finite(x+y)
+        d=MASS::kde2d(x[use], y[use], n=n)
+        r=rep(NA,length(x))
+        r[use]=d$z[cbind(findInterval(x[use], d$x),findInterval(y[use], d$y))]
+        return(r)
+    }
+    re<-rep(NA,length(x))
+    for (f in unique(facet)) re[f==facet]=density2d(x[f==facet],y[f==facet],n=n)
+    re
 }
 
 
@@ -64,7 +64,7 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,log=FALSE,log.x=log,log.y=log) 
 	xlim=(quantile(df[,1]-xmean,pnorm(c(-2,2)))*1.5)+xmean
 	ylim=(quantile(df[,2]-ymean,pnorm(c(-2,2)))*1.5)+ymean
 
-	g=ggplot(df,aes(A,B,color=density.color(log(1+A), log(1+B), n = 100)))+
+	g=ggplot(df,aes(A,B,color=densit2d(log(1+A), log(1+B), n = 100)))+
 			geom_point()+
 			scale_color_viridis_c(name = "Density",guide=FALSE)+
 			xlab(dfnames[1])+ylab(dfnames[2])+
@@ -85,8 +85,9 @@ PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC) {
 
 	phl=comp.hl(ntr,1)	
 	df=data.frame(lfc=LFC.fun(w,n),PHL=phl)[ntr<1,]
-	df=df[df$PHL<quantile(df$PHL,0.8),]
-	ggplot(df,aes(PHL,lfc,color=density.color(PHL, lfc, n = 100)))+
+	df=df[df$PHL<quantile(df$PHL[is.finite(df$PHL)],0.8),]
+	df=df[df$PHL<24,]
+	ggplot(df,aes(PHL,lfc,color=density2d(PHL, lfc, n = 100)))+
 			scale_color_viridis_c(name = "Density",guide=FALSE)+
 			geom_point(alpha=1)+
 			geom_hline(yintercept=0)+
