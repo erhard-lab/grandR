@@ -22,7 +22,7 @@ tomat=function(m,names,cnames){
 
 GeneType=list(
 	mito=function(data) grepl("^MT-",data$Symbol,ignore.case=TRUE),
-	ERCC=function(data) grepl("ERCC",data$Gene),
+	ERCC=function(data) grepl("ERCC-[0-9]{5}",data$Gene),
 	Cellular=function(data) grepl("^ENS.*G\\d+$",data$Gene),
 	Unknown=function(data) rep(T,dim(data)[1])
 )
@@ -54,6 +54,10 @@ checknames=function(a,b){
 
 	if (verbose) cat("Reading files...\n")
 	data=read.delim(file,stringsAsFactors=FALSE,check.names=FALSE)
+	if (anyDuplicated(data$Gene)) {
+		warning("Duplicate gene names present, making unique!",call. = FALSE,immediate. = TRUE)
+		data$Gene=make.unique(data$Gene)
+	}
 	if (anyDuplicated(data$Symbol)) {
 		warning("Duplicate gene symbols present, making unique!",call. = FALSE,immediate. = TRUE)
 		data$Symbol=make.unique(data$Symbol)
@@ -124,12 +128,12 @@ grandR=function(prefix,gene.info,data,coldata) {
 dim.grandR=function(d) c(NumRows(d),NumCond(d))
 is.grandR <- function(x) inherits(x, "grandR")
 
-data.apply=function(data,fun,...) {
+data.apply=function(data,fun,gene.info=TRUE,...) {
 	re=list()
 	for (l1 in names(data$data)) {
 		re[[l1]]=fun(data$data[[l1]],...)
 	}
-	ngene.info=fun(data$gene.info,...)
+	ngene.info=if (gene.info) fun(data$gene.info,...) else data$gene.info
 	invisible(grandR(data$prefix,ngene.info,re,data$coldata))
 }
 
@@ -180,8 +184,10 @@ GetData=function(data,type,conditions=colnames(data$data$count),gene=1:NumRows(d
 		spl=strsplit(type,".",fixed=TRUE)[[1]]
 		if (length(spl)>1) {tno=spl[1]; type=spl[2];}
 		mf = switch(tolower(substr(tno,1,1)),t=1,n=data$data$ntr[gene,conditions],o=1-data$data$ntr[gene,conditions],stop(paste0(type," unknown!"))) 
+		conv=if (type=="count") function(m) {mode(m) <- "integer";m} else function(m) m
+
 		if (!(type %in% names(data$data))) stop(paste0(type," unknown!"))
-		if (length(gene)==1) data.frame(data$data[[tolower(type)]][gene,conditions]*mf) else as.data.frame(t(data$data[[tolower(type)]][gene,conditions]*mf))
+		if (length(gene)==1) data.frame(conv(data$data[[tolower(type)]][gene,conditions]*mf)) else as.data.frame(conv(t(data$data[[tolower(type)]][gene,conditions]*mf)))
 	}
 	re=as.data.frame(lapply(type,uno))
 	if(length(type)==1 && length(gene)==1) names(re)="Value" else if (length(type)==1) names(re)=og else if (length(gene)==1) names(re)=type else names(re)=paste0(rep(og,length(type))," ",rep(type,each=length(og)))
@@ -201,12 +207,29 @@ GetData=function(data,type,conditions=colnames(data$data$count),gene=1:NumRows(d
 	re
 }
 
+Normalize=function(data,sizeFactors=NULL,name="norm") {
+	if (is.null(sizeFactors)) sizeFactors=DESeq2::estimateSizeFactorsForMatrix(data$data$count)
+	data$data[[name]] = t(t(data$data$count)/sizeFactors)
+	data
+}
+
 FilterGenes=function(data,type='tpm',minval='1',mincond=NumCond(data)/2,use=NULL) {
 	if (is.null(use)) {
 		t=GetData(data,type=type,table=TRUE)
 		use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincond)
 	}
 	return(data.apply(data,function(t) t[use,]))
+}
+
+SwapSamples=function(data,s1,s2) {
+	i1=if(is.numeric(s1)) s1 else which(rownames(data$coldata)==s1)
+	i2=if(is.numeric(s2)) s2 else which(rownames(data$coldata)==s2)
+	return(data.apply(data,function(t) {
+		tmp=t[,i1]
+		t[,i1]=t[,i2]
+		t[,i2]=tmp
+		t
+	},gene.info=FALSE))
 }
 
 TestFilterGenes=function(data,type='tpm',minval='1',mincond=NumCond(data)/2,use=NULL) {

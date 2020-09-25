@@ -1,5 +1,36 @@
 
 
+CreateDESeq2<-function(data,Total=TRUE,New=FALSE,Old=FALSE, formula=~Sample*Type) {
+	cbindcheck=function(a,b) if (is.null(a)) b else cbind(a,b)
+	coldata=NULL
+	cnt=NULL
+	if (Total) {
+		coldata=rbind(coldata,cbind(data$coldata,data.frame(Type="Total")))
+		cnt=cbindcheck(cnt,GetData(data,"count",table = TRUE))
+	}
+	if (New) {
+		coldata=rbind(coldata,cbind(data$coldata,data.frame(Type="New")))
+		cnt=cbindcheck(cnt,GetData(data,"new.count",table = TRUE))
+	}
+	if (Old) {
+		coldata=rbind(coldata,cbind(data$coldata,data.frame(Type="Old")))
+		cnt=cbindcheck(cnt,GetData(data,"old.count",table = TRUE))
+	}
+	allzero=apply(cnt,2,function(v) all(v==0))
+	cnt=cnt[,!allzero]
+	coldata=droplevels(coldata[!allzero,])
+	for (i in 1:ncol(coldata)) {
+		if (is.factor(coldata[,i])) levels(coldata[,i]) = gsub("+","_P_",gsub("-","_M_",levels(coldata[,i]),fixed=TRUE),fixed=TRUE)
+	}
+	DESeq(DESeqDataSetFromMatrix(countData = cnt ,colData = coldata,design = formula))
+}
+
+CreateDESeq2NewOld<-function(data,...) CreateDESeq2(data,Total=FALSE,New=TRUE,Old=TRUE,...)
+CreateDESeq2New<-function(data,...) CreateDESeq2(data,Total=FALSE,New=TRUE,Old=FALSE,...)
+CreateDESeq2Old<-function(data,...) CreateDESeq2(data,Total=FALSE,New=FALSE,Old=TRUE,...)
+
+
+
 cnt=function(m) {
 	mode(m) <- "integer"
 	m
