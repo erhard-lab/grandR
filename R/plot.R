@@ -9,6 +9,7 @@ density2d=function(x, y, facet=NULL, n=100) {
         d=MASS::kde2d(x[use], y[use], n=n)
         r=rep(NA,length(x))
         r[use]=d$z[cbind(findInterval(x[use], d$x),findInterval(y[use], d$y))]
+	r=r/max(r,na.rm=T)
         return(r)
     }
     re<-rep(NA,length(x))
@@ -93,6 +94,23 @@ PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantil
 #			geom_smooth(method="loess")+
 			xlab("RNA half-life")+ylab("log FC 4sU/no4sU")+
 			scale_x_continuous(breaks=c())+
+			coord_cartesian(ylim=ylim)
+}
+
+PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
+	w=GetData(data,"count",conditions=w4sU,table=T)[,1]
+	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,"count",conditions=no4sU,table=T)[,1]
+	use=!is.na(w+n)
+	w=w[use]
+	n=n[use]
+
+	df=data.frame(lfc=LFC.fun(w,n),M=(log10(w+1)+log10(n+1))/2)
+	ggplot(df,aes(M,lfc,color=density2d(M, lfc, n = 100)))+
+			scale_color_viridis_c(name = "Density",guide=FALSE)+
+			geom_point(alpha=1)+
+			geom_hline(yintercept=0)+
+#			geom_smooth(method="loess")+
+			xlab("Mean expression")+ylab("log FC 4sU/no4sU")+
 			coord_cartesian(ylim=ylim)
 }
 

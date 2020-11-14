@@ -213,7 +213,7 @@ Normalize=function(data,sizeFactors=NULL,name="norm") {
 	data
 }
 
-FilterGenes=function(data,type='tpm',minval='1',mincond=NumCond(data)/2,use=NULL) {
+FilterGenes=function(data,type='tpm',minval=1,mincond=NumCond(data)/2,use=NULL) {
 	if (is.null(use)) {
 		t=GetData(data,type=type,table=TRUE)
 		use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincond)

@@ -1,20 +1,20 @@
 
 
-CreateDESeq2<-function(data,Total=TRUE,New=FALSE,Old=FALSE, formula=~Sample*Type) {
+CreateDESeq2<-function(data,Total=TRUE,New=FALSE,Old=FALSE, conditions=colnames(data$data$count), formula=~Sample*Type) {
 	cbindcheck=function(a,b) if (is.null(a)) b else cbind(a,b)
 	coldata=NULL
 	cnt=NULL
 	if (Total) {
-		coldata=rbind(coldata,cbind(data$coldata,data.frame(Type="Total")))
-		cnt=cbindcheck(cnt,GetData(data,"count",table = TRUE))
+		coldata=rbind(coldata,cbind(data$coldata[conditions,],data.frame(Type="Total")))
+		cnt=cbindcheck(cnt,GetData(data,"count",table = TRUE,conditions=conditions))
 	}
 	if (New) {
-		coldata=rbind(coldata,cbind(data$coldata,data.frame(Type="New")))
-		cnt=cbindcheck(cnt,GetData(data,"new.count",table = TRUE))
+		coldata=rbind(coldata,cbind(data$coldata[conditions,],data.frame(Type="New")))
+		cnt=cbindcheck(cnt,GetData(data,"new.count",table = TRUE,conditions=conditions))
 	}
 	if (Old) {
-		coldata=rbind(coldata,cbind(data$coldata,data.frame(Type="Old")))
-		cnt=cbindcheck(cnt,GetData(data,"old.count",table = TRUE))
+		coldata=rbind(coldata,cbind(data$coldata[conditions,],data.frame(Type="Old")))
+		cnt=cbindcheck(cnt,GetData(data,"old.count",table = TRUE,conditions=conditions))
 	}
 	allzero=apply(cnt,2,function(v) all(v==0))
 	cnt=cnt[,!allzero]
