@@ -468,5 +468,50 @@ table.MixMatrix.compare=function(mixmat,percentage=0.95,models=list()) {
 }
 
 
+shape.adjust=function(ntr,global.par) {
+    # how much of the new RNA measured at <labeling.time> has been made before t
+    perc=function(x,d) 1-(1-exp(-(1-x)*d))/(1-exp(-1*d))
+    
+    # cumulative distribution function for global parameters, and adjusted for given degradation rates
+    x=seq(global.par$p.err,global.par$p.mconv,length.out = 100)
+    pnew=function(shape) ptbeta(x,global.par$p.err,global.par$p.mconv,exp(shape),exp(-shape))
+    pnew.adj=function(shape,d) perc(pnew(shape),d)
+    
+    # compute degradation rate for ntr
+    ntr2d=function(ntr) -1/1*log(1-ntr)
+    
+    global.d=ntr2d(global.par$ntr)
 
+    # find shape if there was no degradation
+    opt.fun=function(shape) sum((pnew(global.par$shape)-pnew.adj(shape,global.d))^2)
+    global.shape.d0=optimize(opt.fun,lower=global.par$shape-5,upper=global.par$shape+5)$minimum
+    
+    opt.fun=function(shape,this.d) sum((pnew(shape)-pnew.adj(global.shape.d0,this.d))^2)
+    
+    sapply(ntr,function(n) {
+        d=max(1E-12,ntr2d(n))
+        optimize(opt.fun,this.d=d,lower=global.par$shape-5,upper=global.par$shape+5)$minimum
+    })
+}
 
+PlotShapeAdjust=function(...) {
+    make.df=function(g) {
+        df=data.frame(ntr=seq(0,0.99,by=0.01))
+        df$shape.adj=shape.adjust(df$ntr,g)
+        df$name=sprintf("ntr=%.2f shape=%.1f",g$ntr,g$shape)
+        df$gntr=g$ntr
+        df$shape=g$shape
+        df
+    }
+    
+    global.par=list(...)
+    df=do.call("rbind",lapply(global.par,function(g) make.df(g)))
+    
+    ggplot(df,aes(ntr,shape.adj,color=name))+
+    geom_line()+
+    geom_vline(data=unique(df[,c("gntr","shape","name")]),mapping=aes(xintercept=gntr,color=name),linetype=2,show.legend = FALSE)+
+    geom_hline(data=unique(df[,c("gntr","shape","name")]),mapping=aes(yintercept=shape,color=name),linetype=2,show.legend = FALSE)+
+    scale_color_brewer(NULL,palette = "Dark2")
+}
+
+#PlotShapeAdjust(model.par(ntr=0.1,shape=1.1),model.par(ntr=0.3,shape=1.1),model.par(ntr=0.3,shape=1.5))
