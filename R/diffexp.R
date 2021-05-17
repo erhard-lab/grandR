@@ -37,7 +37,7 @@ cnt=function(m) {
 }
 
 
-TestGenesLRT=function(data,target=~Combined,background=~1,name="lrt",verbose=FALSE,subset=!data$coldata$no4sU) {
+TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE,subset=!data$coldata$no4sU) {
 
 	
 	colData=droplevels(data$coldata[subset,])

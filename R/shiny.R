@@ -1,5 +1,5 @@
 
-ServeData=function(data) {
+ServeData=function(data,aest=aes(color=Sample)) {
 	df=GetFdrTab(data)
 
 	server=function(input, output,session) {
@@ -9,21 +9,21 @@ ServeData=function(data) {
 	  output$plot1=renderPlot({
 		if (length(input$tab_rows_selected)==1) {
 			gene=df$Symbol[input$tab_rows_selected]
-			ggplot(GetData(data,gene=gene,type=c("tpm","ntr"),melt=F,coldata=T),aes(tpm,ntr,color=hpi,shape=Condition))+geom_point(size=3)+scale_x_log10(breaks = scales::pretty_breaks(n = 10))
+			ggplot(GetData(data,gene=gene,type=c("tpm","ntr"),melt=F,coldata=T),modifyList(aes(tpm,ntr),aest))+geom_point(size=3)+scale_x_log10(breaks = scales::pretty_breaks(n = 10))
 		}
 	  })
 
 	  output$plot2=renderPlot({
 		if (length(input$tab_rows_selected)==1) {
 			gene=df$Symbol[input$tab_rows_selected]
-			ggplot(GetData(data,gene=gene,type=c("tpm"),melt=T,coldata=T),aes(hpi,Value,color=Condition))+geom_point()+scale_y_log10(breaks = scales::pretty_breaks(n = 10))+xlab(NULL)+ylab("Total TPM")
+			ggplot(GetData(data,gene=gene,type=c("tpm"),melt=T,coldata=T),modifyList(aes(hpi,Value),aest))+geom_point()+scale_y_log10(breaks = scales::pretty_breaks(n = 10))+xlab(NULL)+ylab("Total TPM")
 		}
 	  })
 
 	  output$plot3=renderPlot({
 		if (length(input$tab_rows_selected)==1) {
 			gene=df$Symbol[input$tab_rows_selected]
-			ggplot(GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T),aes(hpi,Value,color=Condition))+geom_point()+scale_y_log10(breaks = scales::pretty_breaks(n = 10))+xlab(NULL)+ylab("New TPM")
+			ggplot(GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T),modifyList(aes(hpi,Value),aest))+geom_point()+scale_y_log10(breaks = scales::pretty_breaks(n = 10))+xlab(NULL)+ylab("New TPM")
 		}
 	  })
 

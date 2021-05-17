@@ -144,6 +144,7 @@ tabrbinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p
 ReadOldMixMatrices=function(data,types=c("binom","binomOverlap"),...) {
 	r=lapply(types,function(type) {
 		t=read.delim(paste0(data$prefix,".",type,".tsv"))
+		if ("Type" %in% names(t)) t=t[t$Type=="",]
 		l=dlply(t,.(Condition),function(s) {
 			m=acast(d~n,data=s[,c("n","d","count")],value.var="count")
 			m[is.na(m)]=0

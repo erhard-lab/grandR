@@ -30,7 +30,7 @@ GeneType=list(
 Design=list(conc.4sU="concentration.4sU",dur.4sU="duration.4sU","Replicate"="Replicate")
 
 # TODO: param should be folder to read numis, rates, etc.
-ReadGRAND=function(prefix, verbose=FALSE, classify.genes=GeneType,design=c("Condition",Design$Replicate),Unknown=NA) {
+ReadGRAND=function(prefix, verbose=FALSE, classify.genes=GeneType,design=c("Condition",Design$Replicate),Unknown=NA,rename.samples=NULL) {
 
 
 checknames=function(a,b){
@@ -61,6 +61,12 @@ checknames=function(a,b){
 	if (anyDuplicated(data$Symbol)) {
 		warning("Duplicate gene symbols present, making unique!",call. = FALSE,immediate. = TRUE)
 		data$Symbol=make.unique(data$Symbol)
+	}
+	if (!is.null(rename.samples)) {
+		if (verbose) cat("Renaming samples...\n")
+		for (from in names(rename.samples)) {
+			names(data)=gsub(from,rename.samples[from],names(data))
+		}
 	}
 	if (verbose) cat("Processing...\n")
 
@@ -213,10 +219,13 @@ Normalize=function(data,sizeFactors=NULL,name="norm") {
 	data
 }
 
-FilterGenes=function(data,type='tpm',minval=1,mincond=NumCond(data)/2,use=NULL) {
+FilterGenes=function(data,type='tpm',minval=1,mincond=NumCond(data)/2,use=NULL,keep=NULL) {
+	if (!is.null(use) & !is.null(keep)) stop("Do not specify both use and keep!")
+
 	if (is.null(use)) {
 		t=GetData(data,type=type,table=TRUE)
 		use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincond)
+		if (!is.null(keep)) use = use | rownames(t) %in% rownames(t[keep,])
 	}
 	return(data.apply(data,function(t) t[use,]))
 }

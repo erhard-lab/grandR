@@ -19,8 +19,14 @@ density2d=function(x, y, facet=NULL, n=100) {
 
 
 
-PlotPCA=function(data,type=c("Total","New","Old"),ntop=500,aest=aes(color=Sample),x=1,y=2) {
+PlotPCA=function(data,type=c("Total","New","Old"),ntop=500,aest=aes(color=Sample),x=1,y=2,subset=NULL) {
 	mat=cnt(switch(type[1],Total=data$data$count,New=data$data$count*data$data$ntr,Old=data$data$count*(1-data$data$ntr)))
+	cd=data$coldata
+
+	if (!is.null(subset)) {
+		mat=mat[,subset]
+		cd=cd[subset,]
+	}
 	vsd <- vst(mat)
 
   	rv <- rowVars(vsd)
@@ -29,7 +35,7 @@ PlotPCA=function(data,type=c("Total","New","Old"),ntop=500,aest=aes(color=Sample
 	percentVar <- pca$sdev^2 / sum( pca$sdev^2 )
 	d <- as.data.frame(pca$x)
 	names(d)=paste0("PC",1:dim(d)[2])	
-	d=cbind(d, data$coldata)
+	d=cbind(d, cd)
 
 	ggplot(d,modifyList(aes_string(paste0("PC",x),paste0("PC",y)),aest))+ geom_point(size=3)+xlab(paste0("PC",x,": ",round(percentVar[x] * 100),"% variance"))+ylab(paste0("PC",y,": ",round(percentVar[y] * 100),"% variance"))+coord_fixed()
 }
@@ -96,6 +102,27 @@ PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantil
 			scale_x_continuous(breaks=c())+
 			coord_cartesian(ylim=ylim)
 }
+
+PlotToxicityTestRank=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC) {
+	w=GetData(data,"count",conditions=w4sU,table=T)[,1]
+	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,"count",conditions=no4sU,table=T)[,1]
+	ntr=GetData(data,"ntr",conditions=w4sU,table=T)[,1]
+	use=!is.na(w+n+ntr) 
+	w=w[use]
+	n=n[use]
+	ntr=ntr[use]
+
+	phl=rank(ntr)	
+	df=data.frame(lfc=LFC.fun(w,n),PHL=phl)
+	ggplot(df,aes(PHL,lfc,color=density2d(PHL, lfc, n = 100)))+
+			scale_color_viridis_c(name = "Density",guide=FALSE)+
+			geom_point(alpha=1)+
+			geom_hline(yintercept=0)+
+#			geom_smooth(method="loess")+
+			xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
+			coord_cartesian(ylim=ylim)
+}
+
 
 PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
 	w=GetData(data,"count",conditions=w4sU,table=T)[,1]
