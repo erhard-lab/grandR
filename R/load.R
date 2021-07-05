@@ -7,9 +7,9 @@ library(plyr)
 
 comp.hl=function(p,time) ifelse(p==0,Inf,log(2)/(-1/time*log(1-p)))
 
-comp.tpm=function(cmat,lengths) {
+comp.tpm=function(cmat,lengths,subset=NULL) {
 	rpk=cmat/(lengths/1000)
-	scale=colSums(rpk)/1E6
+	scale=colSums(if(!is.null(subset)) rpk[subset,] else rpk)/1E6
 	t(t(rpk)/scale)
 }
 tomat=function(m,names,cnames){
@@ -176,7 +176,7 @@ NumRows=function(data) dim(data$gene.info)[1]
 NumCond=function(data) dim(data$coldata)[1]
 
 
-GetData=function(data,type,conditions=colnames(data$data$count),gene=1:NumRows(data),melt=FALSE,coldata=TRUE,table=FALSE) {
+GetData=function(data,type,conditions=colnames(data$data$count),gene=1:NumRows(data),melt=FALSE,coldata=TRUE,table=FALSE,keep.ntr.na=TRUE) {
 	if (table) { 
 		melt=FALSE
 		coldata=FALSE
@@ -190,6 +190,9 @@ GetData=function(data,type,conditions=colnames(data$data$count),gene=1:NumRows(d
 		spl=strsplit(type,".",fixed=TRUE)[[1]]
 		if (length(spl)>1) {tno=spl[1]; type=spl[2];}
 		mf = switch(tolower(substr(tno,1,1)),t=1,n=data$data$ntr[gene,conditions],o=1-data$data$ntr[gene,conditions],stop(paste0(type," unknown!"))) 
+		if (!keep.ntr.na) {
+			mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
+		}
 		conv=if (type=="count") function(m) {mode(m) <- "integer";m} else function(m) m
 
 		if (!(type %in% names(data$data))) stop(paste0(type," unknown!"))

@@ -76,3 +76,16 @@ GetFdrTab=function(data) {
 	ord=order(apply(d,1,function(v) sum(log(v+1E-8),na.rm=T)),decreasing=FALSE)
 	cbind(data$gene.info[,!(names(data$gene.info) %in% c("Length"))],d)[ord,]
 }
+
+
+GetSummarizeMatrix=function(data,column="Condition",subset=!data$coldata$no4sU,average=TRUE) {
+	re=NULL
+	for (v in unique(data$coldata[,column])) re=cbind(re,ifelse(data$coldata[,column]==v,1,0))
+	rownames(re)=rownames(data$coldata)
+	colnames(re)=unique(data$coldata[,column])
+	re[-which(subset),]=0
+	re=re[,colSums(re)>0]
+	if (average) re=t(t(re)/colSums(re))
+	re
+}
+
