@@ -254,10 +254,10 @@ PlotModelLabelTimeCourse.grandR=function(data,label="4sU",...) {
 }
 PlotModelLabelTimeCourse.data.frame=function(tab,e,label="4sU",estimator="Separate") {
 	tab=tab[tab$Label==label & tab$Estimator==estimator,]
-	e$Condition=ifelse(is.na(e$Sample),e$Library,paste(e$Library,e$Sample,sep="."))
+	e$Condition=ifelse(is.na(e$Sample),as.character(e$Library),paste(e$Library,e$Sample,sep="."))
 	e=unique(cbind(Condition=e$Condition,e[,grep(label,names(e))]))
-	e=e[!is.na(e$concentration),]
 	names(e)=gsub(paste0(label," "),"",names(e))
+	e=e[!is.na(e$concentration),]
 
 	x=seq(0,1,length.out=100)
 	make.df=function(row) data.frame(x=x,`Labeling efficiency`=qtbeta(x,tab$`TB-Binom p.err`[row],tab$`TB-Binom p.mconv`[row],exp(tab$`TB-Binom shape`[row]),exp(-tab$`TB-Binom shape`[row])),Condition=tab$Condition[row],Subread=tab$Subread[row],check.names=FALSE)
