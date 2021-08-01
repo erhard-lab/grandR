@@ -1,9 +1,9 @@
 
 
-Simulate=function(s=10*d,d=log(2)/hl,hl=2,l0=s/d,max.time=10,length.out = 1000,by = ((max.time - 0)/(length.out - 1)),name=NULL) {
-    ode.new=function(t,s,d) s/d*(1-exp(-t*d))
-    ode.old=function(t,f0,s,d) f0*exp(-t*d)
-    t=seq(0,max.time,by=by)
+Simulate=function(s=100*d,d=log(2)/hl,hl=2,l0=s/d,min.time=-1,max.time=10,length.out = 1000,by = ((max.time - 0)/(length.out - 1)),name=NULL) {
+    ode.new=function(t,s,d) ifelse(t<0,0,s/d*(1-exp(-t*d)))
+    ode.old=function(t,f0,s,d) ifelse(t<0,s/d,f0*exp(-t*d))
+    t=seq(min.time,max.time,by=by)
     old=ode.old(t,l0,s,d)
     new=ode.new(t,s,d)
     re=data.frame(
@@ -16,13 +16,21 @@ Simulate=function(s=10*d,d=log(2)/hl,hl=2,l0=s/d,max.time=10,length.out = 1000,b
 }
 
 
-PlotSimulation=function(sim.df) {
+PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
+    if (!ntr) sim.df=sim.df[sim.df$Type!="NTR",]
+    if (!old) sim.df=sim.df[sim.df$Type!="Old",]
+    if (!new) sim.df=sim.df[sim.df$Type!="New",]
+    if (!total) sim.df=sim.df[sim.df$Type!="Total",]
     ggplot(sim.df,aes(Time,Value,color=Type))+
         geom_line(size=1)+
         scale_color_manual(NULL,values=c(Old="#54668d",New="#953f36",Total="#373737",NTR="#e4c534"))+
         facet_wrap(~ifelse(Type=="NTR","NTR","Timecourse"),scales="free_y",ncol=1)+
         ylab(NULL)+
-        scale_x_continuous(breaks=scales::pretty_breaks())
+        scale_x_continuous(breaks=scales::pretty_breaks())+
+        theme(
+	  strip.background = element_blank(),
+	  strip.text.x = element_blank()
+	)
 }
 
 PlotCompareNTRs=function(...) {

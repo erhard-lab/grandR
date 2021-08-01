@@ -8,9 +8,13 @@ library(plyr)
 comp.hl=function(p,time) ifelse(p==0,Inf,log(2)/(-1/time*log(1-p)))
 
 comp.tpm=function(cmat,lengths,subset=NULL) {
+	zerolen=lengths==0
+	lengths[zerolen]=1
 	rpk=cmat/(lengths/1000)
-	scale=colSums(if(!is.null(subset)) rpk[subset,] else rpk)/1E6
-	t(t(rpk)/scale)
+	rpk[zerolen,]=NA
+	scale=colSums(if(!is.null(subset)) rpk[subset,] else rpk,na.rm=T)/1E6
+	re=t(t(rpk)/scale)
+	re
 }
 tomat=function(m,names,cnames){
 	m=as.matrix(m)
@@ -27,10 +31,10 @@ GeneType=list(
 	Unknown=function(data) rep(T,dim(data)[1])
 )
 
-Design=list(conc.4sU="concentration.4sU",dur.4sU="duration.4sU","Replicate"="Replicate")
+Design=list(conc.4sU="concentration.4sU",dur.4sU="duration.4sU","Replicate"="Replicate",Condition="Condition",Library="Library",Sample="Sample",Barcode="Barcode")
 
 # TODO: param should be folder to read numis, rates, etc.
-ReadGRAND=function(prefix, verbose=FALSE, classify.genes=GeneType,design=c("Condition",Design$Replicate),Unknown=NA,rename.samples=NULL) {
+ReadGRAND=function(prefix, verbose=FALSE, classify.genes=GeneType,design=c(design$Condition,Design$Replicate),Unknown=NA,rename.samples=NULL) {
 
 
 checknames=function(a,b){

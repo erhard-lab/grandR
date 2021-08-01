@@ -159,7 +159,7 @@ ReadOldMixMatrices=function(data,types=c("binom","binomOverlap"),...) {
 }
 
 ReadMixMatrices=function(data,...) {
-	t=read.delim(paste0(data$prefix,".mismatch.stat.tsv.gz"))
+	t=read.delim(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
 	l=dlply(t,.(Condition,Subread,Label),function(s) {
 		m=acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
 		m[is.na(m)]=0
@@ -174,7 +174,7 @@ ReadMixMatrices=function(data,...) {
 }
 
 ReadMixMatrix=function(data,condition,subread,label="4sU") {
-	t=read.delim(paste0(data$prefix,".mismatch.stat.tsv.gz"))
+	t=read.delim(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
 	s=t[t$Condition==condition&t$Subread==subread&t$Label==label,]
 	m=acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
 	m[is.na(m)]=0
@@ -229,6 +229,54 @@ ExpectedOldFraction=function(mixmat,par=default.model.par,p.err=par$p.err) {
 	em/(em+mixmat+1)	
 }
 
+original.estimate=function(x, errp=5E-4) {
+	comp.p=function(x) sum(apply(x,2,function(c) sum(c*as.integer(rownames(x))))) / sum(apply(x,1,function(c) sum(c*as.integer(colnames(x)))))
+	
+	exp.x=function(x,p,oc) {
+		if (!all(as.integer(rownames(x))==0:(dim(x)[1]-1))) stop("Incomplete!")
+		for (c in 1:dim(x)[2]) {
+			occ = oc[,c]
+			k=as.integer(rownames(x))
+			n=as.integer(colnames(x))[c]
+			x[!occ,c]=sum(x[occ,c])/sum(dbinom(k[occ],n,p))*dbinom(k[!occ],n,p)
+		}
+		x[is.na(x)]=0
+		x
+	}
+
+	onlyconv=apply(sapply(GetMixMatn(x),function(n) dbinom(GetMixMatk(x),n,errp)*sum(x[,n]))<0.01*unclass(x),2,cummax)==1
+	emat=x
+
+	onlyconv=onlyconv&x>0
+	onlyconv=onlyconv&matrix(rep(apply(onlyconv,2,sum)>1,each=dim(onlyconv)[1]),nrow=dim(onlyconv)[1])
+	if (sum(onlyconv)==0) stop("Cannot estimate!")
+	
+	init.x=x
+	init.x[matrix(rep(apply(onlyconv,2,sum)==0,each=dim(x)[1]),nrow=dim(x)[1])]=0
+
+	
+	inter=c(0,1)
+	while(TRUE) {
+		p=sum(inter)/2
+		x=exp.x(x,p,onlyconv)
+		np=comp.p(x)
+		if (np<p) inter=c(inter[1],p) else inter=c(p,inter[2])
+		print(c(inter,p,np))
+		if (inter[2]-inter[1]<1E-12) break;
+	}
+	conv=sum(inter)/2
+	
+	semat=sapply(GetMixMatn(emat),function(n) {
+		dbinom(GetMixMatk(emat),n,conv)*sum(emat[,n])
+	})
+	rmat=(semat*sum(unclass(emat)[onlyconv])/sum(unclass(semat)[onlyconv])-unclass(emat))/unclass(emat)
+	rmat[!onlyconv]=NA
+
+	#print(rmat)
+	conv
+}
+
+
 
 computeMixMatrix=function(m1,m2,fun) {
 	if (!("MixMatrix" %in% class(m2))) return(structure(fun(unclass(m1),m2), class = "MixMatrix"))
@@ -254,6 +302,7 @@ as.data.frame.MixMatrix=function(x) {
 	rownames(df)=NULL
 	df
 }
+
 
 `[.MixMatrix`=function(x,k=0:dim(x)[1],n=1:dim(x)[2]) {
 	if (is.logical(k)) k=GetMixMatk(x)[k]

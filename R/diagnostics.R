@@ -126,10 +126,11 @@ PlotMismatchFreq.data.frame=function(tab,category,ncond.boxplot=120) {
 	ncond=nrow(tab)/nrow(unique(data.frame(tab$Genomic,tab$Read,tab$Semantic)))
 	
 	if (ncond>=ncond.boxplot) {
+		max=max(ddply(tab,.(Category,Condition,Semantic,Genomic,Read),function(s) c(max=quantile(s$Frequency,0.99)))$max)
 		if (length(unique(tab$Condition))<ncond/100) {
-			ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,fill=Condition))+geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.4,outlier.size = 0.1)+facet_grid(Semantic~.)+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)+scale_fill_brewer(NULL,palette="Set2")
+			ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,fill=Condition))+geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.4,outlier.size = 0.1)+facet_grid(Semantic~.)+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)+scale_fill_brewer(NULL,palette="Set2")+coord_cartesian(ylim=c(0,max))
 		} else {
-			ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency))+geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.4)+facet_grid(Semantic~.)+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)
+			ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency))+geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.8)+facet_grid(Semantic~.)+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)+coord_cartesian(ylim=c(0,max))
 		}
 	} else {
 		ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,color=Condition))+geom_hline(yintercept=0,linetype=2)+geom_point(position=position_dodge(width=0.7))+facet_grid(Semantic~.)+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)
