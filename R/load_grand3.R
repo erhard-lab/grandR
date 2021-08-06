@@ -50,6 +50,7 @@ ReadGrand3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design
   re$count=count
   re$ntr=ntr
   
+  # use make coldata instead. add no4sU column!
   coldata=data.frame(Name=cols)
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   for (i in 1:length(design)) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))

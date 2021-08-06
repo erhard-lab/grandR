@@ -31,10 +31,23 @@ GeneType=list(
 	Unknown=function(data) rep(T,dim(data)[1])
 )
 
-Design=list(conc.4sU="concentration.4sU",dur.4sU="duration.4sU","Replicate"="Replicate",Condition="Condition",Library="Library",Sample="Sample",Barcode="Barcode")
+Design=list(has.4sU="has.4sU",conc.4sU="concentration.4sU",dur.4sU="duration.4sU","Replicate"="Replicate",Condition="Condition",Library="Library",Sample="Sample",Barcode="Barcode")
+
+MakeColdata=function(names,design=c(Design$Condition,Design$Replicate)) {
+  coldata=data.frame(Name=names,check.names=FALSE,stringsAsFactors = TRUE)
+  spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
+  if (any(lapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data: ",paste(spl[[1]],collapse=".")))
+  
+  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
+  names(coldata)[-1]=design[!is.na(design)]
+  rownames(coldata)=coldata$Name
+  coldata$Sample=interaction(coldata[ !(names(coldata) %in% c("Name","Replicate"))],drop=TRUE)
+  coldata
+}
+
 
 # TODO: param should be folder to read numis, rates, etc.
-ReadGRAND=function(prefix, verbose=FALSE, classify.genes=GeneType,design=c(design$Condition,Design$Replicate),Unknown=NA,rename.samples=NULL) {
+ReadGRAND=function(prefix, verbose=FALSE, classify.genes=GeneType,design=c(Design$Condition,Design$Replicate),Unknown=NA,rename.samples=NULL) {
 
 
 checknames=function(a,b){
@@ -114,13 +127,14 @@ checknames=function(a,b){
 	checknames(re$count,re$ntr.mean)
 	checknames(re$count,re$alpha)
 	checknames(re$count,re$beta)
-
-	coldata=data.frame(Name=colnames(re$count))
-	spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
-	for (i in 1:length(design)) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
-	names(coldata)[-1]=design
-	rownames(coldata)=coldata$Name
-	coldata$Sample=interaction(coldata[ !(names(coldata) %in% c("Name","Replicate"))],drop=TRUE)
+	
+	#coldata=data.frame(Name=colnames(re$count))
+	#spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
+	#for (i in 1:length(design)) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
+	#names(coldata)[-1]=design
+	#rownames(coldata)=coldata$Name
+	#coldata$Sample=interaction(coldata[ !(names(coldata) %in% c("Name","Replicate"))],drop=TRUE)
+	coldata=MakeColdata(colnames(re$count),design)
 	coldata$no4sU=no4sU.cols
 
 	invisible(grandR(prefix,gene.info,re,coldata))

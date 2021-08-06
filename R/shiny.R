@@ -1,5 +1,5 @@
 
-ServeData=function(data,aest=aes(color=Sample),ggparam) {
+ServeData=function(data,aest=aes(color=Sample),time="hpi",ggparam=NULL) {
 	df=GetFdrTab(data)
 
 	server=function(input, output,session) {
@@ -18,7 +18,7 @@ ServeData=function(data,aest=aes(color=Sample),ggparam) {
 	  output$plot2=renderPlot({
 		if (length(input$tab_rows_selected)==1) {
 			gene=df$Symbol[input$tab_rows_selected]
-			g=ggplot(GetData(data,gene=gene,type=c("tpm"),melt=T,coldata=T),modifyList(aes(hpi,Value),aest))+geom_point()+scale_y_log10()+xlab(NULL)+ylab("Total TPM")
+			g=ggplot(GetData(data,gene=gene,type=c("tpm"),melt=T,coldata=T),modifyList(aes_string(time,"Value"),aest))+geom_point()+scale_y_log10()+xlab(NULL)+ylab("Total TPM")
 			if (!is.null(ggparam)) g=g+ggparam
 			g
 		}
@@ -27,7 +27,7 @@ ServeData=function(data,aest=aes(color=Sample),ggparam) {
 	  output$plot3=renderPlot({
 		if (length(input$tab_rows_selected)==1) {
 			gene=df$Symbol[input$tab_rows_selected]
-			g=ggplot(GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T),modifyList(aes(hpi,Value),aest))+geom_point()+scale_y_log10()+xlab(NULL)+ylab("New TPM")
+			g=ggplot(GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T),modifyList(aes_string(time,"Value"),aest))+geom_point()+scale_y_log10()+xlab(NULL)+ylab("New TPM")
 			if (!is.null(ggparam)) g=g+ggparam
 			g
 		}

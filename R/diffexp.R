@@ -51,9 +51,9 @@ TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE
 	if (verbose) cat("Testing old...\n")
 	dds.old <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*(1-ntrData)),colData=colData,design = target),test="LRT", reduced=background)
 
-	res.tot <- results(dds.tot)
-	res.new <- results(dds.new)
-	res.old <- results(dds.old)
+	res.tot <- DESeq2::results(dds.tot)
+	res.new <- DESeq2::results(dds.new)
+	res.old <- DESeq2::results(dds.old)
 
 	
 	df=data.frame(
@@ -77,15 +77,50 @@ GetFdrTab=function(data) {
 	cbind(data$gene.info[,!(names(data$gene.info) %in% c("Length"))],d)[ord,]
 }
 
-
-GetSummarizeMatrix=function(data,column="Condition",subset=!data$coldata$no4sU,average=TRUE) {
+GetSummarizeMatrix <- function (x, ...) {
+  UseMethod("GetSummarizeMatrix", x)
+}
+GetSummarizeMatrix.grandR=function(data,...) GetSummarizeMatrix.default(data$coldata,...)
+GetSummarizeMatrix.default=function(coldata,column="Sample",subset=!coldata$no4sU,average=TRUE) {
 	re=NULL
-	for (v in unique(data$coldata[,column])) re=cbind(re,ifelse(data$coldata[,column]==v,1,0))
-	rownames(re)=rownames(data$coldata)
-	colnames(re)=unique(data$coldata[,column])
+	for (v in unique(coldata[,column])) re=cbind(re,ifelse(coldata[,column]==v,1,0))
+	rownames(re)=rownames(coldata)
+	colnames(re)=unique(coldata[,column])
 	re[-which(subset),]=0
 	re=re[,colSums(re)>0]
 	if (average) re=t(t(re)/colSums(re))
 	re
+}
+
+GetContrasts <- function (x, ...) {
+  UseMethod("GetContrasts", x)
+}
+GetContrasts.grandR=function(data,subset=!data$coldata$no4sU,...) GetContrasts.default(coldata=data$coldata,subset=subset,...)
+GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,covariate=NULL,subset=NULL) {
+  if (length(contrast)==1) contrast=c(contrast,levels(coldata[,contrast])[1:2])
+  if (length(contrast)!=3 || !contrast[1]%in%names(coldata) || !all(contrast[2:3] %in% coldata[,contrast[1]])) stop("Illegal contrasts (either a name from design, or a vector of length 3 (name from design vector and two levels)")
+  contr=function(use=TRUE) {
+    re=rep(0,nrow(coldata))
+    re[coldata[,contrast[1]]==contrast[2] & use]=1
+    re[coldata[,contrast[1]]==contrast[3] & use]=-1
+    if (!is.null(subset)) {
+      save=re
+      re=rep(0,nrow(coldata))
+      re[subset]=save[subset]
+    }
+    re
+  }
+  if (is.null(covariate))  return(contr())
+  covvec=interaction(coldata[covariate],drop=FALSE,sep=".")
+  as.data.frame(setNames(lapply(levels(covvec),function(bin) contr(use=covvec==bin)),levels(covvec)),check.names=FALSE)
+}
+
+LFC=function(data,type="total.count",contrasts,name.suffix=paste0(".",type),LFC.fun=PsiLFC,...) {
+  mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
+  re=as.data.frame(setNames(lapply(contrasts,function(ctr) {
+    LFC.fun(rowSums(mat[,ctr==1]),rowSums(mat[,ctr==-1]),...)
+  }),colnames(contrasts)),check.names=FALSE)
+  names(re)=paste0(names(re),name.suffix)
+  re
 }
 
