@@ -5,7 +5,7 @@ IsSparse=function(prefix) !file.exists(paste0(prefix,".targets/data.tsv.gz"))
 
 ReadGrand3=function(prefix,...) if (IsSparse(prefix)) ReadGrand3_sparse(prefix,...) else ReadGrand3_dense(prefix,...)
 
-ReadGrand3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design$Sample,Design$Barcode), label="4sU",estimator="Binom") {
+ReadGrand3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design$Sample,Design$Barcode), label="4sU",estimator="Binom", read.CI=FALSE) {
   
   cols=readLines(paste0(prefix, ".targets/barcodes.tsv.gz"))
   conds=strsplit(cols,".",fixed=TRUE)[[1]]
@@ -37,18 +37,30 @@ ReadGrand3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design
 
   colnames(count)=cols
   rownames(count)=gene.info$Symbol
-
+  re=list()
+  re$count=count
+  
   if (verbose) cat("Reading NTRs...\n")
   ntr=as(readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
   colnames(ntr)=cols
   rownames(ntr)=gene.info$Symbol
+  re$ntr=ntr
   
+  if (read.CI && file.exists(sprintf("%s.targets/%s.%s.lower.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.upper.mtx.gz",prefix,label,estimator))) {
+    if (verbose) cat("Reading CIs...\n")
+    lower=as(readMM(sprintf("%s.targets/%s.%s.lower.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    colnames(lower)=cols
+    rownames(lower)=gene.info$Symbol
+    re$lower=lower
+    
+    upper=as(readMM(sprintf("%s.targets/%s.%s.upper.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    colnames(upper)=cols
+    rownames(upper)=gene.info$Symbol
+    re$upper=upper
+  }
   gene.info$Type=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
   gene.info$Type=factor(gene.info$Type,levels=unique(gene.info$Type))
   
-  re=list()
-  re$count=count
-  re$ntr=ntr
   
   # use make coldata instead. add no4sU column!
   coldata=data.frame(Name=cols)
@@ -64,7 +76,7 @@ ReadGrand3_dense=function(prefix, verbose=FALSE, design=c(design$Condition,Desig
   
 }
 
-as.Seurat.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NULL,mode=c("mode","cells","genes")) {
+as.Seurat.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NULL,mode=c("assay","cells","genes","list")) {
 
   total.mat=d$data$count
   rows=rowSums(total.mat)>0
@@ -79,7 +91,7 @@ as.Seurat.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NULL,mode
       prev.mat=old.mat*exp(2*log(2)/pmin(pmax(hls,0.25),24))
     }
   }
-  s=switch(mode[1],mode={
+  re=switch(mode[1],assay={
     s=CreateSeuratObject(counts=total.mat,project=basename(d$prefix))
     if (ntr) s[["NTR"]]=CreateAssayObject(ntr.mat)
     if (new) s[["newRNA"]]=CreateAssayObject(new.mat)
@@ -130,10 +142,71 @@ as.Seurat.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NULL,mode
       total.mat=rbind(total.mat,prev.mat)
     }
     CreateSeuratObject(counts=total.mat,project=basename(d$prefix))
+  },list={
+    s=list(RNA=CreateSeuratObject(counts=total.mat,project="RNA"))
+    if (ntr) s[["NTR"]]=CreateSeuratObject(ntr.mat,project="NTR")
+    if (new) s[["newRNA"]]=CreateSeuratObject(new.mat,project="newRNA")
+    if (old) s[["oldRNA"]]=CreateSeuratObject(old.mat,project="oldRNA")
+    if (prev) s[["prevRNA"]]=CreateSeuratObject(prev.mat,project="prevRNA")
+    s
   })
-  for (i in seq_len(ncol(d$coldata))) s[[names(d$coldata)[i]]]=rep(d$coldata[cols,i],nrow(s[[]])/nrow(d$coldata[cols,]))
-  invisible(s)
+  append.meta=function(s) {
+    for (i in seq_len(ncol(d$coldata))) s[[names(d$coldata)[i]]]=rep(d$coldata[cols,i],nrow(s[[]])/nrow(d$coldata[cols,]))
+    s
+  }
+  re = if ("Seurat" %in% class(re)) append.meta(re) else lapply(re,append.meta)
+  invisible(re)
 }
 
 
     
+
+ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,verbose=FALSE) {
+  
+  cols=read.csv(cells,check.names = FALSE,stringsAsFactors = FALSE)
+  gene.info=setNames(read.csv(genes,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
+  
+  if (verbose) cat("Reading total count matrix...\n")
+  count=as(readMM(total.matrix),Class = "dgCMatrix")
+  
+  if (anyDuplicated(gene.info$Gene)) {
+    dupp=table(gene.info$Gene)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Gene=make.unique(gene.info$Gene)
+  }
+  if (anyDuplicated(gene.info$Symbol)) {
+    dupp=table(gene.info$Symbol)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Symbol=make.unique(gene.info$Symbol)
+  }
+  
+  if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
+    ill=gene.info$Symbol[which(make.names(gene.info$Symbol)!=gene.info$Symbol)]
+    warning(sprintf("Illegal identifiers among the gene symbols (e.g. %s), making legal!",paste(head(ill),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Symbol=make.names(gene.info$Symbol)
+  }
+  
+  colnames(count)=cols[,1]
+  rownames(count)=gene.info$Symbol
+  
+  if (verbose) cat("Reading new count matrix...\n")
+  new=as(readMM(new.matrix),Class = "dgCMatrix")
+  
+  if (verbose) cat("Computing NTRs...\n")
+  new=new/detection.rate
+  ntr=new/count
+  ntr@x[ntr@x>1]=1
+  ntr@x[is.nan(ntr@x)]=0
+  ntr=as(ntr,Class = "dgCMatrix")
+  
+  colnames(ntr)=colnames(count)
+  rownames(ntr)=rownames(count)
+  
+  re=list()
+  re$count=count
+  re$ntr=ntr
+  
+  invisible(grandR("",gene.info,re,cols))
+}

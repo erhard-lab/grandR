@@ -118,7 +118,7 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,d
 LFC=function(data,type="total.count",contrasts,name.suffix=paste0(".",type),LFC.fun=PsiLFC,...) {
   mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
   re=as.data.frame(setNames(lapply(contrasts,function(ctr) {
-    LFC.fun(rowSums(mat[,ctr==1]),rowSums(mat[,ctr==-1]),...)
+    LFC.fun(rowSums(mat[,ctr==1,drop=FALSE]),rowSums(mat[,ctr==-1,drop=FALSE]),...)
   }),colnames(contrasts)),check.names=FALSE)
   names(re)=paste0(names(re),name.suffix)
   re
