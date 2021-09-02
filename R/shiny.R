@@ -24,7 +24,7 @@ ServeData=function(data,aest=aes(color=Sample),aest.ts=aes(color=Sample),time="h
 			if (!is.null(ggparam.ts)) g=g+ggparam.ts
 			if (average.lines) {
 				# compute average line:
-				ddf=as.data.frame(lapply(mapp,function(col) rlang::eval_tidy(col,data=df)))
+				ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
 				ddf=ddply(ddf,.(x,colour),function(s) c(Value=mean(s$y)))
 				g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
 			}
@@ -35,8 +35,16 @@ ServeData=function(data,aest=aes(color=Sample),aest.ts=aes(color=Sample),time="h
 	  output$plot3=renderPlot({
 		if (length(input$tab_rows_selected)==1) {
 			gene=df$Symbol[input$tab_rows_selected]
-			g=ggplot(GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T),modifyList(aes_string(time,"Value"),aest.ts))+geom_point()+scale_y_log10()+xlab(NULL)+ylab("New TPM")
+			df=GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T)
+			aes=modifyList(aes_string(time,"Value"),aest.ts)
+			g=ggplot(df,mapping=aes)+geom_point()+scale_y_log10()+xlab(NULL)+ylab("New TPM")
 			if (!is.null(ggparam)) g=g+ggparam.ts
+			if (average.lines) {
+				# compute average line:
+				ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
+				ddf=ddply(ddf,.(x,colour),function(s) c(Value=mean(s$y)))
+				g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
+			}
 			g
 		}
 	  })
