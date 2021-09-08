@@ -36,10 +36,22 @@ cnt=function(m) {
 	m
 }
 
+DropDiffExp=function(data) {
+  data$diffexp=NULL
+  invisible(data)
+}
+AddDiffExp=function(data,name,mode,table) {
+  if (is.null(data$diffexp)) data$diffexp=list()
+  if (is.null(data$diffexp[[name]])) data$diffexp[[name]]=list()
+  if (is.null(data$diffexp[[name]][[mode]])) {
+    data$diffexp[[name]][[mode]]=table
+  } else {
+    for (n in names(table)) data$diffexp[[name]][[mode]][[n]]=table[[n]]
+  }
+  invisible(data)
+}
 
 TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE,subset=!data$coldata$no4sU) {
-
-	
 	colData=droplevels(data$coldata[subset,])
 	countData=data$data$count[,subset]
 	ntrData=data$data$ntr[,subset]
@@ -55,26 +67,61 @@ TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE
 	res.new <- DESeq2::results(dds.new)
 	res.old <- DESeq2::results(dds.old)
 
-	
-	df=data.frame(
-		total.p=res.tot$pvalue,
-		total.q=p.adjust(res.tot$pvalue,method="BH"),
-		new.p=res.new$pvalue,
-		new.q=p.adjust(res.new$pvalue,method="BH"),
-		old.p=res.old$pvalue,
-		old.q=p.adjust(res.old$pvalue,method="BH")
+	data=AddDiffExp(data,name,"Total",
+	                data.frame(
+	                  M=res.tot$baseMean,
+	                  S=res.tot$stat,
+	                  P=res.tot$pvalue,
+	                  Q=p.adjust(res.tot$pvalue,method="BH"))
 	)
-	names(df)=paste0(name,".",names(df))
-
-	if (is.null(data$data$diffexp)) data$data$diffexp = df else data$data$diffexp=cbind(data$data$diffexp[,!(names(data$data$diffexp) %in% names(df))],df)
-
+	data=AddDiffExp(data,name,"New",
+	                data.frame(
+	                  M=res.new$baseMean,
+	                  S=res.new$stat,
+	                  P=res.new$pvalue,
+	                  Q=p.adjust(res.new$pvalue,method="BH"))
+	)
+	data=AddDiffExp(data,name,"Old",
+	                data.frame(
+	                  M=res.old$baseMean,
+	                  S=res.old$stat,
+	                  P=res.old$pvalue,
+	                  Q=p.adjust(res.old$pvalue,method="BH"))
+	)
+	
 	invisible(data)
 }
 
-GetFdrTab=function(data) {
-	d=data$data$diffexp[,grepl(".q$",names(data$data$diffexp))]
-	ord=order(apply(d,1,function(v) sum(log(v+1E-8),na.rm=T)),decreasing=FALSE)
-	cbind(data$gene.info[,!(names(data$gene.info) %in% c("Length"))],d)[ord,]
+LFC=function(data,contrasts,LFC.fun=PsiLFC,...) {
+  comp=function(type,name) {
+    mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
+    l=setNames(lapply(contrasts,function(ctr) {
+      LFC.fun(rowSums(mat[,ctr==1,drop=FALSE]),rowSums(mat[,ctr==-1,drop=FALSE]),...)
+    }),colnames(contrasts))
+    for (n in names(l)) data=AddDiffExp(data,n,name,data.frame(LFC=l[[n]]))
+    data
+  }
+  data=comp("total.count","Total")
+  data=comp("new.count","New")
+  data=comp("old.count","Old")
+  invisible(data)
+}
+
+
+GetDiffExpTable=function(data,cols=NA) {
+  if (!is.null(data$data$diffexp) && is.null(data$diffexp)) data$diffexp=data$data$diffexp
+  re=data$gene.info[,!(names(data$gene.info) %in% c("Length")),drop=FALSE]
+  ord=rep(0,nrow(re))
+  for (name in names(data$diffexp)) {
+    for (mode in names(data$diffexp[[name]])) {
+      t=data$diffexp[[name]][[mode]]
+      if (!is.na(cols)) t=t[,intersect(names(t),cols)]
+      names(t)=paste(name,mode,names(t),sep=".")
+      re=cbind(re,t)
+      if (!is.null(t$q)) ord=re+t$q
+    }
+  }
+	re[order(ord),]
 }
 
 GetSummarizeMatrix <- function (x, ...) {
@@ -96,7 +143,7 @@ GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
 GetContrasts.grandR=function(data,subset=!data$coldata$no4sU,...) GetContrasts.default(coldata=data$coldata,subset=subset,...)
-GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,covariate=NULL,subset=NULL) {
+GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,covariate=NULL,name="LFC",subset=NULL) {
   if (length(contrast)==1) contrast=c(contrast,levels(coldata[,contrast])[1:2])
   if (length(contrast)!=3 || !contrast[1]%in%names(coldata) || !all(contrast[2:3] %in% coldata[,contrast[1]])) stop("Illegal contrasts (either a name from design, or a vector of length 3 (name from design vector and two levels)")
   contr=function(use=TRUE) {
@@ -110,17 +157,43 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,d
     }
     re
   }
-  if (is.null(covariate))  return(contr())
+  if (is.null(covariate))  return(setNames(data.frame(contr()),name))
   covvec=interaction(coldata[covariate],drop=FALSE,sep=".")
-  as.data.frame(setNames(lapply(levels(covvec),function(bin) contr(use=covvec==bin)),levels(covvec)),check.names=FALSE)
-}
-
-LFC=function(data,type="total.count",contrasts,name.suffix=paste0(".",type),LFC.fun=PsiLFC,...) {
-  mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
-  re=as.data.frame(setNames(lapply(contrasts,function(ctr) {
-    LFC.fun(rowSums(mat[,ctr==1,drop=FALSE]),rowSums(mat[,ctr==-1,drop=FALSE]),...)
-  }),colnames(contrasts)),check.names=FALSE)
-  names(re)=paste0(names(re),name.suffix)
+  re=as.data.frame(setNames(lapply(levels(covvec),function(bin) contr(use=covvec==bin)),levels(covvec)),check.names=FALSE)
+  re=re[,!apply(re==0,2,all),drop=FALSE]
   re
 }
 
+VulcanoPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE) {
+  df=data$diffexp[[name]][[mode]]
+  aes=modifyList(aes(LFC,-log10(Q),color=density2d(LFC,-log10(Q))),aest)
+  g=ggplot(df,mapping=aes)+
+    geom_point(size=0.1)+
+    scale_color_viridis_c(guide=FALSE)+
+    xlab(bquote(log[2]~FC))+
+    ylab(bquote("-"~log[10]~FDR))+
+    geom_hline(yintercept=-log10(p.cutoff),linetype=2)+
+    geom_vline(xintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
+    ggtitle(paste0(name," (",mode,")"))
+  if (label.numbers) {
+    n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),df$Q>p.cutoff)
+    g=g+annotate("label",x=c(-Inf,0,Inf,-Inf,0,Inf),y=c(Inf,Inf,Inf,-Inf,-Inf,-Inf),label=paste0("n=",as.numeric(n)),hjust=c(-0.1,0.5,1.1,-0.1,0.5,1.1),vjust=c(1.1,1.1,1.1,-0.1,-0.1,-0.1))
+  }
+  g
+}
+
+
+
+MAPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1) {
+  df=data$diffexp[[name]][[mode]]
+  aes=modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
+  g=ggplot(df,mapping=aes)+
+    geom_point(size=0.5)+
+    scale_x_log10()+
+    scale_color_manual(values=c(Sig.="black",NS="grey30"),guide=FALSE)+
+    ylab(bquote(log[2]~FC))+
+    xlab("Total expression")+
+    geom_hline(yintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
+    ggtitle(paste0(name," (",mode,")"))
+  g
+}

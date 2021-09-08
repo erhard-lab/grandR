@@ -1,6 +1,6 @@
 
 ServeData=function(data,aest=aes(color=Sample),aest.ts=aes(color=Sample),time="hpi",ggparam=NULL,ggparam.ts=NULL,average.lines=FALSE) {
-	df=GetFdrTab(data)
+	df=GetDiffExpTable(data,cols=c("LFC","Q"))
 
 	server=function(input, output,session) {
 	  options(DT.options = list(pageLength = 12))

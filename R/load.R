@@ -33,12 +33,23 @@ GeneType=list(
 
 Design=list(has.4sU="has.4sU",conc.4sU="concentration.4sU",dur.4sU="duration.4sU","Replicate"="Replicate",Condition="Condition",Library="Library",Sample="Sample",Barcode="Barcode")
 
-MakeColdata=function(names,design=c(Design$Condition,Design$Replicate)) {
+MakeColdata=function(names,design) {
   coldata=data.frame(Name=names,check.names=FALSE,stringsAsFactors = TRUE)
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   if (any(lapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data: ",paste(spl[[1]],collapse=".")))
   
-  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
+  conv=function(v) {
+    if (sum(is.na(suppressWarnings(as.logical(v))))==0) {
+      as.logical(v)
+    } else if (sum(is.na(suppressWarnings(as.integer(v))))==0) {
+      as.integer(v)
+    } else if (sum(is.na(suppressWarnings(as.double(v))))==0) {
+      as.double(v)
+    } else {
+      factor(v,levels=unique(v))
+    }
+  }
+  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,conv(sapply(spl,function(v) v[i])))
   names(coldata)[-1]=design[!is.na(design)]
   rownames(coldata)=coldata$Name
   coldata$Sample=interaction(coldata[ !(names(coldata) %in% c("Name","Replicate"))],drop=TRUE)
