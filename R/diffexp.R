@@ -108,14 +108,17 @@ LFC=function(data,contrasts,LFC.fun=PsiLFC,...) {
 }
 
 
-GetDiffExpTable=function(data,cols=NA) {
-  if (!is.null(data$data$diffexp) && is.null(data$diffexp)) data$diffexp=data$data$diffexp
+GetDiffExpTable=function(data,cols=NULL) {
+  if (!is.null(data$data$diffexp) && is.null(data$diffexp)) {
+    data$diffexp=data$data$diffexp
+    if (!is.null(cols)) cols=c(cols,tolower(cols))
+  }
   re=data$gene.info[,!(names(data$gene.info) %in% c("Length")),drop=FALSE]
   ord=rep(0,nrow(re))
   for (name in names(data$diffexp)) {
     for (mode in names(data$diffexp[[name]])) {
       t=data$diffexp[[name]][[mode]]
-      if (!is.na(cols)) t=t[,intersect(names(t),cols)]
+      if (!is.null(cols)) t=t[,intersect(names(t),cols),drop=FALSE]
       names(t)=paste(name,mode,names(t),sep=".")
       re=cbind(re,t)
       if (!is.null(t$q)) ord=re+t$q
