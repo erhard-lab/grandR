@@ -119,9 +119,9 @@ GetDiffExpTable=function(data,cols=NULL) {
     for (mode in names(data$diffexp[[name]])) {
       t=data$diffexp[[name]][[mode]]
       if (!is.null(cols)) t=t[,intersect(names(t),cols),drop=FALSE]
+      if (!is.null(t$Q)) ord=ord+log(t$Q)
       names(t)=paste(name,mode,names(t),sep=".")
       re=cbind(re,t)
-      if (!is.null(t$q)) ord=re+t$q
     }
   }
 	re[order(ord),]
