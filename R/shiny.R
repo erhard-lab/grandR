@@ -1,6 +1,5 @@
 
-ServeData=function(data,aest=aes(color=Sample),aest.ts=aes(color=Sample),time="hpi",ggparam=NULL,ggparam.ts=NULL,average.lines=FALSE, secondary.plot=NULL) {
-	df=GetDiffExpTable(data,cols=c("LFC","Q"))
+ServeData=function(data,df=GetDiffExpTable(data,cols=c("LFC","Q")),aest=aes(color=Sample),aest.ts=aes(color=Sample),time="hpi",ggparam=NULL,ggparam.ts=NULL,average.lines=FALSE, plot2=NA, plot3=NA) {
 
 	server=function(input, output,session) {
 	  options(DT.options = list(pageLength = 12))
@@ -18,9 +17,9 @@ ServeData=function(data,aest=aes(color=Sample),aest.ts=aes(color=Sample),time="h
 	  output$plot2=renderPlot({
 		if (length(input$tab_rows_selected)==1) {
 			gene=df$Symbol[input$tab_rows_selected]
-			if (!is.null(secondary.plot)){
-				secondary.plot(gene)
-			} else {
+			if (is.null(plot2)) {
+				NULL			
+			} else if (is.na(plot2)){
 				df=GetData(data,gene=gene,type=c("tpm"),melt=T,coldata=T)
 				aes=modifyList(aes_string(time,"Value"),aest.ts)
 				g=ggplot(df,mapping=aes)+geom_point()+scale_y_log10()+xlab(NULL)+ylab("Total TPM")
@@ -32,6 +31,8 @@ ServeData=function(data,aest=aes(color=Sample),aest.ts=aes(color=Sample),time="h
 					g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
 				}
 				g
+			} else {
+				plot2(gene)
 			}
 		}
 	  })
@@ -39,17 +40,23 @@ ServeData=function(data,aest=aes(color=Sample),aest.ts=aes(color=Sample),time="h
 	  output$plot3=renderPlot({
 		if (length(input$tab_rows_selected)==1) {
 			gene=df$Symbol[input$tab_rows_selected]
-			df=GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T)
-			aes=modifyList(aes_string(time,"Value"),aest.ts)
-			g=ggplot(df,mapping=aes)+geom_point()+scale_y_log10()+xlab(NULL)+ylab("New TPM")
-			if (!is.null(ggparam.ts)) g=g+ggparam.ts
-			if (average.lines) {
-				# compute average line:
-				ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
-				ddf=ddply(ddf,.(x,colour),function(s) c(Value=mean(s$y,na.rm=TRUE)))
-				g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
+			if (is.null(plot3)) {
+				NULL			
+			} else if (is.na(plot3)){
+				df=GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T)
+				aes=modifyList(aes_string(time,"Value"),aest.ts)
+				g=ggplot(df,mapping=aes)+geom_point()+scale_y_log10()+xlab(NULL)+ylab("New TPM")
+				if (!is.null(ggparam.ts)) g=g+ggparam.ts
+				if (average.lines) {
+					# compute average line:
+					ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
+					ddf=ddply(ddf,.(x,colour),function(s) c(Value=mean(s$y,na.rm=TRUE)))
+					g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
+				}
+				g
+			} else {
+				plot3(gene)
 			}
-			g
 		}
 	  })
 
@@ -62,7 +69,7 @@ ServeData=function(data,aest=aes(color=Sample),aest.ts=aes(color=Sample),time="h
 	  ),
 	  fluidRow(
 	    column(4, plotOutput("plot1",height = 400)),
-	    column(4, plotOutput("plot2",height = 400)),
+	    column(if (is.null(plot3)) 8 else 4, plotOutput("plot2",height = 400)),
 	    column(4, plotOutput("plot3",height = 400))
 	  )
 	)
