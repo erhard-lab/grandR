@@ -51,48 +51,60 @@ AddDiffExp=function(data,name,mode,table) {
   invisible(data)
 }
 
-TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE,subset=!data$coldata$no4sU) {
+TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE,subset=!data$coldata$no4sU,total=TRUE,new=TRUE,old=TRUE) {
 	colData=droplevels(data$coldata[subset,])
 	countData=data$data$count[,subset]
 	ntrData=data$data$ntr[,subset]
 	
-	if (verbose) cat("Testing total...\n")
-	dds.tot <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData),colData=colData,design = target),test="LRT", reduced=background)
-	if (verbose) cat("Testing new...\n")
-	dds.new <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*ntrData),colData=colData,design = target),test="LRT", reduced=background)
-	if (verbose) cat("Testing old...\n")
-	dds.old <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*(1-ntrData)),colData=colData,design = target),test="LRT", reduced=background)
-
-	res.tot <- DESeq2::results(dds.tot)
-	res.new <- DESeq2::results(dds.new)
-	res.old <- DESeq2::results(dds.old)
-
-	data=AddDiffExp(data,name,"Total",
-	                data.frame(
-	                  M=res.tot$baseMean,
-	                  S=res.tot$stat,
-	                  P=res.tot$pvalue,
-	                  Q=p.adjust(res.tot$pvalue,method="BH"))
-	)
-	data=AddDiffExp(data,name,"New",
-	                data.frame(
-	                  M=res.new$baseMean,
-	                  S=res.new$stat,
-	                  P=res.new$pvalue,
-	                  Q=p.adjust(res.new$pvalue,method="BH"))
-	)
-	data=AddDiffExp(data,name,"Old",
-	                data.frame(
-	                  M=res.old$baseMean,
-	                  S=res.old$stat,
-	                  P=res.old$pvalue,
-	                  Q=p.adjust(res.old$pvalue,method="BH"))
-	)
+	colData=as.data.frame(lapply(colData,function(c) {
+	  if (is.factor(c)) levels(c)=make.names(levels(c),unique = TRUE)
+	  c
+	}))
+	
+	if (total) {
+  	if (verbose) cat("Testing total...\n")
+  	dds.tot <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData),colData=colData,design = target),test="LRT", reduced=background)
+  	res.tot <- DESeq2::results(dds.tot)
+  	data=AddDiffExp(data,name,"Total",
+  	                data.frame(
+  	                  M=res.tot$baseMean,
+  	                  S=res.tot$stat,
+  	                  P=res.tot$pvalue,
+  	                  Q=p.adjust(res.tot$pvalue,method="BH"))
+  	)
+	}
+	
+	if(new) {
+  	if (verbose) cat("Testing new...\n")
+  	dds.new <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*ntrData),colData=colData,design = target),test="LRT", reduced=background)
+  	res.new <- DESeq2::results(dds.new)
+  	data=AddDiffExp(data,name,"New",
+  	                data.frame(
+  	                  M=res.new$baseMean,
+  	                  S=res.new$stat,
+  	                  P=res.new$pvalue,
+  	                  Q=p.adjust(res.new$pvalue,method="BH"))
+  	)
+	}
+	
+	
+	if (old) {
+  	if (verbose) cat("Testing old...\n")
+  	dds.old <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*(1-ntrData)),colData=colData,design = target),test="LRT", reduced=background)
+  	res.old <- DESeq2::results(dds.old)
+  	data=AddDiffExp(data,name,"Old",
+  	                data.frame(
+  	                  M=res.old$baseMean,
+  	                  S=res.old$stat,
+  	                  P=res.old$pvalue,
+  	                  Q=p.adjust(res.old$pvalue,method="BH"))
+  	)
+	}
 	
 	invisible(data)
 }
 
-LFC=function(data,contrasts,LFC.fun=PsiLFC,...) {
+LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=TRUE,...) {
   comp=function(type,name) {
     mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
     l=setNames(lapply(contrasts,function(ctr) {
@@ -101,14 +113,14 @@ LFC=function(data,contrasts,LFC.fun=PsiLFC,...) {
     for (n in names(l)) data=AddDiffExp(data,n,name,data.frame(LFC=l[[n]]))
     data
   }
-  data=comp("total.count","Total")
-  data=comp("new.count","New")
-  data=comp("old.count","Old")
+  if (total) data=comp(paste0("total.",slot),"Total")
+  if (new) data=comp(paste0("new.",slot),"New")
+  if (old) data=comp(paste0("old",slot),"Old")
   invisible(data)
 }
 
 
-GetDiffExpTable=function(data,cols=NULL) {
+GetDiffExpTable=function(data,cols=NULL,sort=FALSE) {
   if (!is.null(data$data$diffexp) && is.null(data$diffexp)) {
     data$diffexp=data$data$diffexp
     if (!is.null(cols)) cols=c(cols,tolower(cols))
@@ -124,7 +136,8 @@ GetDiffExpTable=function(data,cols=NULL) {
       re=cbind(re,t)
     }
   }
-	re[order(ord),]
+  if (sort) re=re[order(ord),]
+  re
 }
 
 GetSummarizeMatrix <- function (x, ...) {
@@ -146,7 +159,7 @@ GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
 GetContrasts.grandR=function(data,subset=!data$coldata$no4sU,...) GetContrasts.default(coldata=data$coldata,subset=subset,...)
-GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,covariate=NULL,name="LFC",subset=NULL) {
+GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,name=contrast[1],covariate=NULL,subset=NULL) {
   if (length(contrast)==1) contrast=c(contrast,levels(coldata[,contrast])[1:2])
   if (length(contrast)!=3 || !contrast[1]%in%names(coldata) || !all(contrast[2:3] %in% coldata[,contrast[1]])) stop("Illegal contrasts (either a name from design, or a vector of length 3 (name from design vector and two levels)")
   contr=function(use=TRUE) {
@@ -162,7 +175,9 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,d
   }
   if (is.null(covariate))  return(setNames(data.frame(contr()),name))
   covvec=interaction(coldata[covariate],drop=FALSE,sep=".")
-  re=as.data.frame(setNames(lapply(levels(covvec),function(bin) contr(use=covvec==bin)),levels(covvec)),check.names=FALSE)
+  names=levels(covvec)
+  if (!is.null(name)) names=paste0(name,".",names)
+  re=as.data.frame(setNames(lapply(levels(covvec),function(bin) contr(use=covvec==bin)),names),check.names=FALSE)
   re=re[,!apply(re==0,2,all),drop=FALSE]
   re
 }
@@ -179,7 +194,7 @@ VulcanoPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.
     geom_vline(xintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
     ggtitle(paste0(name," (",mode,")"))
   if (label.numbers) {
-    n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),df$Q>p.cutoff)
+    n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),factor(df$Q>p.cutoff,levels=c("FALSE","TRUE")))
     g=g+annotate("label",x=c(-Inf,0,Inf,-Inf,0,Inf),y=c(Inf,Inf,Inf,-Inf,-Inf,-Inf),label=paste0("n=",as.numeric(n)),hjust=c(-0.1,0.5,1.1,-0.1,0.5,1.1),vjust=c(1.1,1.1,1.1,-0.1,-0.1,-0.1))
   }
   g
@@ -199,4 +214,30 @@ MAPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutof
     geom_hline(yintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
     ggtitle(paste0(name," (",mode,")"))
   g
+}
+
+
+
+
+
+# Normalization of NTRs such that: median logFC new RNA vs. new RNA is 0, there is no correlation of this logFC vs the NTR
+NormalizeEffectiveLabeling=function(data,reference=colnames(data),slot="norm",verbose=FALSE) {
+  w=rowMeans(GetTable(data,slot,conditions=reference),na.rm=TRUE)
+  ntr=rowMeans(GetTable(data,"ntr",conditions=reference),na.rm=TRUE)
+  w=w*ntr
+  use=!is.na(w) && w>0
+  w=w[use]
+  
+  for (s in colnames(data)[!data$coldata$no4sU])  {
+    if (verbose) cat(sprintf("Fitting model for %s...\n",s))
+    d.ntr=data$data$ntr[use,s]
+    d=GetTable(data,slot,conditions=s)[use,1]
+    df=data.frame(ntr=ntr,lfc=log2(d.ntr*d/w))
+    df=df[!is.na(df$lfc) & !is.infinite(df$lfc),]
+    fit=quantreg::lprq(df$ntr,df$lfc,h = 0.05)
+    fn=splinefun(fit$xx,fit$fv)
+    data$data$ntr[,s]=pmax(pmin(1,data$data$ntr[,s]/2^fn(ntr)),0)
+  }
+  
+  data
 }

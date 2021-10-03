@@ -81,47 +81,28 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,log=FALSE,log.x=log,log.y=log) 
 	g
 }
 
-PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
-	w=GetData(data,"count",conditions=w4sU,table=T)[,1]
-	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,"count",conditions=no4sU,table=T)[,1]
-	ntr=GetData(data,"ntr",conditions=w4sU,table=T)[,1]
-	use=!is.na(w+n+ntr)
-	w=w[use]
-	n=n[use]
-	ntr=ntr[use]
+#PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
+#	w=GetData(data,"count",conditions=w4sU,table=T)[,1]
+#	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,"count",conditions=no4sU,table=T)[,1]
+#	ntr=GetData(data,"ntr",conditions=w4sU,table=T)[,1]
+#	use=!is.na(w+n+ntr)
+#	w=w[use]
+#	n=n[use]
+#	ntr=ntr[use]
+#
+#	phl=comp.hl(ntr)	
+#	df=data.frame(lfc=LFC.fun(w,n),PHL=phl)[ntr<1,]
+#	df=df[df$PHL<quantile(df$PHL[is.finite(df$PHL)],hl.quantile),]
+#	ggplot(df,aes(PHL,lfc,color=density2d(PHL, lfc, n = 100)))+
+#			scale_color_viridis_c(name = "Density",guide=FALSE)+
+#			geom_point(alpha=1)+
+#			geom_hline(yintercept=0)+
+##			geom_smooth(method="loess")+
+#			xlab("RNA half-life")+ylab("log FC 4sU/no4sU")+
+#			scale_x_continuous(breaks=c())+
+#			coord_cartesian(ylim=ylim)
+#}
 
-	phl=comp.hl(ntr,1)	
-	df=data.frame(lfc=LFC.fun(w,n),PHL=phl)[ntr<1,]
-	df=df[df$PHL<quantile(df$PHL[is.finite(df$PHL)],hl.quantile),]
-	ggplot(df,aes(PHL,lfc,color=density2d(PHL, lfc, n = 100)))+
-			scale_color_viridis_c(name = "Density",guide=FALSE)+
-			geom_point(alpha=1)+
-			geom_hline(yintercept=0)+
-#			geom_smooth(method="loess")+
-			xlab("RNA half-life")+ylab("log FC 4sU/no4sU")+
-			scale_x_continuous(breaks=c())+
-			coord_cartesian(ylim=ylim)
-}
-
-PlotToxicityTestRank=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC) {
-	w=GetData(data,"count",conditions=w4sU,table=T)[,1]
-	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,"count",conditions=no4sU,table=T)[,1]
-	ntr=GetData(data,"ntr",conditions=w4sU,table=T)[,1]
-	use=!is.na(w+n+ntr) 
-	w=w[use]
-	n=n[use]
-	ntr=ntr[use]
-
-	phl=rank(ntr)	
-	df=data.frame(lfc=LFC.fun(w,n),PHL=phl)
-	ggplot(df,aes(PHL,lfc,color=density2d(PHL, lfc, n = 100)))+
-			scale_color_viridis_c(name = "Density",guide=FALSE)+
-			geom_point(alpha=1)+
-			geom_hline(yintercept=0)+
-#			geom_smooth(method="loess")+
-			xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
-			coord_cartesian(ylim=ylim)
-}
 
 
 PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
@@ -153,4 +134,54 @@ PlotTypeDistribution=function(data,type="tpm",relative=FALSE) {
 	ggplot(df,aes(Condition,value,fill=Type))+geom_bar(stat="Identity")+scale_fill_viridis_d()+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ylab(type)+xlab(NULL)
 }
 
+PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
+  new=paste0("new.",slot)
+  old=paste0("old.",slot)
+  df=GetData(data,gene=gene,type=c(old,new),melt=F,coldata=T,keep.ntr.na = FALSE)
+  g=ggplot(df,modifyList(aes_string(old,new),aest))+
+    geom_point(size=2)+
+    scale_x_log10("Old RNA")+
+    scale_y_log10("New RNA")
+  if (show.CI) {
+    if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
+    df=cbind(df,GetData(data,gene=gene,type=c("lower","upper",slot),melt=F,coldata=T,keep.ntr.na = FALSE)[,c("lower","upper",slot)])
+    g=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)))
+    g=g+geom_errorbarh(data=df,mapping=aes_string(xmin=paste0("(1-upper)*",slot),xmax=paste0("(1-lower)*",slot)))
+  }
+  g
+}
 
+PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
+  df=GetData(data,gene=gene,type=c("ntr",slot),melt=F,coldata=T,keep.ntr.na = FALSE)
+  g=ggplot(df,modifyList(aes_string(slot,"ntr"),aest))+
+    geom_point(size=2)+
+    scale_x_log10("Total RNA")+
+    scale_y_continuous("NTR")
+  if (show.CI) {
+    if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
+    df=cbind(df,GetData(data,gene=gene,type=c("lower","upper"),melt=F,coldata=T,keep.ntr.na = FALSE)[,c("lower","upper")])
+    g=g+geom_errorbar(data=df,mapping=aes(ymin=lower,ymax=upper))
+  }
+  g
+}
+
+PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data),type="total",show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
+  df=GetData(data,gene=gene,type=c(slot,"ntr"),melt=F,coldata=T,keep.ntr.na = FALSE)
+  df$value=switch(type[1],total=df[[slot]],new=df[[slot]]*df[["ntr"]],old=df[[slot]]*(1-df[["ntr"]]),stop(paste0(type," unknown!")))
+  g=ggplot(df,modifyList(aes_string(group,"value"),aest))+
+    geom_point(size=2,position=if(show.CI) position_dodge(width=0.4) else "identity")+
+    xlab(NULL)+
+    scale_y_log10(slot)+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  if (show.CI) {
+    if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
+    df=cbind(df,GetData(data,gene=gene,type=c("lower","upper"),melt=F,coldata=T,keep.ntr.na = FALSE)[,c("lower","upper")])
+    g=switch(type[1],
+             total=g,
+             new=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)),width=0,position=position_dodge(width=0.4)),
+             old=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("(1-upper)*",slot),ymax=paste0("(1-lower)*",slot)),width=0,position=position_dodge(width=0.4)),
+             stop(paste0(type," unknown!"))
+    )
+  }
+  g
+}

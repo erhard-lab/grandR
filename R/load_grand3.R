@@ -76,7 +76,66 @@ ReadGrand3_dense=function(prefix, verbose=FALSE, design=c(design$Condition,Desig
   
 }
 
-as.Seurat.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NULL,mode=c("assay","cells","genes","list")) {
+as.Seurat.grandR=function(d,modalities=c(RNA="total",newRNA="new"),hls=NULL,mode=c("assay","cells","genes","list")) {
+	
+  if (length(modalities)==0) stop("No modality specified!")
+
+  mats=list(total=d$data$count)
+  rows=rowSums(mats$total)>0
+  cols=colSums(mats$total)>0
+  mats$total=mats$total[rows,cols]
+  mats$ntr=d$data$ntr[rows,cols]
+  if (any(c("old","new","prev") %in% modalities)) {
+    mats$new=round(mats$total*mats$ntr)
+    if (any(c("old","prev") %in% modalities)) mats$old=mats$total-mats$new
+    if ("prev" %in% modalities) {
+      stopifnot(!is.null(hls));
+      prev.mat=old.mat*exp(2*log(2)/pmin(pmax(hls,0.25),24))
+    }
+  }
+  if (any(c("old.lower","new.upper") %in% modalities)) {
+    if(is.null(d$data$upper)) stop("You need to load Grand3 data including CIs! set read.CI=TRUE when calling ReadGrand3!")
+    mats$new.upper=round(mats$total*d$data$upper[rows,cols])
+    if ("old.lower" %in% modalities) mats$old.lower=mats$total-mats$new.upper  
+  }
+  if (any(c("new.lower","old.upper") %in% modalities)) {
+    if(is.null(d$data$lower)) stop("You need to load Grand3 data including CIs! set read.CI=TRUE when calling ReadGrand3!")
+    mats$new.lower=round(mats$total*d$data$lower[rows,cols])
+    if ("old.upper" %in% modalities) mats$old.upper=mats$total-mats$new.lower
+  }
+  if (!all(modalities %in% names(mats))) stop("Modalities unknown! Can be any of total,new,old,ntr,prev,new.lower,new.upper,old.lower,old.upper!")
+
+  mats=mats[modalities]
+
+  re=switch(mode[1],assay={
+    s=CreateSeuratObject(counts=mats[[1]],assay=names(modalities)[1],project=basename(d$prefix))
+    if (length(mats)>1) for (i in 2:length(mats)) s[[names(modalities)[i]]]=CreateAssayObject(mats[[i]])
+    s
+  },cells={
+    for (i in 1:length(mats)) colnames(mats[[i]])=paste(colnames(mats[[i]]),names(mats)[i],sep=".")
+    mat=do.call("cbind",mats)
+    mode=do.call("c",lapply(1:length(mats),function(i) rep(names(mats)[i],ncol(mats[[i]]))))
+    s=CreateSeuratObject(counts=mat,project=basename(d$prefix))
+    s[["mode"]]=factor(mode,levels=unique(mode))
+    s
+  },genes={
+    for (i in 1:length(mats)) rownames(mats[[i]])=paste(rownames(mats[[i]]),names(mats)[i],sep=".")
+    mat=do.call("rbind",mats)
+    CreateSeuratObject(counts=mat,project=basename(d$prefix))
+  },list={
+    re=lapply(1:length(mats),function(i) CreateSeuratObject(counts=mats[[i]],project=names(mats)[i]))
+    names(re)=names(mats)
+    re
+  })
+  append.meta=function(s) {
+    for (i in seq_len(ncol(d$coldata))) s[[names(d$coldata)[i]]]=rep(d$coldata[cols,i],nrow(s[[]])/nrow(d$coldata[cols,]))
+    s
+  }
+  re = if ("Seurat" %in% class(re)) append.meta(re) else lapply(re,append.meta)
+  invisible(re)
+}
+
+as.Seurat.legacy.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NULL,mode=c("assay","cells","genes","list")) {
 
   total.mat=d$data$count
   rows=rowSums(total.mat)>0
