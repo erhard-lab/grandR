@@ -3,7 +3,7 @@ library(ggplot2)
 library(cowplot)
 library(reshape2)
 library(plyr)
-
+library(lfc)
 
 comp.hl=function(p,time=1) ifelse(p==0,Inf,log(2)/(-1/time*log(1-p)))
 
@@ -31,54 +31,82 @@ GeneType=list(
 	Unknown=function(data) rep(T,dim(data)[1])
 )
 
+
+semantics.noop=function(s,name) setNames(data.frame(s),name)
+semantics.time=function(s,name) {
+  time=rep(NA,length(s))
+  
+  no4sU=c("no4sU","-")
+  time[s %in% no4sU]=0
+  
+  h=grepl("[0-9.]+h(p.)?",s)
+  time[h]=as.numeric(gsub("([0-9.]+)h(p.)?","\\1",s[h]))
+  
+  min=grepl("[0-9.]+min",s)
+  time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))/60
+  
+  if (any(is.na(time))) stop(paste0("Time semantics cannot be used for this: ",paste(s[is.na(time)],collapse=",")))
+  setNames(data.frame(time),name)
+}
+
+
 Design=list(
   has.4sU="has.4sU",
   conc.4sU="concentration.4sU",
   dur.4sU="duration.4sU",
   Replicate="Replicate",
   Condition="Condition",
+  hpi="hpi",
+  hps="hps",
   Library="Library",
   Sample="Sample",
-  Barcode="Barcode"
+  Barcode="Barcode",
+  Origin="Origin"
   )
-# Sample is Condition+Replicate; Condition is used all over the place (e.g. kinetic fitting) to identify
+# Sample is without replicate! Condition might have multiple samples, but not the other way around; Condition is used all over the place (e.g. kinetic fitting) to identify
+Design.Semantics=list(
+  hpi=semantics.time,
+  hps=semantics.time,
+  dur.4sU=semantics.time
+)
+GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fixed=TRUE),function(v) v[field])
 
-MakeColdata=function(names,design) {
+ConvFields=function(v) {
+  if (is.data.frame(v) || is.matrix(v)) {
+    re=as.data.frame(lapply(as.data.frame(v),ConvFields))
+    colnames(re)=colnames(v)
+    rownames(re)=rownames(v)
+    return(re)
+  }
+  v=as.character(v)
+  if (sum(is.na(suppressWarnings(as.logical(v))))==0) {
+    as.logical(v)
+  } else if (sum(is.na(suppressWarnings(as.integer(v))))==0) {
+    as.integer(v)
+  } else if (sum(is.na(suppressWarnings(as.double(v))))==0) {
+    as.double(v)
+  } else {
+    factor(v,levels=unique(v))
+  }
+}
+
+
+MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE) {
   coldata=data.frame(Name=names,check.names=FALSE,stringsAsFactors = TRUE)
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   if (any(lapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data: ",paste(spl[[1]],collapse=".")))
   
-  conv=function(v) {
-    if (sum(is.na(suppressWarnings(as.logical(v))))==0) {
-      as.logical(v)
-    } else if (sum(is.na(suppressWarnings(as.integer(v))))==0) {
-      as.integer(v)
-    } else if (sum(is.na(suppressWarnings(as.double(v))))==0) {
-      as.double(v)
-    } else {
-      factor(v,levels=unique(v))
-    }
-  }
-  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,conv(sapply(spl,function(v) v[i])))
+  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,ConvFields(sapply(spl,function(v) v[i])))
   names(coldata)[-1]=design[!is.na(design)]
-  rownames(coldata)=coldata$Name
+  if (rownames) rownames(coldata)=coldata$Name
   coldata$Sample=interaction(coldata[ !(names(coldata) %in% c("Name","Replicate"))],drop=TRUE)
   
-  if (Design$dur.4sU %in% design) {
-    dur=as.character(coldata[[Design$dur.4sU]])
-    time=rep(NA,nrow(coldata))
-    
-    no4sU=c("no4sU","-")
-    time[dur %in% no4sU]=0
-    
-    h=grepl("[0-9.]+h",dur)
-    time[h]=as.numeric(substr(dur[h],1,nchar(dur[h])-1))
-    
-    min=grepl("[0-9.]+min",dur)
-    time[min]=as.numeric(substr(dur[min],1,nchar(dur[min])-3))/60
-    
-    if (any(is.na(time))) stop(paste0("Design$dur.4sU may only be used for valid durations: ",paste(dur[is.na(time)],collapse=",")))
-    coldata[[Design$dur.4sU]]=time
+  for (sname in names(semantics)) {
+    if (sname %in% design) {
+      s=as.character(coldata[[sname]])
+      df=semantics[[sname]](s,sname)
+      coldata=cbind(coldata[!names(coldata) %in% names(df)],df)
+    }
   }
   
   
@@ -86,7 +114,6 @@ MakeColdata=function(names,design) {
 }
 
 
-# TODO: param should be folder to read numis, rates, etc.
 ReadGRAND=function(prefix, verbose=FALSE, classify.genes=GeneType,design=c(Design$Condition,Design$Replicate),Unknown=NA,rename.samples=NULL,read.percent.conv=FALSE) {
 
 
@@ -98,7 +125,7 @@ checknames=function(a,b){
 
 	file=if (file.exists(prefix)) prefix else paste0(prefix,".tsv")
 	if (!file.exists(file) && file.exists(paste0(file,".gz"))) file = paste0(file,".gz")
-	prefix=gsub(".tsv$","",file)
+	prefix=gsub(".tsv(.gz)?$","",file)
 	
 	if (verbose) cat("Checking file...\n")
 	con <- file(file,"r")
@@ -188,34 +215,45 @@ checknames=function(a,b){
 	coldata=MakeColdata(colnames(re$count),design)
 	coldata$no4sU=no4sU.cols
 
-	re=grandR(prefix,gene.info,re,coldata)
+	re=grandR(prefix=prefix,gene.info=gene.info,data=re,coldata=coldata,metadata=list())
 	DefaultSlot(re)="count"
 	invisible(re)
 }
 
 
-grandR=function(prefix,gene.info,data,coldata) {
+grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,data=parent$gene.info,coldata=parent$coldata,metadata=parent$metadata,parent=NULL) {
 	info=list()
 	info$prefix=prefix
 	info$gene.info=gene.info
 	info$data=data
 	info$coldata=coldata
+	info$metadata=metadata
 	class(info)="grandR"
 	invisible(info)
 }
 
+VersionString=function(data) {
+  "grandR v0.1.0"
+}
+
+Title=function(data) {
+  x=strsplit(data$prefix,"/")[[1]]
+  x[length(x)]
+}
 
 `DefaultSlot<-` <- function(data, value) {
-  attr(data$data,"default.slot")=value
+  data$metadata$default.slot=value
   data
 }
 DefaultSlot <- function(data) {
-  attr(data$data,"default.slot")
+  data$metadata$default.slot
 }
 
 Slots=function(data) {
   names(data$data)
 }
+
+Genes=function(data, use.symbols=TRUE) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]]
 
 AddSlot=function(data,name,matrix) {
   if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
@@ -235,10 +273,14 @@ data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
 	}
 	ngene.info=if (!is.null(fun.gene.info)) fun.gene.info(data$gene.info,...) else data$gene.info
 	ncoldata=if (!is.null(fun.coldata)) fun.coldata(data$coldata,...) else data$coldata
-	invisible(grandR(data$prefix,ngene.info,re,ncoldata))
+	invisible(grandR(parent=data,gene.info=ngene.info,data=re,coldata=ncoldata))
 }
 
-
+reorder.grandR=function(data,columns) {
+  r=subset.grandR(data,columns)
+  r$coldata=ConvFields(r$coldata)
+  r
+}
 subset.grandR=function(data,columns) {
   keep=rownames(data$coldata)[columns]
   data.apply(data,function(m) m[,intersect(keep,colnames(m))],fun.coldata = function(t) droplevels(t[columns,]))
@@ -246,7 +288,7 @@ subset.grandR=function(data,columns) {
 
 split.grandR=function(data,column.name=Design$Condition) {
   col=as.factor(data$coldata[[column.name]])
-  setNames(lapply(levels(col),function(c) subset(data,col==c)),levels(col))
+  setNames(lapply(levels(col),function(c) {re=subset(data,col==c); re$coldata[[Design$Origin]]=c; re }),levels(col))
 }
 
 `Condition<-` <- function(data, value) {
@@ -265,15 +307,15 @@ RenameSamples=function(data,map=NULL,fun=NULL) {
   data.apply(data,function(m) {colnames(m)=names; m})
 }
 
-merge.grandR=function(...,list=NULL,column.name="Origin") {
+merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
   list=c(list(...),list)
   if (length(list)==1) return(list[[1]])
   
   re=list[[1]]
-  re$coldata[[column.name]]=names(list)[1]
+  if (!is.null(names(list))) re$coldata[[column.name]]=names(list)[1]
   for (i in 2:length(list)) {
     add=list[[i]]
-    add$coldata[[column.name]]=names(list)[i]
+    if (!is.null(names(list))) add$coldata[[column.name]]=names(list)[i]
     if (any(colnames(add) %in% colnames(re))) stop("Sample names must be unique!")
     if (any(rownames(add)!=rownames(re))) stop("Data sets must have the same genes!")
     if (any(colnames(add$coldata)!=colnames(re$coldata))) stop("Data sets must have the coldata columns!")
@@ -331,9 +373,8 @@ ToIndex=function(data,gene) {
 
 
 
-GetTable=function(data,type,conditions=colnames(data),gene=1:nrow(data),keep.ntr.na=TRUE,summarize=NULL,prefix=NULL,name.by="Symbol") {
-  type=type[1]
-  r=GetData(data,type,conditions,gene,keep.ntr.na = keep.ntr.na,coldata=FALSE, table=TRUE,name.by = name.by)
+GetTable=function(data,type,subset=NULL,gene=Genes(data),keep.ntr.na=TRUE,summarize=NULL,prefix=NULL,name.by="Symbol") {
+  r=GetData(data,type,subset=subset,gene,keep.ntr.na = keep.ntr.na,coldata=FALSE, table=TRUE,name.by = name.by)
   if (!is.null(summarize)) {
     if (is.logical(summarize) && length(summarize)==1) summarize=GetSummarizeMatrix(data)
     r=as.data.frame(as.matrix(r) %*% summarize)
@@ -341,12 +382,13 @@ GetTable=function(data,type,conditions=colnames(data),gene=1:nrow(data),keep.ntr
   if (!is.null(prefix)) colnames(r)=paste0(prefix,colnames(r))
   r
 }
-GetData=function(data,type,conditions=colnames(data$data$count),gene=1:nrow(data),melt=FALSE,coldata=TRUE,table=FALSE,keep.ntr.na=TRUE,name.by="Symbol") {
+GetData=function(data,type,subset=NULL,gene=Genes(data),melt=FALSE,coldata=TRUE,table=FALSE,keep.ntr.na=TRUE,name.by="Symbol") {
 	if (table) { 
 		melt=FALSE
 		coldata=FALSE
 		if (length(type)!=1) stop("Only one type for table output!")
 	}
+  if (is.null(subset)) subset=colnames(data)
 	og=gene
 	gene=ToIndex(data,gene)
 	og=data$gene.info[[name.by]][gene]
@@ -354,18 +396,18 @@ GetData=function(data,type,conditions=colnames(data$data$count),gene=1:nrow(data
 		tno="t"
 		spl=strsplit(type,".",fixed=TRUE)[[1]]
 		if (length(spl)>1) {tno=spl[1]; type=spl[2];}
-		mf = switch(tolower(substr(tno,1,1)),t=1,n=data$data$ntr[gene,conditions],o=1-data$data$ntr[gene,conditions],stop(paste0(type," unknown!"))) 
+		mf = switch(tolower(substr(tno,1,1)),t=1,n=data$data$ntr[gene,subset],o=1-data$data$ntr[gene,subset],stop(paste0(type," unknown!"))) 
 		if (!keep.ntr.na) {
 			mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
 		}
 		conv=if (type=="count") function(m) {mode(m) <- "integer";m} else if (type=="ntr" && !keep.ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
 		if (!(type %in% names(data$data))) stop(paste0(type," unknown!"))
-		if (length(gene)==1) data.frame(conv(data$data[[tolower(type)]][gene,conditions]*mf)) else as.data.frame(conv(t(data$data[[tolower(type)]][gene,conditions]*mf)))
+		if (length(gene)==1) data.frame(conv(data$data[[tolower(type)]][gene,subset]*mf)) else as.data.frame(conv(t(data$data[[tolower(type)]][gene,subset]*mf)))
 	}
 	re=as.data.frame(lapply(type,uno))
 	if(length(type)==1 && length(gene)==1) names(re)="Value" else if (length(type)==1) names(re)=og else if (length(gene)==1) names(re)=type else names(re)=paste0(rep(og,length(type))," ",rep(type,each=length(og)))
-	if (coldata) re = cbind(data$coldata[conditions,],re)
+	if (coldata) re = cbind(data$coldata[subset,],re)
 	if (melt && (length(gene)>1 || length(type)>1)) {
 		re = melt(re,id.vars=if(coldata) names(data$coldata) else c(),value.name="Value")
 		if (length(type)==1) names(re)[dim(re)[2]-1]="Gene" else if (length(gene)==1) names(re)[dim(re)[2]-1]="Type" else {
@@ -376,7 +418,7 @@ GetData=function(data,type,conditions=colnames(data$data$count),gene=1:nrow(data
 	if (table) {
 		names(re)=og
 		re=as.data.frame(t(re))
-		names(re)=conditions
+		names(re)=data$coldata[subset,"Name"]
 	}
 	re
 }

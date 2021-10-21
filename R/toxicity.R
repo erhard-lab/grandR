@@ -200,21 +200,34 @@ EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC, t
 
 PlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.len",...) {
   if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
-  lapply(names(pairs),function(n) PlotToxicityTestLength(data,n,pairs[[n]],TU.len = TU.len,...)+ggtitle(n))
+  setNames(lapply(names(pairs),function(n) PlotToxicityTestLength(data,n,pairs[[n]],TU.len = TU.len,...)+ggtitle(n)),names(pairs))
 }
 PlotToxicityTestRankAll=function(data,pairs=Findno4sUPairs(data),...) {
   if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
-  lapply(names(pairs),function(n) PlotToxicityTestRank(data,n,pairs[[n]],...)+ggtitle(n))
+  setNames(lapply(names(pairs),function(n) PlotToxicityTestRank(data,n,pairs[[n]],...)+ggtitle(n)),names(pairs))
 }
 PlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
   if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
-  lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)+ggtitle(n))
+  setNames(lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)+ggtitle(n)),names(pairs))
+}
+
+DPlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
+  rm(data)
+  setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTest,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),height=4,...)),names(pairs))
+}
+DPlotToxicityTestRankAll=function(data,pairs=Findno4sUPairs(data),...) {
+  rm(data)
+  setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),height=4,...)),names(pairs))
+}
+DPlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.len",...) {
+  rm(data)
+  setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],TU.len = TU.len,add=ggtitle(n),height=4,...)),names(pairs))
 }
 
 MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=PsiLFC,slot="count",correction=1,TU.len=NULL) {
-  w=rowMeans(GetData(data,slot,conditions=w4sU,table=T))
-  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetData(data,slot,conditions=no4sU,table=T))
-  ntr=apply(GetData(data,"ntr",conditions=ntr,table=T),1,mean,rm.na=TRUE)
+  w=rowMeans(GetData(data,slot,subset=w4sU,table=T))
+  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetData(data,slot,subset=no4sU,table=T))
+  ntr=apply(GetData(data,"ntr",subset=ntr,table=T),1,mean,rm.na=TRUE)
   use=!is.na(w+n+ntr) 
   w=w[use]
   n=n[use]

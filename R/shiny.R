@@ -1,45 +1,150 @@
 
-ServeData=function(data,df=GetDiffExpTable(data,cols=c("LFC","Q")),plot1=PlotGeneOldVsNew,plot2=NULL, plot3=NULL) {
+ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,height=400,plots=NULL,title=Title(data),gg=NULL) {
 
+  
+  plot.funs=list(...)
+  
+  if (length(plot.funs)==0) plot.funs=list(PlotGeneOldVsNew)
+  if (length(sizes)==1) sizes=rep(floor(12/min(4,length(plot.funs))),min(4,length(plot.funs)))
+  if (length(sizes)!=length(plot.funs)) stop("sizes need to be length 1 or same length as plots!")
+  sizes=c(sizes,rep(1,8))
+  
+  if (!is.null(plots)) {
+    plots=lapply(plots, function(p) if (is.function(p)) p(data) else p)
+  }
+  
 	server=function(input, output,session) {
 	  options(DT.options = list(pageLength = 12))
-	  output$tab <- DT::renderDataTable(DT::datatable(df, selection = 'single',rownames = FALSE, escape=-1)) # %>%formatRound(names(df)[grepl("q$",names(df))], 2)
+	  output$tab <- DT::renderDataTable(DT::datatable(df, selection = 'single',rownames = FALSE, escape=-1,filter = "top")) # %>%formatRound(names(df)[grepl("q$",names(df))], 2)
 
-	  output$plot1=renderPlot({
-		if (length(input$tab_rows_selected)==1) {
-			gene=df$Symbol[input$tab_rows_selected]
-			if (!is.null(plot1)) plot1(data=data,gene=gene) else NULL
-		}
-	  })
-
-	  output$plot2=renderPlot({
-		if (length(input$tab_rows_selected)==1) {
-		  gene=df$Symbol[input$tab_rows_selected]
-		  if (!is.null(plot2)) plot2(data=data,gene=gene) else NULL
-		}
-	  })
-
-	  output$plot3=renderPlot({
-		if (length(input$tab_rows_selected)==1) {
-		  gene=df$Symbol[input$tab_rows_selected]
-		  if (!is.null(plot3)) plot3(data=data,gene=gene) else NULL
-		}
-		})
-
+	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.funs[[1]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=2) plot.funs[[2]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=3) plot.funs[[3]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  output$plot4=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=4) plot.funs[[4]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  output$plot5=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=5) plot.funs[[5]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  output$plot6=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=6) plot.funs[[6]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=7) plot.funs[[7]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=8) plot.funs[[8]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  
+	  if (!is.null(plots)) {
+	    for (n in names(plots)) {
+	      create=function(n) {
+  	      env=new.env()
+  	      env$n=n
+  	      getwidth=function() {
+  	        w=attr(plots[[n]][[input[[paste0(n,"list")]]]],"width")
+  	        if (is.null(w)) w=7*100
+  	        w
+  	      }
+  	      getheight=function() {
+  	        w=attr(plots[[n]][[input[[paste0(n,"list")]]]],"height")
+  	        if (is.null(w)) w=7*100
+  	        w
+  	      }
+  	      renderPlot({plots[[n]][[input[[paste0(n,"list")]]]](data)},width=getwidth,height=getheight,env=env)
+	      }
+	      output[[paste0(n,"plot")]]=create(n)
+	    }
+	  }
+	  
+	  output$download <- 
+	    downloadHandler(
+	      filename = paste0(title,".csv.gz"),
+	      content = function(file){
+	        write.csv(df[input[["tab_rows_all"]], ],
+	                  gzfile(file))
+	      }
+	    )
+	  
 	}
 
 
-	ui=fluidPage(
-	  fluidRow(
-	    column(12, DT::dataTableOutput('tab'))
-	  ),
-	  fluidRow(
-	    column(4, plotOutput("plot1",height = 400)),
-	    column(if (is.null(plot3)) 8 else 4, plotOutput("plot2",height = 400)),
-	    column(4, plotOutput("plot3",height = 400))
-	  )
-	)
+	plot.ui=NULL
+	if (!is.null(plots)) {
+	  
+	  plist=c(lapply(names(plots),function(n) tabPanel(n,
+	                                                   selectInput(paste0(n,"list"),n,names(plots[[n]]),selectize=FALSE,size=10),
+	                                                   plotOutput(paste0(n,"plot"))
+	                                                   )),list(title="Plots"))
+	  
+	  plot.ui=do.call("navbarMenu",plist)
+	}
+	ui=list(
+        	  tabPanel("Data",
+        	  fluidPage(
+        	  fluidRow(
+        	    column(12, DT::dataTableOutput('tab')),
+        	    downloadButton('download',"Download table")
+        	  ),
+        	  fluidRow(
+        	    column(sizes[1], plotOutput("plot1",height = height)),
+        	    conditionalPanel(
+        	      condition = "plot2",
+        	      column(sizes[2], plotOutput("plot2",height = height))
+        	    ),
+        	    conditionalPanel(
+        	      condition = "plot3",
+        	      column(sizes[3], plotOutput("plot3",height = height))
+        	    ),
+        	    conditionalPanel(
+        	      condition = "plot4",
+        	      column(sizes[4], plotOutput("plot4",height = height))
+        	    )
+        	  ),
+        	  fluidRow(
+        	    conditionalPanel(
+        	      condition = "plot5",
+        	      column(sizes[5], plotOutput("plot5",height = height))
+        	    ),
+        	    conditionalPanel(
+        	      condition = "plot6",
+        	      column(sizes[6], plotOutput("plot6",height = height))
+        	    ),
+        	    conditionalPanel(
+        	      condition = "plot7",
+        	      column(sizes[7], plotOutput("plot7",height = height))
+        	    ),
+        	    conditionalPanel(
+        	      condition = "plot8",
+        	      column(sizes[8], plotOutput("plot8",height = height))
+        	    )
+        	  )
+        	  #do.call("fluidRow",lapply(1:length(plot.funs),function(i) column(sizes[i],plotOutput(paste0("plot.funs",i),height=height))))
+        	)),
+        	
+        	plot.ui,
+        	
+        	navbarMenu("More",
+        	           tabPanel("Download table")
+        	),
 
+        	  
+        	tags$script(HTML(sprintf("
+        	var header = $('.navbar> .container-fluid');
+          header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">%s</span></div>')",
+        	                         VersionString(data)
+        	))),
+        	
+        	tags$script(HTML(
+        	  "$(document).ready(function(){
+              $('#download').css({'position': 'absolute', 'left': '-999px;'});
+              
+              $('[data-toggle=tab]').on('click', function(e){
+                if (($(this).attr('data-value'))=='Download') {
+                  $('#download')[0].click()
+                  $('.dropdown').removeClass('open');
+                  e.stopPropagation();
+                  e.preventDefault();
+                }
+              });
+            });"
+        	))
+	)
+	
+	ui=ui[!sapply(ui,is.null)]
+	myui=function(...) navbarPage(title,...)
+	ui=do.call("myui",ui)
+	
 	shinyApp(ui = ui, server = server)
 }
 

@@ -115,20 +115,21 @@ LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=
   }
   if (total) data=comp(paste0("total.",slot),"Total")
   if (new) data=comp(paste0("new.",slot),"New")
-  if (old) data=comp(paste0("old",slot),"Old")
+  if (old) data=comp(paste0("old.",slot),"Old")
   invisible(data)
 }
 
 
-GetDiffExpTable=function(data,cols=NULL,sort=FALSE) {
+GetDiffExpTable=function(data,gene.info=TRUE,names=NULL,modes=NULL,cols=NULL,sort=FALSE) {
   if (!is.null(data$data$diffexp) && is.null(data$diffexp)) {
     data$diffexp=data$data$diffexp
     if (!is.null(cols)) cols=c(cols,tolower(cols))
   }
-  re=data$gene.info[,!(names(data$gene.info) %in% c("Length")),drop=FALSE]
+  re=data$gene.info
   ord=rep(0,nrow(re))
-  for (name in names(data$diffexp)) {
-    for (mode in names(data$diffexp[[name]])) {
+  sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
+  for (name in sintersect(names(data$diffexp),names)) {
+    for (mode in sintersect(names(data$diffexp[[name]]),modes)) {
       t=data$diffexp[[name]][[mode]]
       if (!is.null(cols)) t=t[,intersect(names(t),cols),drop=FALSE]
       if (!is.null(t$Q)) ord=ord+log(t$Q)
@@ -137,6 +138,7 @@ GetDiffExpTable=function(data,cols=NULL,sort=FALSE) {
     }
   }
   if (sort) re=re[order(ord),]
+  if (!gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re)]
   re
 }
 
@@ -159,10 +161,14 @@ GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
 GetContrasts.grandR=function(data,subset=!data$coldata$no4sU,...) GetContrasts.default(coldata=data$coldata,subset=subset,...)
-GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,name=contrast[1],covariate=NULL,subset=NULL) {
-  if (length(contrast)==1) contrast=c(contrast,levels(coldata[,contrast])[1:2])
-  if (length(contrast)!=3 || !contrast[1]%in%names(coldata) || !all(contrast[2:3] %in% coldata[,contrast[1]])) stop("Illegal contrasts (either a name from design, or a vector of length 3 (name from design vector and two levels)")
-  contr=function(use=TRUE) {
+GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,name=NULL,covariate=NULL,subset=NULL) {
+  # either level 1 against level 2 of some coldata column (3 entries in contrast)
+  # or each level against one specific level (2 entries)
+  # or each all pairwise comparison (1 entry)
+  # in both cases, covariates would just subset by the covariate levels first, and then do it for each subset separately
+  if (!(length(contrast) %in% 1:3) || !contrast[1]%in%names(coldata) || (length(contrast)>1 && !all(contrast[2:length(contrast)] %in% coldata[,contrast[1]]))) stop("Illegal contrasts (either a name from design (all pairwise comparisons), a name and a reference level (all comparisons vs. the reference), or a name and two levels (exactly this comparison))")
+  
+  make.col=function(contrast,use=TRUE) {
     re=rep(0,nrow(coldata))
     re[coldata[,contrast[1]]==contrast[2] & use]=1
     re[coldata[,contrast[1]]==contrast[3] & use]=-1
@@ -171,13 +177,53 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,d
       re=rep(0,nrow(coldata))
       re[subset]=save[subset]
     }
-    re
+    matrix(re)
   }
-  if (is.null(covariate))  return(setNames(data.frame(contr()),name))
-  covvec=interaction(coldata[covariate],drop=FALSE,sep=".")
-  names=levels(covvec)
-  if (!is.null(name)) names=paste0(name,".",names)
-  re=as.data.frame(setNames(lapply(levels(covvec),function(bin) contr(use=covvec==bin)),names),check.names=FALSE)
+  
+  contr=if (length(contrast)==3) {
+    function(use=TRUE) make.col(contrast,use)
+  } else if (length(contrast)==2) {
+    function(use=TRUE) {
+      if (is.null(subset)) subset=TRUE
+      ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[subset,contrast[1]])) else unique(coldata[subset,contrast[1]])
+      ll=setdiff(ll,contrast[2])
+      re=sapply(ll,function(l) make.col(c(contrast[1],l,contrast[2]),use))
+      #re=matrix(0,nrow=nrow(coldata),ncol=length(ll))
+      #re[coldata[,contrast[1]]==contrast[2] & use,]=-1
+      #for (c in 1:length(ll)) re[coldata[,contrast[1]]==ll[c] & use,c]=1
+      #if (!is.null(subset)) {
+      #  save=re
+      #  re=matrix(0,nrow=nrow(coldata),ncol=length(ll))
+      #  re[subset,]=save[subset,]
+      #}
+      colnames(re)=ll
+      re
+    }
+  } else {
+    function(use=TRUE) {
+      if (is.null(subset)) subset=TRUE
+      ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[subset,contrast[1]])) else unique(coldata[subset,contrast[1]])
+      re=combn(ll,2,FUN=function(v) make.col(c(contrast,v),use)[,1])
+      colnames(re)=combn(ll,2,FUN=paste,collapse=" vs ")
+      re
+    }
+  }
+  re=if (is.null(covariate)) {
+    as.data.frame(contr())
+  } else {
+    covvec=interaction(coldata[covariate],drop=FALSE,sep=".")
+    names=levels(covvec)
+    re=lapply(levels(covvec),function(bin) contr(use=covvec==bin))
+    re=if (!is.null(colnames(re))) setNames(re,paste0(names,names(re),sep=".")) else setNames(re,names)
+    as.data.frame(re,check.names=FALSE)
+  }
+  if (ncol(re)==1 && names(re)=="V1") {
+    names(re)=if (is.null(name)) contrast[1] else name;
+    name=NULL;
+  }
+  if (!is.null(name)) {
+    names(re)= if (length(name)==ncol(re)) name else paste(name,names(re),sep=".")
+  }
   re=re[,!apply(re==0,2,all),drop=FALSE]
   re
 }
@@ -222,8 +268,8 @@ MAPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutof
 
 # Normalization of NTRs such that: median logFC new RNA vs. new RNA is 0, there is no correlation of this logFC vs the NTR
 NormalizeEffectiveLabeling=function(data,reference=colnames(data),slot="norm",verbose=FALSE) {
-  w=rowMeans(GetTable(data,slot,conditions=reference),na.rm=TRUE)
-  ntr=rowMeans(GetTable(data,"ntr",conditions=reference),na.rm=TRUE)
+  w=rowMeans(GetTable(data,slot,subset=reference),na.rm=TRUE)
+  ntr=rowMeans(GetTable(data,"ntr",subset=reference),na.rm=TRUE)
   w=w*ntr
   use=!is.na(w) && w>0
   w=w[use]
@@ -231,7 +277,7 @@ NormalizeEffectiveLabeling=function(data,reference=colnames(data),slot="norm",ve
   for (s in colnames(data)[!data$coldata$no4sU])  {
     if (verbose) cat(sprintf("Fitting model for %s...\n",s))
     d.ntr=data$data$ntr[use,s]
-    d=GetTable(data,slot,conditions=s)[use,1]
+    d=GetTable(data,slot,subset=s)[use,1]
     df=data.frame(ntr=ntr,lfc=log2(d.ntr*d/w))
     df=df[!is.na(df$lfc) & !is.infinite(df$lfc),]
     fit=quantreg::lprq(df$ntr,df$lfc,h = 0.05)

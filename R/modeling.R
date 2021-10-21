@@ -44,9 +44,10 @@ logLik.nls.lm <- function(object, REML = FALSE, ...)
     class(val) <- "logLik"
     val
 }
-FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,conf.int=0.95,use.old=TRUE,use.new=TRUE,return.vector=FALSE,return.fields=c("rmse"),maxiter=100) {
+FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,conf.int=0.95,use.old=TRUE,use.new=TRUE,return.vector=FALSE,return.fields=c("rmse"),return.extra=function(p) NULL, maxiter=100) {
     correct=function(s) {
         if (max(s$Value)==0) s$Value[s$time==1]=0.01
+        s$Type="New"
         s
     }
     
@@ -59,12 +60,14 @@ FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,con
     
     correct=function(s) {
         if (max(s$Value)==0) s$Value=0.01
+        s$Type="Old"
         s
     }
     olddf=GetData(data,type=paste0("old.",slot),gene=gene,keep.ntr.na = FALSE)
     olddf$time=olddf[[Design$dur.4sU]]
     if (is.null(olddf$Condition)) olddf$Condition="Data"
     olddf=dlply(olddf,.(Condition),function(s) correct(s))
+    
     
     fit.equi=function(ndf,odf) {
         oind=union(which(odf$time==0),(1:nrow(odf))[use.old])
@@ -79,7 +82,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,con
                        new=ndf[nind,],
                        control=nls.lm.control(maxiter = maxiter))
         
-        if (model.p$niter==maxiter) return(list(param=c(NA,NA),conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,loglik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="equi"))
+        if (model.p$niter==maxiter) return(list(data=NA,param=c(NA,NA),conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,loglik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
         conf.p=try(sd.from.hessian(-model.p$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
         par=setNames(model.p$par,c("s","d"))
         rmse=sqrt(model.p$deviance/(nrow(ndf)+nrow(odf)))
@@ -87,7 +90,16 @@ FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,con
         n=nrow(odf)
         rmse.old=sqrt(sum(fvec[1:n]^2)/n)
         rmse.new=sqrt(sum(fvec[(n+1):(n*2)]^2)/n)
-        list(param=par,conf.lower=par-conf.p,conf.upper=par+conf.p,f0=unname(par['s']/par['d']),loglik=logLik.nls.lm(model.p),rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old, total=sum(ndf$Value)+sum(odf$Value),type="equi")
+        df=rbind(odf[oind,],ndf[nind,])
+        list(data=df,
+             param=par,
+             conf.lower=par-conf.p,
+             conf.upper=par+conf.p,
+             f0=unname(par['s']/par['d']),
+             loglik=logLik.nls.lm(model.p),
+             rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
+             rmse.linear=sqrt(sum(ddply(df,.(Sample,Type),function(s) data.frame(se=s$Value-mean(s$Value))^2)$se)/nrow(df)),
+             total=sum(ndf$Value)+sum(odf$Value),type="equi")
     }
     fit.nonequi=function(ndf,odf) {
         oind=union(which(odf$time==0),(1:nrow(odf))[use.old])
@@ -103,7 +115,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,con
                        old=odf[oind,],
                        new=ndf[nind,],
                        control=nls.lm.control(maxiter = maxiter))
-        if (model.m$niter==maxiter) return(list(param=c(NA,NA),conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,loglik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
+        if (model.m$niter==maxiter) return(list(data=NA,param=c(NA,NA),conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,loglik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
         par=setNames(model.m$par,c("s","d"))
         conf.m=try(sd.from.hessian(-model.m$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
         rmse=sqrt(model.m$deviance/(nrow(ndf)+nrow(odf)))
@@ -111,7 +123,10 @@ FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,con
         n=nrow(odf)
         rmse.old=sqrt(sum(fvec[1:n]^2)/n)
         rmse.new=sqrt(sum(fvec[(n+1):(n*2)]^2)/n)
-        list(param=par,
+        df=rbind(odf[oind,],ndf[nind,])
+        linear.rmse=sqrt(sum(ddply(df,.(Sample,Type),function(s) data.frame(se=s$Value-mean(s$Value))^2)$se)/nrow(df))
+        list(data=df,
+             param=par,
              conf.lower=par-conf.m,
              conf.upper=par+conf.m,
              f0=unname(f0),
@@ -127,7 +142,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,con
         if (equi) fit.equi(ndf,odf) else fit.nonequi(ndf,odf)
     })
     if (!is.null(data$coldata$Condition)) names(fits)=names(newdf)
-    if (return.vector) fits=unlist(lapply(fits,function(p) c(Synthesis=unname(p$param["s"]),`Half-life`=unname(log(2)/p$param["d"]),p[return.fields])))
+    if (return.vector) fits=unlist(lapply(fits,function(p) c(Synthesis=unname(p$param["s"]),`Half-life`=unname(log(2)/p$param["d"]),p[return.fields],return.extra(p))))
     if (is.null(data$coldata$Condition) && !return.vector) fits=fits[[1]]
     fits
 }
