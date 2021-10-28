@@ -166,11 +166,11 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,log=FALSE,log.x=log,log.y=log) 
 	names(df)=c("A","B")
 	xmean=mean(df[,1])
 	ymean=mean(df[,2])
-	xlim=(quantile(df[,1]-xmean,pnorm(c(-2,2)))*1.5)+xmean
-	ylim=(quantile(df[,2]-ymean,pnorm(c(-2,2)))*1.5)+ymean
+	xlim=boxplot.stats(df[,1])$stats[c(1,5)] #(quantile(df[,1]-xmean,pnorm(c(-2,2)))*1.5)+xmean
+	ylim=boxplot.stats(df[,2])$stats[c(1,5)] #(quantile(df[,2]-ymean,pnorm(c(-2,2)))*1.5)+ymean
 	clip=function(v,lim) ifelse(v<lim[1],-Inf,ifelse(v>lim[2],Inf,v))
 	df$A=clip(df$A,xlim)
-	df$B=clip(df$B,xlim)
+	df$B=clip(df$B,ylim)
 	
 	trans.x=if(log.x) function(x) log(x) else function(x) x
 	trans.y=if(log.y) function(y) log(y) else function(y) y

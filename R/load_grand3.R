@@ -90,7 +90,7 @@ as.Seurat.grandR=function(d,modalities=c(RNA="total",newRNA="new"),hls=NULL,mode
     if (any(c("old","prev") %in% modalities)) mats$old=mats$total-mats$new
     if ("prev" %in% modalities) {
       stopifnot(!is.null(hls));
-      prev.mat=old.mat*exp(2*log(2)/pmin(pmax(hls,0.25),24))
+      mats$prev=mats$old*exp(2*log(2)/pmin(pmax(hls,0.25),24))
     }
   }
   if (any(c("old.lower","new.upper") %in% modalities)) {
@@ -106,10 +106,11 @@ as.Seurat.grandR=function(d,modalities=c(RNA="total",newRNA="new"),hls=NULL,mode
   if (!all(modalities %in% names(mats))) stop("Modalities unknown! Can be any of total,new,old,ntr,prev,new.lower,new.upper,old.lower,old.upper!")
 
   mats=mats[modalities]
+  if (!is.null(names(modalities))) names(mats)=names(modalities)
 
   re=switch(mode[1],assay={
-    s=CreateSeuratObject(counts=mats[[1]],assay=names(modalities)[1],project=basename(d$prefix))
-    if (length(mats)>1) for (i in 2:length(mats)) s[[names(modalities)[i]]]=CreateAssayObject(mats[[i]])
+    s=CreateSeuratObject(counts=mats[[1]],assay=names(mats)[1],project=basename(d$prefix))
+    if (length(mats)>1) for (i in 2:length(mats)) s[[names(mats)[i]]]=CreateAssayObject(mats[[i]])
     s
   },cells={
     for (i in 1:length(mats)) colnames(mats[[i]])=paste(colnames(mats[[i]]),names(mats)[i],sep=".")
