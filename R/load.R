@@ -94,7 +94,7 @@ ConvFields=function(v) {
 MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE) {
   coldata=data.frame(Name=names,check.names=FALSE,stringsAsFactors = TRUE)
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
-  if (any(lapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data: ",paste(spl[[1]],collapse=".")))
+  if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
   
   for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,ConvFields(sapply(spl,function(v) v[i])))
   names(coldata)[-1]=design[!is.na(design)]
