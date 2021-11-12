@@ -2,11 +2,12 @@
 
 
 Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
-  stopifnot(is.grandR(data))
-  df=data$coldata
-  df$group=if (paired.replicates) interaction(df[[Design$Condition]],df[[Design$Replicate]]) else df[[Design$Condition]]
-  map=dlply(df,.(group),function(s) as.character(s$Name[s$no4sU]))
-  pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
+  pairs=FindReferences(data,reference=no4sU,covariate = if(paired.replicates) c(Design$Replicate,Design$Condition) else Design$Condition)
+  #stopifnot(is.grandR(data))
+  #df=data$coldata
+  #df$group=if (paired.replicates) interaction(df[[Design$Condition]],df[[Design$Replicate]]) else df[[Design$Condition]]
+  #map=dlply(df,.(group),function(s) as.character(s$Name[s$no4sU]))
+  #pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
   if (discard.no4sU && "no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
   pairs
 }

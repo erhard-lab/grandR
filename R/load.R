@@ -382,7 +382,7 @@ GetTable=function(data,type,subset=NULL,gene=Genes(data),keep.ntr.na=TRUE,summar
   if (!is.null(prefix)) colnames(r)=paste0(prefix,colnames(r))
   r
 }
-GetData=function(data,type,subset=NULL,gene=Genes(data),melt=FALSE,coldata=TRUE,table=FALSE,keep.ntr.na=TRUE,name.by="Symbol") {
+GetData=function(data,type=DefaultSlot(data),subset=NULL,gene=Genes(data),melt=FALSE,coldata=TRUE,table=FALSE,keep.ntr.na=TRUE,name.by="Symbol") {
 	if (table) { 
 		melt=FALSE
 		coldata=FALSE
@@ -403,7 +403,7 @@ GetData=function(data,type,subset=NULL,gene=Genes(data),melt=FALSE,coldata=TRUE,
 		conv=if (type=="count") function(m) {mode(m) <- "integer";m} else if (type=="ntr" && !keep.ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
 		if (!(type %in% names(data$data))) stop(paste0(type," unknown!"))
-		if (length(gene)==1) data.frame(conv(data$data[[tolower(type)]][gene,subset]*mf)) else as.data.frame(conv(t(data$data[[tolower(type)]][gene,subset]*mf)))
+		if (length(gene)==1) data.frame(conv(data$data[[type]][gene,subset]*mf)) else as.data.frame(conv(t(data$data[[type]][gene,subset]*mf)))
 	}
 	re=as.data.frame(lapply(type,uno))
 	if(length(type)==1 && length(gene)==1) names(re)="Value" else if (length(type)==1) names(re)=og else if (length(gene)==1) names(re)=type else names(re)=paste0(rep(og,length(type))," ",rep(type,each=length(og)))
@@ -432,22 +432,47 @@ Normalize=function(data,sizeFactors=NULL,genes=NULL,name="norm",slot="count",ret
 	if (set.to.default) DefaultSlot(data)=name
 	data
 }
-NormalizeTPM=function(data,tlen=data$gene.info$Length,name="tpm",set.to.default=TRUE) {
+NormalizeTPM=function(data,tlen=data$gene.info$Length,name="tpm",slot="count",set.to.default=TRUE) {
   stopifnot(is.grandR(data))
-  mat=as.matrix(GetTable(data,"count",keep.ntr.na = FALSE,name.by = "Gene"))
+  mat=as.matrix(GetTable(data,slot,keep.ntr.na = FALSE,name.by = "Gene"))
   data=AddSlot(data,name,comp.tpm(mat,tlen))
   if (set.to.default) DefaultSlot(data)=name
   data
 }
 
+NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition==levels(Condition)[1]),name="baseline",slot=DefaultSlot(data),set.to.default=TRUE,LFC.fun=PsiLFC,...) {
+  stopifnot(is.grandR(data))
+  mat=as.matrix(GetTable(data,slot,keep.ntr.na = FALSE,name.by = "Gene"))
+  mat=sapply(names(baseline),function(n) LFC.fun(mat[,n],rowMeans(mat[,baseline[[n]]]),...))
+  data=AddSlot(data,name,mat)
+  if (set.to.default) DefaultSlot(data)=name
+  data
+}
 
 
-FilterGenes=function(data,type='count',minval=100,mincond=ncol(data)/2,use=NULL,keep=NULL,return.genes=FALSE) {
+FindReferences=function(data,reference, covariate=NULL) {
+  stopifnot(is.grandR(data))
+  df=data$coldata
+  df$group=if(is.null(covariate)) 1 else interaction(df[covariate],drop=FALSE,sep=".")
+  e=substitute(reference)
+  map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
+  pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
+  pairs
+}
+
+
+# minsamp: GetSummarizeMatrix(d,subset=NULL,average=FALSE), if all replicates of a sample exceed minval
+FilterGenes=function(data,type='count',minval=100,mincond=ncol(data)/2,minsamp=NULL,use=NULL,keep=NULL,return.genes=FALSE) {
 	if (!is.null(use) & !is.null(keep)) stop("Do not specify both use and keep!")
 
 	if (is.null(use)) {
 		t=GetData(data,type=type,table=TRUE)
-		use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincond)
+		if (!is.null(minsamp)) {
+		  m=GetSummarizeMatrix(d,subset=NULL,average=FALSE)
+		  use=rowSums(sapply(1:ncol(m),function(i) apply(t[,m[,i]>0]>=minval,1,all)))>=minsamp
+		} else {
+      use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincond)
+	  }
 		if (!is.null(keep)) use = use | rownames(t) %in% rownames(t[keep,])
 	} else {
 	  use=ToIndex(data,use)

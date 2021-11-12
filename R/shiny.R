@@ -1,5 +1,5 @@
 
-ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,height=400,plots=NULL,title=Title(data),gg=NULL) {
+ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,height=400,plots=NULL,title=Title(data),show.sessionInfo=FALSE,help=list(".Q: multiple testing corrected p values",".LFC: log2 fold changes") ) {
 
   
   plot.funs=list(...)
@@ -13,18 +13,24 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
     plots=lapply(plots, function(p) if (is.function(p)) p(data) else p)
   }
   
+  if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
+  
 	server=function(input, output,session) {
 	  options(DT.options = list(pageLength = 12))
-	  output$tab <- DT::renderDataTable(DT::datatable(df, selection = 'single',rownames = FALSE, escape=-1,filter = "top")) # %>%formatRound(names(df)[grepl("q$",names(df))], 2)
+	  output$tab <- DT::renderDataTable(DT::datatable(df, selection = 'single',rownames = FALSE, escape=-1,filter = "top",extensions = 'Buttons', options = list(
+	    dom = 'Bfrtip',
+	    buttons = c('copy', 'csv', 'excel')
+	  )) %>%formatRound(names(df)[grepl("\\.LFC$",names(df))], 2)%>%formatSignif(names(df)[grepl("\\.Q$",names(df))], 2))
 
-	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.funs[[1]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
-	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=2) plot.funs[[2]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
-	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=3) plot.funs[[3]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
-	  output$plot4=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=4) plot.funs[[4]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
-	  output$plot5=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=5) plot.funs[[5]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
-	  output$plot6=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=6) plot.funs[[6]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
-	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=7) plot.funs[[7]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
-	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=8) plot.funs[[8]](data=data,gene=df$Symbol[input$tab_rows_selected])+gg  })
+	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.funs[[1]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=2) plot.funs[[2]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=3) plot.funs[[3]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$plot4=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=4) plot.funs[[4]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$plot5=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=5) plot.funs[[5]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$plot6=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=6) plot.funs[[6]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=7) plot.funs[[7]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=8) plot.funs[[8]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$helpText=renderText({ if (length(input$tab_rows_selected)==0 && !is.null(help)) help  })
 	  
 	  if (!is.null(plots)) {
 	    for (n in names(plots)) {
@@ -47,14 +53,10 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
 	    }
 	  }
 	  
-	  output$download <- 
-	    downloadHandler(
-	      filename = paste0(title,".csv.gz"),
-	      content = function(file){
-	        write.csv(df[input[["tab_rows_all"]], ],
-	                  gzfile(file))
-	      }
-	    )
+	  if (show.sessionInfo) output$sessionInfo <- renderPrint({
+	    capture.output(sessionInfo())
+	  })
+	  
 	  
 	}
 
@@ -69,12 +71,23 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
 	  
 	  plot.ui=do.call("navbarMenu",plist)
 	}
+	
+	more=NULL
+	if (show.sessionInfo)
+	  more=navbarMenu("More",
+	                  tabPanel("Info",verbatimTextOutput("sessionInfo"))
+	  )
+	
+	
 	ui=list(
         	  tabPanel("Data",
         	  fluidPage(
         	  fluidRow(
-        	    column(12, DT::dataTableOutput('tab')),
-        	    downloadButton('download',"Download table")
+        	    column(12, DT::dataTableOutput('tab'))
+        	  ),
+        	  conditionalPanel(
+        	    condition = "helpText",
+        	    fluidRow(column(10, htmlOutput("helpText")))
         	  ),
         	  fluidRow(
         	    column(sizes[1], plotOutput("plot1",height = height)),
@@ -114,10 +127,7 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
         	
         	plot.ui,
         	
-        	navbarMenu("More",
-        	           tabPanel("Download table")
-        	),
-
+        	more,
         	  
         	tags$script(HTML(sprintf("
         	var header = $('.navbar> .container-fluid');
@@ -127,10 +137,9 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
         	
         	tags$script(HTML(
         	  "$(document).ready(function(){
-              $('#download').css({'position': 'absolute', 'left': '-999px;'});
               
               $('[data-toggle=tab]').on('click', function(e){
-                if (($(this).attr('data-value'))=='Download') {
+                if (($(this).attr('data-value'))=='Download table') {
                   $('#download')[0].click()
                   $('.dropdown').removeClass('open');
                   e.stopPropagation();

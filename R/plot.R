@@ -92,7 +92,7 @@ PlotHeatmap=function(data,
     if (is.null(cluster.genes)) cluster.genes=TRUE
   }
   
-  if (is.null(cluster.genes)) cluster.genes=length(genes)==length(Genes(data)) && all(genes==Genes(data))
+  if (is.null(cluster.genes)) cluster.genes=is.logical(genes) || (length(genes)==length(Genes(data)) && all(genes==Genes(data)))
   
   if (tolower(type[1])=="new") slot=paste0("new.",slot)
   if (tolower(type[1])=="old") slot=paste0("old.",slot)
@@ -160,26 +160,44 @@ PlotScatter.grandR=function(data,cx,cy,type=DefaultSlot(data),type.x=type,type.y
 	PlotScatter(df,...)
 }
 
-PlotScatter.data.frame=function(df,xcol=1,ycol=2,log=FALSE,log.x=log,log.y=log) {
-  df=df[,c(xcol,ycol)]
-	dfnames=names(df)
-	names(df)=c("A","B")
+PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=log,remove.outlier=1.5,size=0.5,xlim=NULL,ylim=NULL, highlight=NULL) {
+  x=substitute(x)
+  y=substitute(y)
+  dfnames=c(xcol,ycol)
+  A=if (is.null(x)) df[,xcol] else {
+    eval(x,df,parent.frame())
+  }
+  B=if (is.null(y)) df[,ycol] else {
+    eval(y,df,parent.frame())
+  }
+  
+  if (is.null(x)) dfnames[1]=names(df[,xcol,drop=F])
+  if (is.null(y)) dfnames[2]=names(df[,ycol,drop=F])
+
+  df=data.frame(A=A,B=B,highlight=FALSE)
+  if (!is.null(highlight)) df$highlight[highlight]=TRUE
+  
 	xmean=mean(df[,1])
 	ymean=mean(df[,2])
-	xlim=boxplot.stats(df[,1])$stats[c(1,5)] #(quantile(df[,1]-xmean,pnorm(c(-2,2)))*1.5)+xmean
-	ylim=boxplot.stats(df[,2])$stats[c(1,5)] #(quantile(df[,2]-ymean,pnorm(c(-2,2)))*1.5)+ymean
-	clip=function(v,lim) ifelse(v<lim[1],-Inf,ifelse(v>lim[2],Inf,v))
-	df$A=clip(df$A,xlim)
-	df$B=clip(df$B,ylim)
+	if (remove.outlier!=FALSE || !is.null(xlim) || !is.null(ylim)) {
+  	if (is.null(xlim) && remove.outlier) xlim=boxplot.stats(df[,1],coef=remove.outlier)$stats[c(1,5)] #(quantile(df[,1]-xmean,pnorm(c(-2,2)))*1.5)+xmean
+  	if (is.null(ylim) && remove.outlier) ylim=boxplot.stats(df[,2],coef=remove.outlier)$stats[c(1,5)] #(quantile(df[,2]-ymean,pnorm(c(-2,2)))*1.5)+ymean
+  	if (is.null(xlim)) xlim=range(df$A)
+  	if (is.null(ylim)) xlim=range(df$B)
+  	clip=function(v,lim) ifelse(v<lim[1],-Inf,ifelse(v>lim[2],Inf,v))
+  	df$A=clip(df$A,xlim)
+  	df$B=clip(df$B,ylim)
+	}
 	
 	trans.x=if(log.x) function(x) log(x) else function(x) x
 	trans.y=if(log.y) function(y) log(y) else function(y) y
 	
 	g=ggplot(df,aes(A,B,color=density2d(trans.x(A), trans.y(B), n = 100)))+
-			geom_point()+
+			geom_point(size=size)+
 			scale_color_viridis_c(name = "Density",guide=FALSE)+
-			xlab(dfnames[1])+ylab(dfnames[2])+
-			coord_cartesian(ylim=ylim,xlim=xlim)
+			xlab(dfnames[1])+ylab(dfnames[2])
+	if (!is.null(highlight)) g=g+geom_point(data=df[df$highlight,],color='red',size=size*2)
+  if (remove.outlier!=FALSE) g=g+coord_cartesian(ylim=ylim,xlim=xlim)
 	if (log.x) g=g+scale_x_log10()
 	if (log.y) g=g+scale_y_log10()
 	g
@@ -290,6 +308,24 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
   g
 }
 
+PlotGeneTimeCourse=function(data,gene,group="Condition",time="Time",slot=DefaultSlot(data),type="total",aest=aes(color=Condition,shape=Replicate),average.lines=TRUE,log.y=TRUE) {
+  df=GetData(data,gene=gene,type=c(slot,"ntr"),melt=F,coldata=T,keep.ntr.na = FALSE)
+  df$value=switch(type[1],total=df[[slot]],new=df[[slot]]*df[["ntr"]],old=df[[slot]]*(1-df[["ntr"]]),stop(paste0(type," unknown!")))
+  aes=modifyList(aes_string(time,"value",group=group),aest)
+  g=ggplot(df,mapping=aes)+
+    geom_point(size=2)+
+    xlab(NULL)+
+    ylab(paste0(toupper(substr(type,1,1)),substr(type,2,nchar(type))," RNA (",slot,")"))
+  if (log.y) g=g+scale_y_log10()
+  if (average.lines) {
+    # compute average line:
+    ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
+    ddf=ddply(ddf,.(x,colour),function(s) c(Value=mean(s$y,na.rm=TRUE)))
+    g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
+  }
+  g
+}
+
 Plot=function(fun=NULL,...,gg=NULL) {
   function(data,gene) {
     if (is.null(fun)) return(NULL)
@@ -308,14 +344,13 @@ DPlot=function(FUN,...,height=7,width=7,add=NULL) {
     pp=list(...)
     if (length(pp)>0) {
       re=do.call(FUN,c(list(data),param,pp))
-      if (!is.null(add)) re=re+add
+      if (!is.null(add)) for (e in if (is.list(add)) add else list(add)) re=re+e
       return(re)
     }
     
     if (is.null(value)) {
       value<<-do.call(FUN,c(list(data),param))
-      if (!is.null(add))
-        value<<-value+add
+      if (!is.null(add)) for (e in if (is.list(add)) add else list(add)) value<<-value+e
     }
     value
   }

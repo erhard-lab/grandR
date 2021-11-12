@@ -14,7 +14,9 @@ ReadGrand3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design
   
   if (verbose) cat("Reading count matrix...\n")
   count=as(readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "dgCMatrix")
-  gene.info=setNames(read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE),c("Gene","Symbol","Mode","Category","Length"))
+  gene.info=read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
+  if (ncol(gene.info)==4) gene.info$Length=1
+  gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
     
   if (anyDuplicated(gene.info$Gene)) {
     dupp=table(gene.info$Gene)

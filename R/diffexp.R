@@ -36,8 +36,12 @@ cnt=function(m) {
 	m
 }
 
-DropDiffExp=function(data) {
-  data$diffexp=NULL
+DropDiffExp=function(data,pattern=NULL) {
+  if (is.null(pattern)) {
+    data$diffexp=NULL
+  } else {
+    data$diffexp=data$diffexp[!grepl(pattern,names(data$diffexp))]
+  }
   invisible(data)
 }
 AddDiffExp=function(data,name,mode,table) {
@@ -138,7 +142,8 @@ GetDiffExpTable=function(data,gene.info=TRUE,names=NULL,modes=NULL,cols=NULL,sor
     }
   }
   if (sort) re=re[order(ord),]
-  if (!gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re)]
+  if (is.logical(gene.info) && !gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re)]
+  if (is.character(gene.info)) re=re[,-which(!names(data$gene.info) %in% gene.info)]
   re
 }
 
@@ -151,7 +156,11 @@ GetSummarizeMatrix.default=function(coldata,column="Sample",subset=!coldata$no4s
 	for (v in unique(coldata[,column])) re=cbind(re,ifelse(coldata[,column]==v,1,0))
 	rownames(re)=rownames(coldata)
 	colnames(re)=unique(coldata[,column])
-	re[-which(subset),]=0
+	if (!is.null(subset)) {
+  	save=re[subset,]
+  	re[,]=0
+  	re[subset,]=save
+	}
 	re=re[,colSums(re)>0]
 	if (average) re=t(t(re)/colSums(re))
 	re
@@ -225,6 +234,7 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,d
     names(re)= if (length(name)==ncol(re)) name else paste(name,names(re),sep=".")
   }
   re=re[,!apply(re==0,2,all),drop=FALSE]
+  rownames(re)=rownames(coldata)
   re
 }
 
