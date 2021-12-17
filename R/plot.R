@@ -4,9 +4,20 @@ KineticsRates=function(a0,s,d) function(t) (a0-s/d)*exp(-t*d)+s/d
 
 
 density2d=function(x, y, facet=NULL, n=100) {
-    if (is.null(facet)) {
+  bandwidth.nrd.ex=function (x) 
+  {
+    r <- range(x)
+    h <- (r[2L] - r[1L])/1.34
+    4 * 1.06 * min(sqrt(var(x)), h) * length(x)^(-1/5)
+  }
+  
+  if (is.null(facet)) {
         use=is.finite(x+y)
-        d=MASS::kde2d(x[use], y[use], n=n)
+        bw.x=MASS::bandwidth.nrd(x[use])
+        if (bw.x==0) bw.x=bandwidth.nrd.ex(x[use])
+        bw.y=MASS::bandwidth.nrd(y[use])
+        if (bw.y==0) bw.y=bandwidth.nrd.ex(y[use])
+        d=MASS::kde2d(x[use], y[use], h=c(bw.x,bw.y), n=n)
         r=rep(NA,length(x))
         r[use]=d$z[cbind(findInterval(x[use], d$x),findInterval(y[use], d$y))]
 	r=r/max(r,na.rm=T)
@@ -51,6 +62,12 @@ PlotPCA=function(data,type="count",ntop=500,aest=aes(color=Sample),x=1,y=2,subse
 	ggplot(d,modifyList(aes_string(paste0("PC",x),paste0("PC",y)),aest))+ geom_point(size=3)+xlab(paste0("PC",x,": ",round(percentVar[x] * 100),"% variance"))+ylab(paste0("PC",y,": ",round(percentVar[y] * 100),"% variance"))+coord_fixed()
 }
 
+Transform=function(name,label=NULL) function(mat) {
+  re=get(paste0("Transform.",name))(mat)
+  if (!is.null(label)) attr(re,"label")=label
+  re
+}
+Transform.noop=function(mat) {re=mat; attr(re,"label")="Expression"; re}
 Transform.Z=function(mat) {re=t(scale(t(mat))); attr(re,"label")="z score"; re}
 Transform.VST=function(mat) {re=vst(mat); attr(re,"label")="VST"; re}
 Transform.logFC=function(LFC.fun=PsiLFC,lfc.reference=NULL, contrasts=NULL,...) {
@@ -160,10 +177,29 @@ PlotScatter.grandR=function(data,cx,cy,type=DefaultSlot(data),type.x=type,type.y
 	PlotScatter(df,...)
 }
 
-PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=log,remove.outlier=1.5,size=0.5,xlim=NULL,ylim=NULL, highlight=NULL) {
+PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=log,remove.outlier=1.5,size=0.3,xlim=NULL,ylim=NULL, highlight=NULL, subset=NULL) {
+  adaptInf=function(df,rx,ry) {
+    # workaround to also "brush" infinity points at the border of the plane
+    if (log.x) rx=log10(rx)
+    rx=c(rx[1]-0.04*(rx[2]-rx[1]),rx[2]+0.04*(rx[2]-rx[1]))
+    if (log.x) rx=10^rx
+    df$A[is.infinite(df$A) & df$A>0]=rx[2]
+    df$A[is.infinite(df$A) & df$A<0]=rx[1]
+    
+    if (log.y) ry=log10(ry)
+    ry=c(ry[1]-0.04*(ry[2]-ry[1]),ry[2]+0.04*(ry[2]-ry[1]))
+    if (log.y) ry=10^ry
+    df$B[is.infinite(df$B) & df$B>0]=ry[2]
+    df$B[is.infinite(df$B) & df$B<0]=ry[1]
+    
+    df
+  }
+  
   x=substitute(x)
   y=substitute(y)
   dfnames=c(xcol,ycol)
+  rn=rownames(df)
+  
   A=if (is.null(x)) df[,xcol] else {
     eval(x,df,parent.frame())
   }
@@ -173,34 +209,57 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=l
   
   if (is.null(x)) dfnames[1]=names(df[,xcol,drop=F])
   if (is.null(y)) dfnames[2]=names(df[,ycol,drop=F])
-
-  df=data.frame(A=A,B=B,highlight=FALSE)
-  if (!is.null(highlight)) df$highlight[highlight]=TRUE
   
-	xmean=mean(df[,1])
-	ymean=mean(df[,2])
-	if (remove.outlier!=FALSE || !is.null(xlim) || !is.null(ylim)) {
-  	if (is.null(xlim) && remove.outlier) xlim=boxplot.stats(df[,1],coef=remove.outlier)$stats[c(1,5)] #(quantile(df[,1]-xmean,pnorm(c(-2,2)))*1.5)+xmean
-  	if (is.null(ylim) && remove.outlier) ylim=boxplot.stats(df[,2],coef=remove.outlier)$stats[c(1,5)] #(quantile(df[,2]-ymean,pnorm(c(-2,2)))*1.5)+ymean
-  	if (is.null(xlim)) xlim=range(df$A)
-  	if (is.null(ylim)) xlim=range(df$B)
-  	clip=function(v,lim) ifelse(v<lim[1],-Inf,ifelse(v>lim[2],Inf,v))
-  	df$A=clip(df$A,xlim)
-  	df$B=clip(df$B,ylim)
-	}
-	
-	trans.x=if(log.x) function(x) log(x) else function(x) x
-	trans.y=if(log.y) function(y) log(y) else function(y) y
-	
-	g=ggplot(df,aes(A,B,color=density2d(trans.x(A), trans.y(B), n = 100)))+
-			geom_point(size=size)+
-			scale_color_viridis_c(name = "Density",guide=FALSE)+
-			xlab(dfnames[1])+ylab(dfnames[2])
-	if (!is.null(highlight)) g=g+geom_point(data=df[df$highlight,],color='red',size=size*2)
-  if (remove.outlier!=FALSE) g=g+coord_cartesian(ylim=ylim,xlim=xlim)
-	if (log.x) g=g+scale_x_log10()
-	if (log.y) g=g+scale_y_log10()
-	g
+  df=data.frame(A=A,B=B)
+  rownames(df)=rn
+  if (!is.null(subset)) df=df[subset,]
+  
+  df$A.trans=if(log.x) log10(df$A) else df$A
+  df$B.trans=if(log.y) log10(df$B) else df$B
+  
+  set.coord=remove.outlier!=FALSE || !is.null(xlim) || !is.null(ylim)
+  if (set.coord) {
+    if (is.null(xlim) && remove.outlier) {
+      xlim=boxplot.stats(df$A.trans[is.finite(df$A.trans)],coef=remove.outlier)$stats[c(1,5)] #(quantile(df[,1]-xmean,pnorm(c(-2,2)))*1.5)+xmean
+      xlim=c(df$A[which(df$A.trans==xlim[1])[1]],df$A[which(df$A.trans==xlim[2])[1]])
+    }
+    if (is.null(ylim) && remove.outlier) {
+      ylim=boxplot.stats(df$B.trans[is.finite(df$B.trans)],coef=remove.outlier)$stats[c(1,5)] #(quantile(df[,2]-ymean,pnorm(c(-2,2)))*1.5)+ymean
+      ylim=c(df$B[which(df$B.trans==ylim[1])[1]],df$B[which(df$B.trans==ylim[2])[1]])
+    }
+    if (is.null(xlim)) xlim=range(df$A[!is.infinite(df$A)])
+    if (is.null(ylim)) ylim=range(df$B[!is.infinite(df$B)])
+    clip=function(v,ch,lim,minus) ifelse(ch<lim[1],minus,ifelse(ch>lim[2],Inf,v))
+    df$A.trans=clip(df$A.trans,df$A,xlim,-Inf)
+    df$B.trans=clip(df$B.trans,df$B,ylim,-Inf)
+    df$A=clip(df$A,df$A,xlim,if (log.x) 0 else -Inf)
+    df$B=clip(df$B,df$B,ylim,if (log.y) 0 else -Inf)
+  }
+  else {
+    xlim=range(df$A[!is.infinite(df$A)])
+    ylim=range(df$B[!is.infinite(df$B)])
+  }
+  
+  
+  g=ggplot(df,aes(A,B,color=density2d(A.trans, B.trans, n = 100)))+
+    geom_point(size=size)+
+    scale_color_viridis_c(name = "Density",guide="none")+
+    xlab(dfnames[1])+ylab(dfnames[2])
+  if (!is.null(highlight)) {
+    if (is.list(highlight)){
+      for (col in names(highlight)) {
+        g=g+geom_point(data=df[highlight[[col]],],color=col,size=size*2)
+      }
+    } else {
+      g=g+geom_point(data=df[highlight,],color='red',size=size*2)
+    }
+  }
+  if (set.coord) g=g+coord_cartesian(ylim=ylim,xlim=xlim)
+  if (log.x) g=g+scale_x_log10()
+  if (log.y) g=g+scale_y_log10()
+  
+  attr(g, 'df') <- adaptInf(df,xlim,ylim)
+  g
 }
 
 #PlotToxicityTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
@@ -308,14 +367,13 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
   g
 }
 
-PlotGeneTimeCourse=function(data,gene,group="Condition",time="Time",slot=DefaultSlot(data),type="total",aest=aes(color=Condition,shape=Replicate),average.lines=TRUE,log.y=TRUE) {
-  df=GetData(data,gene=gene,type=c(slot,"ntr"),melt=F,coldata=T,keep.ntr.na = FALSE)
-  df$value=switch(type[1],total=df[[slot]],new=df[[slot]]*df[["ntr"]],old=df[[slot]]*(1-df[["ntr"]]),stop(paste0(type," unknown!")))
-  aes=modifyList(aes_string(time,"value",group=group),aest)
+PlotGeneTimeCourse=function(data,gene,group="Condition",time="Time",type=DefaultSlot(data),aest=aes(color=Condition,shape=Replicate),average.lines=TRUE,log.y=TRUE) {
+  df=GetData(data,gene=gene,type=type,melt=F,coldata=T,keep.ntr.na = FALSE)
+  aes=modifyList(aes_string(time,"Value",group=group),aest)
   g=ggplot(df,mapping=aes)+
     geom_point(size=2)+
     xlab(NULL)+
-    ylab(paste0(toupper(substr(type,1,1)),substr(type,2,nchar(type))," RNA (",slot,")"))
+    ylab(paste0(" RNA (",type,")"))
   if (log.y) g=g+scale_y_log10()
   if (average.lines) {
     # compute average line:

@@ -4,6 +4,7 @@ library(cowplot)
 library(reshape2)
 library(plyr)
 library(lfc)
+library(rclipboard)
 
 comp.hl=function(p,time=1) ifelse(p==0,Inf,log(2)/(-1/time*log(1-p)))
 

@@ -108,7 +108,34 @@ TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE
 	invisible(data)
 }
 
-LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=TRUE,...) {
+TestPairwise=function(data,contrasts,total=TRUE,new=TRUE,old=TRUE) {
+  comp=function(type,name) {
+    mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
+    
+    l=setNames(lapply(contrasts,function(ctr) {
+      B=mat[,ctr==1,drop=FALSE]
+      A=mat[,ctr==-1,drop=FALSE] # reverse compared to LFC! (does not matter in the end, only the q val is extracted)
+      coldata=data.frame(comparison=c(rep("A",ncol(A)),rep("B",ncol(B))))
+      dds <- DESeqDataSetFromMatrix(countData = cbind(A,B),
+                                    colData = coldata,
+                                    design= ~ comparison-1)
+      results(DESeq(dds))
+    }),colnames(contrasts))
+    for (n in names(l)) data=AddDiffExp(data,n,name,data.frame(
+      M=l[[n]]$baseMean,
+      S=l[[n]]$stat,
+      P=l[[n]]$pvalue,
+      Q=l[[n]]$padj
+    ))
+    data
+  }
+  if (total) data=comp("total.count","Total")
+  if (new) data=comp("new.count","New")
+  if (old) data=comp("old.count","Old")
+  invisible(data)
+}
+
+LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=TRUE,compute.test=FALSE,...) {
   comp=function(type,name) {
     mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
     l=setNames(lapply(contrasts,function(ctr) {
@@ -120,16 +147,20 @@ LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=
   if (total) data=comp(paste0("total.",slot),"Total")
   if (new) data=comp(paste0("new.",slot),"New")
   if (old) data=comp(paste0("old.",slot),"Old")
+  if (compute.test) data = TestPairwise(data=data,contrasts=contrasts,total=total,new=new,old=old)
   invisible(data)
 }
 
 
-GetDiffExpTable=function(data,gene.info=TRUE,names=NULL,modes=NULL,cols=NULL,sort=FALSE) {
+GetDiffExpTable=function(data,gene.info=TRUE,rownames="Symbol",names=NULL,modes=NULL,cols=NULL,sort=FALSE) {
   if (!is.null(data$data$diffexp) && is.null(data$diffexp)) {
     data$diffexp=data$data$diffexp
     if (!is.null(cols)) cols=c(cols,tolower(cols))
   }
   re=data$gene.info
+  if (!is.null(rownames)) {
+    rownames(re)=if (rownames %in% names(data$gene.info)) data$gene.info[[rownames]] else data$gene.info[,1]
+  }
   ord=rep(0,nrow(re))
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
   for (name in sintersect(names(data$diffexp),names)) {
@@ -235,6 +266,12 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,d
   }
   re=re[,!apply(re==0,2,all),drop=FALSE]
   rownames(re)=rownames(coldata)
+  
+  remove=apply(re>=0,2,all) | apply(re<=0,2,all)
+  if (sum(remove)>0) {
+    warning(sprintf("Removed columns without matching experiment: %s",paste(colnames(re)[remove],collapse = ",")))
+    re=re[,!remove]
+  }
   re
 }
 
@@ -243,7 +280,7 @@ VulcanoPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.
   aes=modifyList(aes(LFC,-log10(Q),color=density2d(LFC,-log10(Q))),aest)
   g=ggplot(df,mapping=aes)+
     geom_point(size=0.1)+
-    scale_color_viridis_c(guide=FALSE)+
+    scale_color_viridis_c(guide='none')+
     xlab(bquote(log[2]~FC))+
     ylab(bquote("-"~log[10]~FDR))+
     geom_hline(yintercept=-log10(p.cutoff),linetype=2)+

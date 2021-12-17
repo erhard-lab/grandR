@@ -1,56 +1,111 @@
 
-ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,height=400,plots=NULL,title=Title(data),show.sessionInfo=FALSE,help=list(".Q: multiple testing corrected p values",".LFC: log2 fold changes") ) {
+ServeData=function(data,
+                   df=GetDiffExpTable(data,cols=c("LFC","Q")),
+                   df.set=df,
+                   sizes=12,height=400,
+                   plot.single=list(), plot.set=list(), plot.static=list(),
+                   df.identifier="Symbol",
+                   title=Title(data),
+                   show.sessionInfo=FALSE,
+                   help=list(".Q: multiple testing corrected p values",".LFC: log2 fold changes") ) {
 
   
-  plot.funs=list(...)
-  
-  if (length(plot.funs)==0) plot.funs=list(PlotGeneOldVsNew)
-  if (length(sizes)==1) sizes=rep(floor(12/min(4,length(plot.funs))),min(4,length(plot.funs)))
-  if (length(sizes)!=length(plot.funs)) stop("sizes need to be length 1 or same length as plots!")
+  if (length(plot.single)==0) plot.single=list(PlotGeneOldVsNew)
+  if (length(sizes)==1) sizes=rep(floor(12/min(4,length(plot.single))),min(4,length(plot.single)))
+  if (length(sizes)!=length(plot.single)) stop("sizes need to be length 1 or same length as plots!")
   sizes=c(sizes,rep(1,8))
   
-  if (!is.null(plots)) {
-    plots=lapply(plots, function(p) if (is.function(p)) p(data) else p)
-  }
+#    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
   
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
-  
 	server=function(input, output,session) {
-	  options(DT.options = list(pageLength = 12))
-	  output$tab <- DT::renderDataTable(DT::datatable(df, selection = 'single',rownames = FALSE, escape=-1,filter = "top",extensions = 'Buttons', options = list(
-	    dom = 'Bfrtip',
-	    buttons = c('copy', 'csv', 'excel')
-	  )) %>%formatRound(names(df)[grepl("\\.LFC$",names(df))], 2)%>%formatSignif(names(df)[grepl("\\.Q$",names(df))], 2))
-
-	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.funs[[1]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
-	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=2) plot.funs[[2]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
-	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=3) plot.funs[[3]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
-	  output$plot4=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=4) plot.funs[[4]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
-	  output$plot5=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=5) plot.funs[[5]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
-	  output$plot6=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=6) plot.funs[[6]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
-	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=7) plot.funs[[7]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
-	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.funs)>=8) plot.funs[[8]](data=data,gene=df$Symbol[input$tab_rows_selected])  })
+	  output$tab <- DT::renderDataTable(DT::datatable(df, 
+	                                                  callback = JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
+	                                                  selection = 'single',
+	                                                  rownames = FALSE, 
+	                                                  escape=-1,
+	                                                  filter = "top",
+	                                                  options = list(
+	                                                    pageLength = 10,
+	                                                    dom = '<"#buttons">lfrtip'
+                                                  	  ))
+	                                    %>%formatRound(names(df)[grepl("\\.LFC$",names(df))], 2)
+	                                    %>%formatSignif(names(df)[grepl("\\.Q$",names(df))], 2)
+	                                    )
+	  output$download1 <- downloadHandler(
+	    filename = function() {
+	      paste0(title,"-", Sys.Date(), ".tsv")
+	    },
+	    content = function(file) {
+	      write.table(df[input$tab_rows_all,], file,row.names=F,col.names=T,quote=F,sep="\t")
+	    }
+	  )
+	  output$clip <- renderUI({
+	    nn=if(.row_names_info(df)<0) df[input$tab_rows_all,1] else rownames(df)[input$tab_rows_all]
+	    rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), icon("clipboard"))
+	  })
+	  observeEvent(input$clipbtn, {showNotification(
+	    sprintf("Copied %d names",length(input$tab_rows_all)),
+	    duration = 2, 
+	    type = "message"
+	  )})
+	  
+	  
+	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.single[[1]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=2) plot.single[[2]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=3) plot.single[[3]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot4=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=4) plot.single[[4]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot5=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=5) plot.single[[5]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot6=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=6) plot.single[[6]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=7) plot.single[[7]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=8) plot.single[[8]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
 	  output$helpText=renderText({ if (length(input$tab_rows_selected)==0 && !is.null(help)) help  })
 	  
-	  if (!is.null(plots)) {
-	    for (n in names(plots)) {
-	      create=function(n) {
-  	      env=new.env()
-  	      env$n=n
-  	      getwidth=function() {
-  	        w=attr(plots[[n]][[input[[paste0(n,"list")]]]],"width")
-  	        if (is.null(w)) w=7*100
-  	        w
-  	      }
-  	      getheight=function() {
-  	        w=attr(plots[[n]][[input[[paste0(n,"list")]]]],"height")
-  	        if (is.null(w)) w=7*100
-  	        w
-  	      }
-  	      renderPlot({plots[[n]][[input[[paste0(n,"list")]]]](data)},width=getwidth,height=getheight,env=env)
+	  for (n in names(plot.static)) {
+	    create=function(n) {
+	      env=new.env()
+	      env$n=n
+	      getwidth=function() {
+	        w=attr(plot.static[[n]][[input[[paste0(n,"list")]]]],"width")
+	        if (is.null(w)) w=7*100
+	        w
 	      }
-	      output[[paste0(n,"plot")]]=create(n)
+	      getheight=function() {
+	        w=attr(plot.static[[n]][[input[[paste0(n,"list")]]]],"height")
+	        if (is.null(w)) w=7*100
+	        w
+	      }
+	      renderPlot({plot.static[[n]][[input[[paste0(n,"list")]]]](data)},width=getwidth,height=getheight,env=env)
 	    }
+	    output[[paste0(n,"plot")]]=create(n)
+	  }
+	  
+	  for (n in names(plot.set)) {
+	    create=function(n) {
+	      env=new.env()
+	      env$n=n
+	      getwidth=function() {
+	        w=attr(plot.set[[n]],"width")
+	        if (is.null(w)) w=7*100
+	        w
+	      }
+	      getheight=function() {
+	        w=attr(plot.set[[n]],"height")
+	        if (is.null(w)) w=7*100
+	        w
+	      }
+	      renderPlot({plot.set[[n]](df.set)},width=getwidth,height=getheight,env=env)
+	    }
+	    output[[make.names(paste0(n,"plotset"))]]=create(n)
+	    e=new.env()
+	    e$ddf=attr(plot.set[[n]](df.set),"df")
+	    e$n=n
+	    
+	    observe({
+	      brushgenes=rownames(brushedPoints(ddf, input[[make.names(paste0(n,"plotsetbrush"))]]))
+	      updateTextAreaInput(session, make.names(paste0(n,"plotsetgenes")), value = paste(brushgenes,collapse="\n"), label=sprintf("Selected genes (n=%d)",length(brushgenes)))
+	    },env=e)
+	    
 	  }
 	  
 	  if (show.sessionInfo) output$sessionInfo <- renderPrint({
@@ -58,18 +113,31 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
 	  })
 	  
 	  
+	} # end server
+
+	
+	plot.static.ui=NULL
+	if (length(plot.static)>0) {
+	  
+	  plist=c(lapply(names(plot.static),function(n) tabPanel(n,
+	                                                         selectInput(paste0(n,"list"),n,names(plot.static[[n]]),selectize=FALSE,size=10),
+	                                                         plotOutput(paste0(n,"plot"))
+	  )),list(title="Plots"))
+	  
+	  plot.static.ui=do.call("navbarMenu",plist)
 	}
-
-
-	plot.ui=NULL
-	if (!is.null(plots)) {
+	
+	plot.set.ui=NULL
+	if (length(plot.set)>0) {
 	  
-	  plist=c(lapply(names(plots),function(n) tabPanel(n,
-	                                                   selectInput(paste0(n,"list"),n,names(plots[[n]]),selectize=FALSE,size=10),
-	                                                   plotOutput(paste0(n,"plot"))
-	                                                   )),list(title="Plots"))
+	  plist=c(lapply(names(plot.set),function(n) tabPanel(n,
+	                                                      fluidRow( 
+	                                                        column(8,plotOutput(make.names(paste0(n,"plotset")),brush = brushOpts(id = make.names(paste0(n,"plotsetbrush"))))),
+	                                                        column(4,textAreaInput(make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40))
+	                                                      )
+	  )),list(title="Global level"))
 	  
-	  plot.ui=do.call("navbarMenu",plist)
+	  plot.set.ui=do.call("navbarMenu",plist)
 	}
 	
 	more=NULL
@@ -80,9 +148,12 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
 	
 	
 	ui=list(
-        	  tabPanel("Data",
+        	  tabPanel("Gene level",
         	  fluidPage(
         	  fluidRow(
+        	    rclipboardSetup(),
+        	    uiOutput("clip"),
+        	    downloadButton("download1","Download"),
         	    column(12, DT::dataTableOutput('tab'))
         	  ),
         	  conditionalPanel(
@@ -102,9 +173,7 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
         	    conditionalPanel(
         	      condition = "plot4",
         	      column(sizes[4], plotOutput("plot4",height = height))
-        	    )
-        	  ),
-        	  fluidRow(
+        	    ),
         	    conditionalPanel(
         	      condition = "plot5",
         	      column(sizes[5], plotOutput("plot5",height = height))
@@ -125,29 +194,32 @@ ServeData=function(data,...,df=GetDiffExpTable(data,cols=c("LFC","Q")),sizes=12,
         	  #do.call("fluidRow",lapply(1:length(plot.funs),function(i) column(sizes[i],plotOutput(paste0("plot.funs",i),height=height))))
         	)),
         	
-        	plot.ui,
+        	plot.set.ui,
+        	plot.static.ui,
         	
         	more,
         	  
+        	tags$head(
+        	  tags$style(
+        	    HTML("#shiny-notification-panel {
+                              top: 0;
+                              bottom: unset;
+                              left: 0;
+                              right: 0;
+                              margin-left: auto;
+                              margin-right: auto;
+                              width: 100%;
+                              max-width: 450px;
+                            }"
+        	    )
+        	  )
+        	),
+        	
         	tags$script(HTML(sprintf("
         	var header = $('.navbar> .container-fluid');
           header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">%s</span></div>')",
         	                         VersionString(data)
-        	))),
-        	
-        	tags$script(HTML(
-        	  "$(document).ready(function(){
-              
-              $('[data-toggle=tab]').on('click', function(e){
-                if (($(this).attr('data-value'))=='Download table') {
-                  $('#download')[0].click()
-                  $('.dropdown').removeClass('open');
-                  e.stopPropagation();
-                  e.preventDefault();
-                }
-              });
-            });"
-        	))
+        	)))
 	)
 	
 	ui=ui[!sapply(ui,is.null)]

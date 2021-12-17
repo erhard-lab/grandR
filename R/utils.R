@@ -5,3 +5,12 @@ read.tsv=function(t,...) {
 	t
 }
 
+combine=function(...,sep=".") {
+	l=list(...)
+	re=l[[1]]
+	if (length(l)>1) for (i in 2:length(l)) {
+		re=paste(rep(re,each=length(l[[i]])),rep(l[[i]],length(re)),sep=sep)
+	}
+	re
+}
+
