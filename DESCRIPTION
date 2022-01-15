@@ -9,13 +9,16 @@ License: Apache License (>= 2.0)
 Depends: stats,
     ggplot2,
     cowplot,
-    labeling,
-    scales,
+    patchwork,
     reshape2,
     plyr,
-    lfc,
-    gsl
+    lfc
 Suggests: knitr,
     rmarkdown,
     DESeq2,
-    SummarizedExperiment
+    rclipboard,
+    minpack.lm,
+    parallel,
+    Matrix
+RoxygenNote: 7.1.2
+VignetteBuilder: knitr

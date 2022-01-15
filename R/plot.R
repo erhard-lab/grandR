@@ -4,13 +4,13 @@ KineticsRates=function(a0,s,d) function(t) (a0-s/d)*exp(-t*d)+s/d
 
 
 density2d=function(x, y, facet=NULL, n=100) {
-  bandwidth.nrd.ex=function (x) 
+  bandwidth.nrd.ex=function (x)
   {
     r <- range(x)
     h <- (r[2L] - r[1L])/1.34
     4 * 1.06 * min(sqrt(var(x)), h) * length(x)^(-1/5)
   }
-  
+
   if (is.null(facet)) {
         use=is.finite(x+y)
         bw.x=MASS::bandwidth.nrd(x[use])
@@ -30,21 +30,21 @@ density2d=function(x, y, facet=NULL, n=100) {
 
 
 
-PlotPCA=function(data,type="count",ntop=500,aest=aes(color=Sample),x=1,y=2,subset=NULL) {
-  
+PlotPCA=function(data,type="count",ntop=500,aest=aes(color=Condition),x=1,y=2,columns=NULL) {
+
   my.cbind=function(...) {
     l=list(...)
     l=lapply(1:length(l),function(i) as.matrix(setNames(l[[i]],paste0(type[i],".",names(l[[i]])))))
     do.call("cbind",l)
   }
-  
+
   mat=do.call("my.cbind",lapply(type,GetTable,data=data))
 	#mat=cnt(switch(type[1],Total=data$data$count,New=data$data$count*data$data$ntr,Old=data$data$count*(1-data$data$ntr)))
 	cd=do.call("rbind",lapply(1:length(type), function(i) cbind(data$coldata,data.frame(type=type[i]))))
 
-	if (!is.null(subset)) {
-		mat=mat[,subset]
-		cd=cd[subset,]
+	if (!is.null(columns)) {
+		mat=mat[,columns]
+		cd=cd[columns,]
 	}
 	rm.na=!apply(is.na(mat),2,sum)==nrow(mat)
 	mat=mat[,rm.na]
@@ -56,7 +56,7 @@ PlotPCA=function(data,type="count",ntop=500,aest=aes(color=Sample),x=1,y=2,subse
   	pca <- prcomp(t(vsd[select,]))
 	percentVar <- pca$sdev^2 / sum( pca$sdev^2 )
 	d <- as.data.frame(pca$x)
-	names(d)=paste0("PC",1:dim(d)[2])	
+	names(d)=paste0("PC",1:dim(d)[2])
 	d=cbind(d, cd)
 
 	ggplot(d,modifyList(aes_string(paste0("PC",x),paste0("PC",y)),aest))+ geom_point(size=3)+xlab(paste0("PC",x,": ",round(percentVar[x] * 100),"% variance"))+ylab(paste0("PC",y,": ",round(percentVar[y] * 100),"% variance"))+coord_fixed()
@@ -93,29 +93,29 @@ PlotHeatmap=function(data,
                      slot=DefaultSlot(data),
                      summarize=NULL,
                      transform=Transform.Z,
-                     subset=NULL,
+                     columns=NULL,
                      cluster.genes=NULL,
                      label.genes=length(genes)<=50,
                      breaks=NULL, # either actual breaks, or null (50 and 99 quantile), or the quantiles (number matching to colors); if values centere around 0, then the center color is always 0
                      colors=RColorBrewer::brewer.pal(5,"RdBu"),
                      verbose=FALSE,
-                     sample.names=colnames(data),
+                     col.names=colnames(data),
                      title=NULL,return.matrix=FALSE,...) {
-  
+
   if (length(genes)==1 && genes %in% names(data$diffexp) && "Q" %in% names(data$diffexp[[genes]][[type[1]]])) {
     n=genes
     genes=data$diffexp[[genes]][[type[1]]]$Q<0.05
     if (verbose) cat(sprintf("Selected %d genes significant in %s\n",sum(genes),n))
     if (is.null(cluster.genes)) cluster.genes=TRUE
   }
-  
+
   if (is.null(cluster.genes)) cluster.genes=is.logical(genes) || (length(genes)==length(Genes(data)) && all(genes==Genes(data)))
-  
+
   if (tolower(type[1])=="new") slot=paste0("new.",slot)
   if (tolower(type[1])=="old") slot=paste0("old.",slot)
-  if (tolower(type[1])!="total" && is.null(subset)) subset=!data$coldata$no4sU
-  
-  mat=as.matrix(GetTable(data,type=slot,gene = genes,subset=subset,summarize = summarize,keep.ntr.na = FALSE))
+  if (tolower(type[1])!="total" && is.null(columns)) columns=!data$coldata$no4sU
+
+  mat=as.matrix(GetTable(data,type=slot,gene = genes,columns=columns,summarize = summarize,ntr.na = FALSE))
   mat=transform(mat)
 
   name=attr(mat,"label")
@@ -134,7 +134,7 @@ PlotHeatmap=function(data,
       breaks=quantile(mat,quant/100)
     }
   }
-  colnames(mat)=if (is.null(subset)) sample.names else sample.names[subset]
+  colnames(mat)=if (is.null(columns)) col.names else col.names[columns]
   col=circlize::colorRamp2(breaks = breaks,colors=colors)
   hm=ComplexHeatmap::Heatmap(mat,name=name,
                           cluster_rows = cluster.genes,
@@ -143,8 +143,8 @@ PlotHeatmap=function(data,
                           col = col,
                           column_title=if (is.null(title)) "" else title,
                           row_title=sprintf("n=%d",nrow(mat)),
-                          ...)  
-  
+                          ...)
+
   if (return.matrix) return(list(Matrix=mat,Heatmap=hm))
   hm
 }
@@ -158,7 +158,7 @@ PlotTestOverlap=function(data,name="lrt",alpha=0.05,type=c("venn","euler")) {
 
 
 PlotScatter=function(...)  {
-	UseMethod('PlotScatter',list(...)[[1]])  
+	UseMethod('PlotScatter',list(...)[[1]])
 }
 
 PlotScatter.default=function(...) {
@@ -170,14 +170,14 @@ PlotScatter.default=function(...) {
 }
 
 PlotScatter.grandR=function(data,cx,cy,type=DefaultSlot(data),type.x=type,type.y=type,...) {
-  a=GetData(data,type.x,conditions=cx,table=T)[,1]
-	b=GetData(data,type.y,conditions=cy,table=T)[,1]
+  a=GetTable(data,type=type.x,columns=cx)[,1]
+	b=GetTable(data,type=type.y,columns=cy)[,1]
 	df=data.frame(a,b)
 	names(df)=c(cx,cy)
 	PlotScatter(df,...)
 }
 
-PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=log,remove.outlier=1.5,size=0.3,xlim=NULL,ylim=NULL, highlight=NULL, subset=NULL) {
+PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=log,remove.outlier=1.5,size=0.3,xlim=NULL,ylim=NULL, highlight=NULL, columns=NULL) {
   adaptInf=function(df,rx,ry) {
     # workaround to also "brush" infinity points at the border of the plane
     if (log.x) rx=log10(rx)
@@ -185,38 +185,38 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=l
     if (log.x) rx=10^rx
     df$A[is.infinite(df$A) & df$A>0]=rx[2]
     df$A[is.infinite(df$A) & df$A<0]=rx[1]
-    
+
     if (log.y) ry=log10(ry)
     ry=c(ry[1]-0.04*(ry[2]-ry[1]),ry[2]+0.04*(ry[2]-ry[1]))
     if (log.y) ry=10^ry
     df$B[is.infinite(df$B) & df$B>0]=ry[2]
     df$B[is.infinite(df$B) & df$B<0]=ry[1]
-    
+
     df
   }
-  
+
   x=substitute(x)
   y=substitute(y)
   dfnames=c(xcol,ycol)
   rn=rownames(df)
-  
+
   A=if (is.null(x)) df[,xcol] else {
     eval(x,df,parent.frame())
   }
   B=if (is.null(y)) df[,ycol] else {
     eval(y,df,parent.frame())
   }
-  
+
   if (is.null(x)) dfnames[1]=names(df[,xcol,drop=F])
   if (is.null(y)) dfnames[2]=names(df[,ycol,drop=F])
-  
+
   df=data.frame(A=A,B=B)
   rownames(df)=rn
-  if (!is.null(subset)) df=df[subset,]
-  
+  if (!is.null(columns)) df=df[columns,]
+
   df$A.trans=if(log.x) log10(df$A) else df$A
   df$B.trans=if(log.y) log10(df$B) else df$B
-  
+
   set.coord=remove.outlier!=FALSE || !is.null(xlim) || !is.null(ylim)
   if (set.coord) {
     if (is.null(xlim) && remove.outlier) {
@@ -239,8 +239,8 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=l
     xlim=range(df$A[!is.infinite(df$A)])
     ylim=range(df$B[!is.infinite(df$B)])
   }
-  
-  
+
+
   g=ggplot(df,aes(A,B,color=density2d(A.trans, B.trans, n = 100)))+
     geom_point(size=size)+
     scale_color_viridis_c(name = "Density",guide="none")+
@@ -257,7 +257,7 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=l
   if (set.coord) g=g+coord_cartesian(ylim=ylim,xlim=xlim)
   if (log.x) g=g+scale_x_log10()
   if (log.y) g=g+scale_y_log10()
-  
+
   attr(g, 'df') <- adaptInf(df,xlim,ylim)
   g
 }
@@ -271,7 +271,7 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=l
 #	n=n[use]
 #	ntr=ntr[use]
 #
-#	phl=comp.hl(ntr)	
+#	phl=comp.hl(ntr)
 #	df=data.frame(lfc=LFC.fun(w,n),PHL=phl)[ntr<1,]
 #	df=df[df$PHL<quantile(df$PHL[is.finite(df$PHL)],hl.quantile),]
 #	ggplot(df,aes(PHL,lfc,color=density2d(PHL, lfc, n = 100)))+
@@ -287,8 +287,8 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=l
 
 
 PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
-	w=GetData(data,"count",conditions=w4sU,table=T)[,1]
-	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,"count",conditions=no4sU,table=T)[,1]
+	w=GetData(data,mode.slot="count",columns=w4sU,table=T)[,1]
+	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,mode.slot="count",columns=no4sU,table=T)[,1]
 	use=!is.na(w+n)
 	w=w[use]
 	n=n[use]
@@ -303,8 +303,8 @@ PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quant
 			coord_cartesian(ylim=ylim)
 }
 
-PlotTypeDistribution=function(data,type="tpm",relative=FALSE) {
-	df=GetData(d,type=type,table=T)
+PlotTypeDistribution=function(data,mode.slot=DefaultSlot(data),relative=FALSE) {
+	df=GetTable(data,type=mode.slot)
 	df=sapply(levels(data$gene.info$Type),function(type) colSums(df[ data$gene.info$Type==type,]))
 	df=df[,colSums(df)>0]
 	if (relative) {
@@ -312,20 +312,20 @@ PlotTypeDistribution=function(data,type="tpm",relative=FALSE) {
 		type=sprintf("%s [%%]",type)
 	}
 	df=melt(df,varnames=c("Condition","Type"))
-	ggplot(df,aes(Condition,value,fill=Type))+geom_bar(stat="Identity")+scale_fill_viridis_d()+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ylab(type)+xlab(NULL)
+	ggplot(df,aes(Condition,value,fill=Type))+geom_bar(stat="Identity")+scale_fill_viridis_d()+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ylab(mode.slot)+xlab(NULL)
 }
 
 PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
   new=paste0("new.",slot)
   old=paste0("old.",slot)
-  df=GetData(data,gene=gene,type=c(old,new),melt=F,coldata=T,keep.ntr.na = FALSE)
+  df=GetData(data,genes=gene,mode.slot=c(old,new),melt=F,coldata=T,ntr.na = FALSE)
   g=ggplot(df,modifyList(aes_string(old,new),aest))+
     geom_point(size=2)+
     scale_x_log10("Old RNA")+
     scale_y_log10("New RNA")
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df=cbind(df,GetData(data,gene=gene,type=c("lower","upper",slot),melt=F,coldata=T,keep.ntr.na = FALSE)[,c("lower","upper",slot)])
+    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper",slot),melt=F,coldata=T,ntr.na = FALSE)[,c("lower","upper",slot)])
     g=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)))
     g=g+geom_errorbarh(data=df,mapping=aes_string(xmin=paste0("(1-upper)*",slot),xmax=paste0("(1-lower)*",slot)))
   }
@@ -333,21 +333,21 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=ae
 }
 
 PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
-  df=GetData(data,gene=gene,type=c("ntr",slot),melt=F,coldata=T,keep.ntr.na = FALSE)
+  df=GetData(data,genes=gene,mode.slot=c("ntr",slot),melt=F,coldata=T,ntr.na = FALSE)
   g=ggplot(df,modifyList(aes_string(slot,"ntr"),aest))+
     geom_point(size=2)+
     scale_x_log10("Total RNA")+
     scale_y_continuous("NTR")
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df=cbind(df,GetData(data,gene=gene,type=c("lower","upper"),melt=F,coldata=T,keep.ntr.na = FALSE)[,c("lower","upper")])
+    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper"),melt=F,coldata=T,ntr.na = FALSE)[,c("lower","upper")])
     g=g+geom_errorbar(data=df,mapping=aes(ymin=lower,ymax=upper))
   }
   g
 }
 
 PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data),type="total",show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
-  df=GetData(data,gene=gene,type=c(slot,"ntr"),melt=F,coldata=T,keep.ntr.na = FALSE)
+  df=GetData(data,genes=gene,mode.slot=c(slot,"ntr"),melt=F,coldata=T,ntr.na = FALSE)
   df$value=switch(type[1],total=df[[slot]],new=df[[slot]]*df[["ntr"]],old=df[[slot]]*(1-df[["ntr"]]),stop(paste0(type," unknown!")))
   g=ggplot(df,modifyList(aes_string(group,"value"),aest))+
     geom_point(size=2,position=if(show.CI) position_dodge(width=0.4) else "identity")+
@@ -356,7 +356,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df=cbind(df,GetData(data,gene=gene,type=c("lower","upper"),melt=F,coldata=T,keep.ntr.na = FALSE)[,c("lower","upper")])
+    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper"),melt=F,coldata=T,ntr.na = FALSE)[,c("lower","upper")])
     g=switch(type[1],
              total=g,
              new=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)),width=0,position=position_dodge(width=0.4)),
@@ -368,7 +368,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
 }
 
 PlotGeneTimeCourse=function(data,gene,group="Condition",time="Time",type=DefaultSlot(data),aest=aes(color=Condition,shape=Replicate),average.lines=TRUE,log.y=TRUE) {
-  df=GetData(data,gene=gene,type=type,melt=F,coldata=T,keep.ntr.na = FALSE)
+  df=GetData(data,genes=gene,mode.slot=type,melt=F,coldata=T,ntr.na = FALSE)
   aes=modifyList(aes_string(time,"Value",group=group),aest)
   g=ggplot(df,mapping=aes)+
     geom_point(size=2)+
@@ -387,7 +387,7 @@ PlotGeneTimeCourse=function(data,gene,group="Condition",time="Time",type=Default
 Plot=function(fun=NULL,...,gg=NULL) {
   function(data,gene) {
     if (is.null(fun)) return(NULL)
-    re=fun(data=data,gene=gene,...)
+    re=fun(data=data,genes=gene,...)
     if (!is.null(gg)) re=re+gg
     re
   }
@@ -405,7 +405,7 @@ DPlot=function(FUN,...,height=7,width=7,add=NULL) {
       if (!is.null(add)) for (e in if (is.list(add)) add else list(add)) re=re+e
       return(re)
     }
-    
+
     if (is.null(value)) {
       value<<-do.call(FUN,c(list(data),param))
       if (!is.null(add)) for (e in if (is.list(add)) add else list(add)) value<<-value+e

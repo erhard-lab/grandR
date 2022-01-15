@@ -2,7 +2,7 @@
 
 
 Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
-  pairs=FindReferences(data,reference=no4sU,covariate = if(paired.replicates) c(Design$Replicate,Design$Condition) else Design$Condition)
+  pairs=FindReferences(data,reference=no4sU,group = if(paired.replicates) c(Design$Replicate,Design$Condition) else Design$Condition)
   #stopifnot(is.grandR(data))
   #df=data$coldata
   #df$group=if (paired.replicates) interaction(df[[Design$Condition]],df[[Design$Replicate]]) else df[[Design$Condition]]
@@ -16,7 +16,7 @@ ComputeBiasCorrectionFactors=function(data,pairs=Findno4sUPairs(data),TU.len=NUL
   if (is.null(TU.len)) {
     sapply(names(pairs),function(n) EstimateTranscriptionLoss(data,n,pairs[[n]],...))
   } else {
-    sapply(names(pairs),function(n) EstimateTranscriptionLossLen(data,n,pairs[[n]],TU.len=TU.len,...))    
+    sapply(names(pairs),function(n) EstimateTranscriptionLossLen(data,n,pairs[[n]],TU.len=TU.len,...))
   }
 }
 
@@ -54,16 +54,16 @@ CorrectBiasHLNonlinear.old=function(data,pairs=Findno4sUPairs(data)) {
     df=df[order(df$covar),]
     fit=lowess(df$covar,df$lfc,f=0.2)
     stopifnot(all(fit$x==df$covar))
-    
+
     df$f=2^(-fit$y)
     df$f=df$f/min(df$f) # scale such that we have an increase for each gene!
     df=df[order(df$idx),]
-    
+
     count=data$data$count[,names(pairs)[i]]
     ntr=data$data$ntr[,names(pairs)[i]]
     a=data$data$alpha[,names(pairs)[i]]
     b=data$data$beta[,names(pairs)[i]]
-    
+
     #f1=(count*df$f-count)/(count*ntr)
     data$data$count[,names(pairs)[i]] = count*df$f #==count+f1*count*ntr
     for (n in setdiff(names(data$data),c("count","ntr","alpha","beta"))) data$data[[n]][,names(pairs)[i]] = data$data[[n]][,names(pairs)[i]]*df$f
@@ -80,15 +80,15 @@ CorrectBiasHLNonlinear=function(data,pairs=Findno4sUPairs(data),TU.len=NULL) {
   for (i in 1:length(pairs)) {
     df=MakeToxicityTestTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,TU.len = TU.len)
     fit=if (is.null(TU.len))  loess(lfc~covar,data=df) else loess(lfc~covar+log(tulen),data=df)
-    
+
     df$f=2^(-predict(fit))
     df$f=df$f/min(df$f) # scale such that we have an increase for each gene!
-    
+
     count=data$data$count[,names(pairs)[i]]
     ntr=data$data$ntr[,names(pairs)[i]]
     a=data$data$alpha[,names(pairs)[i]]
     b=data$data$beta[,names(pairs)[i]]
-    
+
     #f1=(count*df$f-count)/(count*ntr)
     data$data$count[,names(pairs)[i]] = count*df$f #==count+f1*count*ntr
     for (n in setdiff(names(data$data),c("count","ntr","alpha","beta"))) data$data[[n]][,names(pairs)[i]] = data$data[[n]][,names(pairs)[i]]*df$f
@@ -119,7 +119,7 @@ CorrectBiasHLLen = function(data,pairs=Findno4sUPairs(data),LFC.fun=NormLFC) {
     f=par$par[2]
     f=f*2^(-df$tulen/1000*p)
     f=(1-f)/f
-    
+
     count=data$data$count[,names(pairs)[i]]
     ntr=data$data$ntr[,names(pairs)[i]]
     a=data$data$alpha[,names(pairs)[i]]
@@ -127,7 +127,7 @@ CorrectBiasHLLen = function(data,pairs=Findno4sUPairs(data),LFC.fun=NormLFC) {
     data$data$count[,names(pairs)[i]] = count+f*count*ntr
     # assume all other tables are expression tables!
     for (n in setdiff(names(data$data),c("count","ntr","alpha","beta"))) data$data[[n]][,names(pairs)[i]] = data$data[[n]][,names(pairs)[i]]+f*data$data[[n]][,names(pairs)[i]]*ntr
-    
+
     data$data$ntr[,names(pairs)[i]] = (ntr*count+f*ntr*count)/(count+f*count*ntr)
     ntr=data$data$ntr[,names(pairs)[i]]
     data$data$alpha[,names(pairs)[i]]=ntr*(a+b-2)+1
@@ -151,12 +151,12 @@ EstimateTranscriptionLossLen = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC
   }
   setNames(optim(c(0.01,0.5),obj)$par,c("p","f"))
 }
-  
+
 EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC, type=c("quantreg","spearman","linear","lowess"),bootstrap=FALSE) {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun)
-  
+
   if (bootstrap) df = df[sample.int(nrow(df),nrow(df),replace=TRUE),]
-  
+
   if (type[1]=="spearman") {
     obj=function(f1) {
       df=data.frame(lfc = LFC.fun(df$`4sU`+df$`4sU`*df$ntr*f1, df$`no4sU`),covar=(df$`4sU`*df$ntr+df$`4sU`*df$ntr*f1)/(df$`4sU`+df$`4sU`*df$ntr*f1))
@@ -183,7 +183,7 @@ EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC, t
   else if (type[1]=="lowess") {
     obj=function(f1) sum(loess(lfc~covar,data=data.frame(lfc = LFC.fun(df$`4sU`+df$`4sU`*df$ntr*f1, df$`no4sU`), covar=(df$`4sU`*df$ntr+df$`4sU`*df$ntr*f1)/(df$`4sU`+df$`4sU`*df$ntr*f1)))$y^2)
     f1=optimize(obj,c(0,19))$minimum
-  } 
+  }
   else if (type[1]=="quantreg") {
     obj=function(f1) quantreg::rq(lfc~covar,data=data.frame(lfc = LFC.fun(df$`4sU`+df$`4sU`*df$ntr*f1, df$`no4sU`), covar=(df$`4sU`*df$ntr+df$`4sU`*df$ntr*f1)/(df$`4sU`+df$`4sU`*df$ntr*f1)))$coeff[2]
     l=obj(0)
@@ -194,9 +194,9 @@ EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC, t
     }
     f1=uniroot(obj,c(0,19))$root
   }
-  
+
   1/(f1+1)
-  
+
 }
 
 PlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.len",...) {
@@ -226,21 +226,21 @@ DPlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.l
 }
 
 MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=PsiLFC,slot="count",correction=1,TU.len=NULL) {
-  w=rowMeans(GetData(data,slot,subset=w4sU,table=T))
-  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetData(data,slot,subset=no4sU,table=T))
-  ntr=apply(GetData(data,"ntr",subset=ntr,table=T),1,mean,rm.na=TRUE)
-  use=!is.na(w+n+ntr) 
+  w=rowMeans(GetTable(data,type=slot,columns=w4sU))
+  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=no4sU))
+  ntr=apply(GetTable(data,"ntr",columns=ntr),1,mean,rm.na=TRUE)
+  use=!is.na(w+n+ntr)
   w=w[use]
   n=n[use]
   ntr=ntr[use]
-  
+
   f1=1/correction-1
   nw=w+f1*ntr*w
   ntr=(ntr*w+f1*ntr*w)/nw
   w=nw
-  
+
   phl=transform(ntr)
-  
+
   df=data.frame(`4sU`=w,`no4sU`=n,ntr=ntr,lfc=LFC.fun(w,n),covar=phl,check.names = FALSE)
   if (!is.null(TU.len)) df$tulen=data$gene.info[[TU.len]][use]
   df

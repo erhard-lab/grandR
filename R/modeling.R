@@ -2,8 +2,8 @@
 
 
 f.old.equi=function(t,s,d) s/d*exp(-t*d)
-f.new=function(t,s,d) s/d*(1-exp(-t*d))
 f.old.nonequi=function(t,f0,s,d) f0*exp(-t*d)
+f.new=function(t,s,d) s/d*(1-exp(-t*d))
 
 res.fun.equi=function(par,old,new) {
     s=par[1]
@@ -44,45 +44,51 @@ logLik.nls.lm <- function(object, REML = FALSE, ...)
     class(val) <- "logLik"
     val
 }
-FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,conf.int=0.95,use.old=TRUE,use.new=TRUE,return.vector=FALSE,return.fields=c("rmse"),return.extra=function(p) NULL, maxiter=100) {
+FitKineticsGeneLeastSquares=function(data,gene,slot="norm",time=Design$dur.4sU,steady.state=NULL,group=Design$Condition,conf.int=0.95,use.old=TRUE,use.new=TRUE,return.vector=FALSE,return.fields=c("Synthesis","Half-life","rmse"),return.extra=function(p) NULL, maxiter=100, compute.modifier=FALSE) {
+    if (length(group)>1) stop("Can only group using a single column!")
+    if (is.null(group) || is.na(group)) group=paste0(names(ColData(data)),collapse="_")
+
     correct=function(s) {
         if (max(s$Value)==0) s$Value[s$time==1]=0.01
         s$Type="New"
         s
     }
-    
-    stopifnot(Design$dur.4sU %in% names(data$coldata))
-    
-    newdf=GetData(data,type=paste0("new.",slot),gene=gene,keep.ntr.na = FALSE)
-    newdf$time=newdf[[Design$dur.4sU]]
-    if (is.null(newdf$Condition)) newdf$Condition="Data"
-    newdf=dlply(newdf,.(Condition),function(s) correct(s))
-    
+
+    stopifnot(time %in% names(data$coldata))
+
+    newdf=GetData(data,mode.slot=paste0("new.",slot),genes=gene,ntr.na = FALSE)
+    newdf$use=1:nrow(newdf) %in% (1:nrow(newdf))[use.new]
+    newdf$time=newdf[[time]]
+    if (is.null(newdf[[group]])) {
+        newdf[[group]]="Data"
+        if (length(steady.state)==1) names(steady.state)="Data"
+    }
+    newdf=dlply(newdf,group,function(s) correct(s))
+
     correct=function(s) {
         if (max(s$Value)==0) s$Value=0.01
         s$Type="Old"
         s
     }
-    olddf=GetData(data,type=paste0("old.",slot),gene=gene,keep.ntr.na = FALSE)
-    olddf$time=olddf[[Design$dur.4sU]]
-    if (is.null(olddf$Condition)) olddf$Condition="Data"
-    olddf=dlply(olddf,.(Condition),function(s) correct(s))
-    
-    
+    olddf=GetData(data,mode.slot=paste0("old.",slot),genes=gene,ntr.na = FALSE)
+    olddf$use=1:nrow(olddf) %in% (1:nrow(olddf))[use.old]
+    olddf$time=olddf[[time]]
+    if (is.null(olddf[[group]])) olddf[[group]]="Data"
+    olddf=dlply(olddf,group,function(s) correct(s))
+
+
     fit.equi=function(ndf,odf) {
-        oind=union(which(odf$time==0),(1:nrow(odf))[use.old])
-        nind=union(which(ndf$time==0),(1:nrow(ndf))[use.new])
-        
+
         tinit=min(ndf$time[ndf$Value>0])
         init.d=mean(-log(1-(0.1+ndf[ndf$time==tinit,"Value"])/(0.2+ndf[ndf$time==tinit,"Value"]+odf[odf$time==tinit,"Value"])))
         init.s=init.d*mean(odf[odf$time==tinit,"Value"])
-        model.p=nls.lm(c(init.s,init.d),lower=c(0,0.01),
+        model.p=minpack.lm::nls.lm(c(init.s,init.d),lower=c(0,0.01),
                        fn=res.fun.equi,
-                       old=odf[oind,],
-                       new=ndf[nind,],
-                       control=nls.lm.control(maxiter = maxiter))
-        
-        if (model.p$niter==maxiter) return(list(data=NA,param=c(NA,NA),conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,loglik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
+                       old=odf[odf$use,],
+                       new=ndf[ndf$use,],
+                       control=minpack.lm::nls.lm.control(maxiter = maxiter))
+
+        if (model.p$niter==maxiter) return(list(data=NA,modifier=NA,param=c(NA,NA),conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
         conf.p=try(sd.from.hessian(-model.p$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
         par=setNames(model.p$par,c("s","d"))
         rmse=sqrt(model.p$deviance/(nrow(ndf)+nrow(odf)))
@@ -90,32 +96,46 @@ FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,con
         n=nrow(odf)
         rmse.old=sqrt(sum(fvec[1:n]^2)/n)
         rmse.new=sqrt(sum(fvec[(n+1):(n*2)]^2)/n)
-        df=rbind(odf[oind,],ndf[nind,])
+        df=droplevels(rbind(odf[odf$use,],ndf[ndf$use,]))
+
+
+        modifier=NA
+        if (compute.modifier) {
+            s=par["s"]
+            d=par["d"]
+            # solve f.old.equi(t)/f.new(t)=old/new for t!
+            time=daply(df,.(Name),function(sub) 1/d * log( 1+ sum(sub$Value[sub$Type=="New"])/sum(sub$Value[sub$Type=="Old"]) ) )
+            # new+old=s/d, so for a particular time point, multiply such that the sum is s/d
+            norm.fac=daply(df,.(Name),function(sub) s/d / sum(sub$Value))
+            modifier=data.frame(Name=names(norm.fac),Time=time,Norm.factor=norm.fac)
+        }
+
         list(data=df,
+             modifier=modifier,
              param=par,
              conf.lower=par-conf.p,
              conf.upper=par+conf.p,
              f0=unname(par['s']/par['d']),
-             loglik=logLik.nls.lm(model.p),
+             logLik=logLik.nls.lm(model.p),
              rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
-             rmse.linear=sqrt(sum(ddply(df,.(Sample,Type),function(s) data.frame(se=s$Value-mean(s$Value))^2)$se)/nrow(df)),
+             rmse.linear=sqrt(sum(ddply(df,c(group,"Type"),function(s) data.frame(se=s$Value-mean(s$Value))^2)$se)/nrow(df)),
              total=sum(ndf$Value)+sum(odf$Value),type="equi")
     }
     fit.nonequi=function(ndf,odf) {
-        oind=union(which(odf$time==0),(1:nrow(odf))[use.old])
-        nind=union(which(ndf$time==0),(1:nrow(ndf))[use.new])
-   
+        oind=union(which(odf$time==0),which(odf$use))
+        nind=union(which(ndf$time==0),which(ndf$use))
+
         tinit=min(ndf$time[ndf$Value>0])
         init.d=mean(-log(1-(0.1+ndf[ndf$time==tinit,"Value"])/(0.2+ndf[ndf$time==tinit,"Value"]+odf[odf$time==tinit,"Value"])))
         init.s=max(mean(ndf[ndf$time==1,"Value"]),mean(ndf[ndf$time==2,"Value"])/2,mean(ndf[ndf$time==4,"Value"])/4)
         f0=mean(odf[odf$time==0,"Value"])
-        model.m=nls.lm(c(init.s,init.d),lower=c(0,0.01),
+        model.m=minpack.lm::nls.lm(c(init.s,init.d),lower=c(0,0.01),
                        fn=res.fun.nonequi,
                        f0=f0,
                        old=odf[oind,],
                        new=ndf[nind,],
-                       control=nls.lm.control(maxiter = maxiter))
-        if (model.m$niter==maxiter) return(list(data=NA,param=c(NA,NA),conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,loglik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
+                       control=minpack.lm::nls.lm.control(maxiter = maxiter))
+        if (model.m$niter==maxiter) return(list(data=NA,modifier=NA,param=c(NA,NA),conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, rmse.linear=NA, total=NA,type="non.equi"))
         par=setNames(model.m$par,c("s","d"))
         conf.m=try(sd.from.hessian(-model.m$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
         rmse=sqrt(model.m$deviance/(nrow(ndf)+nrow(odf)))
@@ -123,56 +143,81 @@ FitKineticsGeneLeastSquares=function(data,gene,slot="norm",steady.state=NULL,con
         n=nrow(odf)
         rmse.old=sqrt(sum(fvec[1:n]^2)/n)
         rmse.new=sqrt(sum(fvec[(n+1):(n*2)]^2)/n)
-        df=rbind(odf[oind,],ndf[nind,])
-        linear.rmse=sqrt(sum(ddply(df,.(Sample,Type),function(s) data.frame(se=s$Value-mean(s$Value))^2)$se)/nrow(df))
+        df=droplevels(rbind(odf[oind,],ndf[nind,]))
+        rmse.linear=sqrt(sum(ddply(df,c(group,"Type"),function(s) data.frame(se=s$Value-mean(s$Value))^2)$se)/nrow(df))
+
+        modifier=NA
+        if (compute.modifier) {
+            s=par["s"]
+            d=par["d"]
+            f0=unname(f0)
+            # solve f.old.nonequi(t)/f.new(t)=old/new for t!
+            time=daply(df,.(Name),function(sub) 1/d * log( 1+ (sum(sub$Value[sub$Type=="New"])*f0*d)/(sum(sub$Value[sub$Type=="Old"])*s) ) )
+            # new+old=f.old.nonequi(t)+f.new(t), so for the computed time point t, multiply such that the sum is f.old.nonequi(t)+f.new(t)
+            norm.fac=daply(df,.(Name),function(sub) {
+                t=time[as.character(sub$Name[1])]
+                (f.old.nonequi(t,f0,s,d)+f.new(t,s,d)) / sum(sub$Value)
+            })
+
+            modifier=data.frame(Name=names(norm.fac),Time=time,Norm.factor=norm.fac)
+        }
+
         list(data=df,
+             modifier=modifier,
              param=par,
              conf.lower=par-conf.m,
              conf.upper=par+conf.m,
              f0=unname(f0),
-             loglik=logLik.nls.lm(model.m),
+             logLik=logLik.nls.lm(model.m),
              rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
+             rmse.linear=rmse.linear,
              total=sum(ndf$Value)+sum(odf$Value),type="non.equi")
     }
-    
+
     fits=lapply(names(newdf),function(cond) {
         equi=is.null(steady.state) || is.na(unlist(steady.state)[cond]) || as.logical(unlist(steady.state)[cond])
         ndf=newdf[[cond]]
         odf=olddf[[cond]]
         if (equi) fit.equi(ndf,odf) else fit.nonequi(ndf,odf)
     })
-    if (!is.null(data$coldata$Condition)) names(fits)=names(newdf)
-    if (return.vector) fits=unlist(lapply(fits,function(p) c(Synthesis=unname(p$param["s"]),`Half-life`=unname(log(2)/p$param["d"]),p[return.fields],return.extra(p))))
-    if (is.null(data$coldata$Condition) && !return.vector) fits=fits[[1]]
+    if (!is.null(data$coldata[[group]])) names(fits)=names(newdf)
+    if (return.vector) fits=unlist(lapply(fits,function(p) {
+        p["Synthesis"]=unname(p$param["s"])
+        p["Half-life"]=unname(log(2)/p$param["d"])
+        c(p[return.fields],return.extra(p))
+        }))
+    if (is.null(data$coldata[[group]]) && !return.vector) fits=fits[[1]]
     fits
 }
 
 
-FitKineticsGeneNtr=function(data,gene,slot="norm",conf.int=0.95,return.vector=FALSE,total.fun=median,return.fields=c("rmse")) {
-    
+FitKineticsGeneNtr=function(data,gene,slot="norm",time=Design$dur.4sU,group=Design$Condition,conf.int=0.95,return.vector=FALSE,total.fun=median,return.fields=c("Synthesis","Half-life","rmse"),return.extra=function(p) NULL) {
+    if (length(group)>1) stop("Can only group using a single column!")
+    if (is.null(group) || is.na(group)) group=paste0(names(ColData(data)),collapse="_")
+
     crit <- qchisq(1-conf.int, df = 2, lower.tail = FALSE) / 2
-    
+
     bounds=c(log(2)/48,log(2)/0.01)
-    
-    df=GetData(data,type=paste0("total.",slot),gene=gene)
-    if (is.null(df$Condition)) df$Condition="Data"
-    total=dlply(df,.(Condition),function(s) total.fun(s$Value))
-    
-    a=GetData(data,type="alpha",gene=gene)
-    b=GetData(data,type="beta",gene=gene)
-    ntr=GetData(data,type="ntr",gene=gene)
-    if (is.null(a$Condition)) a$Condition="Data"
-    if (is.null(b$Condition)) b$Condition="Data"
-    if (is.null(ntr$Condition)) ntr$Condition="Data"
-    
+
+    df=GetData(data,mode.slot=paste0("total.",slot),genes=gene)
+    if (is.null(df[[group]])) df[[group]]="Data"
+    total=dlply(df,group,function(s) total.fun(s$Value))
+
+    a=GetData(data,mode.slot="alpha",genes=gene)
+    b=GetData(data,mode.slot="beta",genes=gene)
+    ntr=GetData(data,mode.slot="ntr",genes=gene)
+    if (is.null(a[[group]])) a[[group]]="Data"
+    if (is.null(b[[group]])) b[[group]]="Data"
+    if (is.null(ntr[[group]])) ntr[[group]]="Data"
+
     #sloglik=function(d,a,b,t) (a-1)*log(1-exp(-t*d))-t*d*b
     loglik=function(d,a,b,t) sum((a-1)*log(1-exp(-t*d))-t*d*b)
     #sloglik=function(d,a,b,t) (a-1)*log1p(-exp(-t*d))-t*d*(b-1)
     #loglik=function(d,a,b,t) sum((a-1)*log1p(-exp(-t*d))-t*d*(b-1))
-    
-    t=a[,Design$dur.4sU]
+
+    t=a[,time]
     use=t>0
-    c=droplevels(a$Condition[use])
+    c=droplevels(a[[group]][use])
     a=a$Value[use]
     b=b$Value[use]
     ntr=ntr$Value[use]
@@ -186,75 +231,122 @@ FitKineticsGeneNtr=function(data,gene,slot="norm",conf.int=0.95,return.vector=FA
         max=ploglik(d)
         lower=uniroot.save(function(x) ploglik(x)-max+crit,lower = bounds[1],upper=d)
         upper=uniroot.save(function(x) ploglik(x)-max+crit,lower = d,upper=bounds[2])
-        
+
         rmse=sum(sqrt(((1-exp(-t[ind]*d)-ntr[ind]))^2))/sum(ind)
-        
+
         list(param=c(s=total[[cc]]*d,d=d),
              conf.lower=c(s=total[[cc]]*lower,d=lower),
              conf.upper=c(s=total[[cc]]*upper,d=upper),
              f0=unname(total[[cc]]),
-             loglik=max,
+             logLik=max,
              rmse=rmse,
              total=total[[cc]],
              type="ntr.fit")
     })
-    if (!is.null(data$coldata$Condition)) names(fits)=levels(c)
-    if (return.vector) fits=unlist(lapply(fits,function(p) c(Synthesis=unname(p$param["s"]),`Half-life`=unname(log(2)/p$param["d"]),p[return.fields])))
-    if (is.null(data$coldata$Condition) && !return.vector) fits=fits[[1]]
+    if (!is.null(data$coldata[[group]])) names(fits)=levels(c)
+    if (return.vector) fits=unlist(lapply(fits,function(p) {
+        p["Synthesis"]=unname(p$param["s"])
+        p["Half-life"]=unname(log(2)/p$param["d"])
+        c(p[return.fields],return.extra(p))
+    }))
+    if (is.null(data$coldata[[group]]) && !return.vector) fits=fits[[1]]
     fits
-    
+
 }
 
-DropModeling=function(data) {
-    data$modeling=NULL
-    invisible(data)
-}
-AddModeling=function(data,name,table) {
-    if (is.null(data$modeling)) data$modeling=list()
-    if (is.null(data$modeling[[name]])) {
-        data$modeling[[name]]=table
-    } else {
-        for (n in names(table)) data$modeling[[name]][[n]]=table[[n]]
+NormalizeKinetic=function(data,slot=DefaultSlot(norm),time=Design$dur.4sU,norm.name="norm_kinetic",time.name="norm.time",group=Design$Condition,steady.state=NULL,n.estimate=1000,set.to.default=TRUE) {
+
+    conds=ColData(data)
+    if (is.null(conds[[group]])) {
+        conds[[group]]==factor("Data")
+        if (length(steady.state)==1) names(steady.state)="Data"
     }
-    rownames(data$modeling[[name]])=data$gene.info$Gene
+    timecol=setNames(rep(NA,nrow(conds)),conds$Name)
+    norm.df=list()
+    for (cond in levels(conds[[group]])) {
+        sub=subset(data,columns=conds[[group]]==cond)
+
+        # restrict to top n genes
+        totals=rowSums(GetTable(sub,type=slot))
+        threshold=sort(totals,decreasing = TRUE)[min(length(totals),n.estimate)]
+
+        # fit models
+        fits=opt$lapply(Genes(sub),FitKineticsGeneLeastSquares,data=sub,time=time,group=NULL,steady.state = steady.state[[cond]],compute.modifier=TRUE)
+        HL=log(2)/sapply(fits,function(fit) fit$param['d'])
+
+        # extract modifiers
+        times=t(sapply(fits[Genes(sub) %in% names(which(totals>=threshold))],function(fit)fit$modifier[,"Time"]))
+        colnames(times)=fits[[1]]$modifier$Name
+
+        norm.factor=t(sapply(fits[Genes(sub) %in% names(which(totals>=threshold))],function(fit)fit$modifier[,"Norm.factor"]))
+        colnames(norm.factor)=fits[[1]]$modifier$Name
+
+        # just the median for the time!
+        timecol[colnames(times)]=apply(times,2,median)
+
+        # spline regression for the normalization factors
+        for (i in 1:ncol(norm.factor)) {
+            df=data.frame(x=log10(HL[Genes(sub) %in% names(which(totals>=threshold))]),y=log10(norm.factor[,i]))
+            df=df[!is.na(df$y),]
+            spl=smooth.spline(df$x,df$y,nknots = 5)
+            norm.df[[colnames(norm.factor)[i]]]=GetTable(data,type=slot,columns=colnames(norm.factor)[i],name.by = "Gene")*10^predict(spl,log10(HL))$y
+        }
+
+    }
+
+    norm.df=as.matrix(as.data.frame(norm.df)[,ColData(data)$Name])
+
+    data=AddSlot(data,norm.name,norm.df)
+    if (set.to.default) DefaultSlot(data)=norm.name
+    data=ColData(data,time.name,timecol)
+
     invisible(data)
 }
-
 
 FitKinetics=function(data,name="kinetics",ntr.fit=FALSE,...) {
-    slam.param=as.data.frame(t(simplify2array(mclapply(data$gene.info$Gene,
-                                                       if(ntr.fit)FitKineticsGeneNtr else FitKineticsGeneLeastSquares,
-                                                       data=data,mc.cores=max(1,detectCores()-2),return.vector=TRUE,...))))
-    AddModeling(data,name,slam.param)
+    slam.param=as.data.frame(t(opt$sapply(data$gene.info$Gene,
+                                   if(ntr.fit)FitKineticsGeneNtr else FitKineticsGeneLeastSquares,
+                                   data=data,return.vector=TRUE,...)))
+    AddAnalysis(data,Analysis(name=name,analysis="FitKinetics"),slam.param)
 }
-    
 
-PlotGeneKinetics=function(data,gene,slot="norm",title=gene, ntr.fit=FALSE,...) {
+
+PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=gene, group=Design$Condition, ntr.fit=FALSE, bare.plot=FALSE,exact.tics=TRUE,...) {
     if (length(ToIndex(data,gene))==0) return(NULL)
 
-    fit=if (ntr.fit) FitKineticsGeneNtr(data,gene,slot=slot,...) else FitKineticsGeneLeastSquares(data,gene,slot,...)
+    fit=if (ntr.fit) FitKineticsGeneNtr(data,gene,slot=slot,group=group,...) else FitKineticsGeneLeastSquares(data,gene,slot=slot,group=group,...)
+    if (is.null(data$coldata[[group]])) fit=setNames(list(fit),gene)
     df=rbind(
-        cbind(GetData(data,type=paste0("total.",slot),gene=gene),Type="Total"),
-        cbind(GetData(data,type=paste0("new.",slot),gene=gene,keep.ntr.na = FALSE),Type="New"),
-        cbind(GetData(data,type=paste0("old.",slot),gene=gene,keep.ntr.na = FALSE),Type="Old")
+        cbind(GetData(data,mode.slot=paste0("total.",slot),genes=gene),Type="Total"),
+        cbind(GetData(data,mode.slot=paste0("new.",slot),genes=gene,ntr.na = FALSE),Type="New"),
+        cbind(GetData(data,mode.slot=paste0("old.",slot),genes=gene,ntr.na = FALSE),Type="Old")
     )
     if (ntr.fit) {
-        fac=if (is.null(data$coldata$Condition)) fit$total/df$Value[df$Type=="Total"] else unlist(lapply(as.character(df$Condition),function(n) fit[[n]]$total))/df$Value[df$Type=="Total"]
+        fac=unlist(lapply(as.character(df[[group]]),function(n) fit[[n]]$total))/df$Value[df$Type=="Total"]
         df$Value=df$Value*fac
     }
-    
-    df$time=df[[Design$dur.4sU]]
+
+    df$time=df[[time]]
+    if (is.data.frame(fit[[1]]$modifier)) {
+        df$time=sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Time"])
+        df$Value=df$Value*sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Norm.factor"])
+    }
+    df$Condition=if (group %in% names(df)) df[[group]] else gene
     tt=seq(0,max(df$time),length.out=100)
-    df.median=ddply(df,.(Condition,Type,duration.4sU,time),function(s) data.frame(Value=median(s$Value)))
+    df.median=ddply(df,c("Condition","Type","duration.4sU","time"),function(s) data.frame(Value=median(s$Value)))
     fitted=ldply(fit,function(f) data.frame(time=c(tt,tt),Value=c(f.old.nonequi(tt,f$f0,f$param["s"],f$param['d']),f.new(tt,f$param["s"],f$param['d'])),Type=rep(c("Old","New"),each=length(tt))),.id="Condition")
-    ggplot(df,aes(time,Value,color=Type))+
+    breaks=if (exact.tics) sort(unique(df[[time]])) else scales::breaks_extended(5)(df[[time]])
+
+    g=ggplot(df,aes(time,Value,color=Type))+
         geom_point()+
         geom_line(data=df.median[df.median$Type=="Total",])+
-        scale_x_continuous("4sU labeling",labels = function(x) sprintf("%dh",x),breaks=sort(unique(df$time)))+
-        scale_color_manual("RNA",values=c(Total="gray",New="red",Old="blue"))+
-        facet_wrap(~Condition,nrow=1)+
-        ylab("Expression")+
-        ggtitle(title)+geom_line(data=fitted,aes(ymin=NULL,ymax=NULL),linetype=2)
+        scale_x_continuous(if (bare.plot) NULL else "4sU labeling",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks)),suffix="h"),breaks=breaks)+
+        scale_color_manual("RNA",values=c(Total="gray",New="red",Old="blue"),guide=if (bare.plot) "none" else "legend")+
+        ylab(if (bare.plot) NULL else "Expression")+
+        geom_line(data=fitted,aes(ymin=NULL,ymax=NULL),linetype=2)
+    if (!is.null(data$coldata[[group]])) g=g+facet_wrap(~Condition,nrow=1)
+    if (!bare.plot) g=g+ggtitle(title)
+    g
 }
 
 
@@ -323,7 +415,7 @@ PlotCompareNTRs=function(...) {
 #    PlotCompareNTRs(sim.hl8.steady,sim.hl8.2x,sim.hl8.10x),
 #    ncol=2
 #)
-    
+
 
 #plot_grid(
 #    PlotSimulation(sim.hl4.steady),

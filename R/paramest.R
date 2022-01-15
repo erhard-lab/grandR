@@ -143,7 +143,7 @@ tabrbinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p
 
 ReadOldMixMatrices=function(data,types=c("binom","binomOverlap"),...) {
 	r=lapply(types,function(type) {
-		t=read.delim(paste0(data$prefix,".",type,".tsv"))
+		t=read.tsv(paste0(data$prefix,".",type,".tsv"))
 		if ("Type" %in% names(t)) t=t[t$Type=="",]
 		l=dlply(t,.(Condition),function(s) {
 			m=acast(d~n,data=s[,c("n","d","count")],value.var="count")
@@ -159,7 +159,7 @@ ReadOldMixMatrices=function(data,types=c("binom","binomOverlap"),...) {
 }
 
 ReadMixMatrices=function(data,...) {
-	t=read.delim(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
+	t=read.tsv(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
 	l=dlply(t,.(Condition,Subread,Label),function(s) {
 		m=acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
 		m[is.na(m)]=0
@@ -174,7 +174,7 @@ ReadMixMatrices=function(data,...) {
 }
 
 ReadMixMatrix=function(data,condition,subread,label="4sU") {
-	t=read.delim(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
+	t=read.tsv(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
 	s=t[t$Condition==condition&t$Subread==subread&t$Label==label,]
 	m=acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
 	m[is.na(m)]=0
@@ -196,7 +196,7 @@ CreateMixMatrix=function(n.vector=round(dnorm(0:50,mean=30,sd=10)*3E7),tabfun=ta
 	m=matrix(0,nrow=length(n.vector)+1,ncol=length(n.vector))
 	rownames(m)=0:length(n.vector)
 	colnames(m)=1:length(n.vector)
-	
+
 	for (n in 1:length(n.vector)) {
 		if (n.vector[n]>0) {
 			tab=tabfun(n.vector[n],n,...)
@@ -226,12 +226,12 @@ ExpectedOld=function(mixmat,par=default.model.par,p.err=par$p.err) {
 }
 ExpectedOldFraction=function(mixmat,par=default.model.par,p.err=par$p.err) {
 	em=ExpectedOld(mixmat,par,p.err)
-	em/(em+mixmat+1)	
+	em/(em+mixmat+1)
 }
 
 original.estimate=function(x, errp=5E-4) {
 	comp.p=function(x) sum(apply(x,2,function(c) sum(c*as.integer(rownames(x))))) / sum(apply(x,1,function(c) sum(c*as.integer(colnames(x)))))
-	
+
 	exp.x=function(x,p,oc) {
 		if (!all(as.integer(rownames(x))==0:(dim(x)[1]-1))) stop("Incomplete!")
 		for (c in 1:dim(x)[2]) {
@@ -250,11 +250,11 @@ original.estimate=function(x, errp=5E-4) {
 	onlyconv=onlyconv&x>0
 	onlyconv=onlyconv&matrix(rep(apply(onlyconv,2,sum)>1,each=dim(onlyconv)[1]),nrow=dim(onlyconv)[1])
 	if (sum(onlyconv)==0) stop("Cannot estimate!")
-	
+
 	init.x=x
 	init.x[matrix(rep(apply(onlyconv,2,sum)==0,each=dim(x)[1]),nrow=dim(x)[1])]=0
 
-	
+
 	inter=c(0,1)
 	while(TRUE) {
 		p=sum(inter)/2
@@ -265,7 +265,7 @@ original.estimate=function(x, errp=5E-4) {
 		if (inter[2]-inter[1]<1E-12) break;
 	}
 	conv=sum(inter)/2
-	
+
 	semat=sapply(GetMixMatn(emat),function(n) {
 		dbinom(GetMixMatk(emat),n,conv)*sum(emat[,n])
 	})
@@ -345,7 +345,7 @@ ComputeCombinationLogLikelihood=function(llold,llnew) {
 	re
 }
 
-logLik.MixMat=function(m,fun,...) { 
+logLik.MixMat=function(m,fun,...) {
 	an=GetMixMatn(m)
 	ak=GetMixMatk(m)
 	re=sum(sapply(an,function(n) {
@@ -366,7 +366,7 @@ binom.optim=function(mixmat,par,fix=c(F,F,F)) {
 	start=0
 	optfun=function(p) logLik.MixMat(mixmat,dbinommix,ntr=sel(p,1),p.err=sel(p,2),p.conv=sel(p,3))-start
 	start=optfun(pp[!fix])
-	
+
 	if (sum(!fix)==1) {
 		l=c(0,0,0)
 		u=c(1,MAX_ERR,1)
@@ -393,11 +393,11 @@ tbbinom.optim=function(mixmat,par,fix=c(F,F,F,F)) {
 	first=rep(0,length(fix))
 	first[!fix]=1:sum(!fix)
 	sel=function(p,i) if (fix[i]) pp[i] else p[first[i]]
-	
+
 	start=0
 	optfun=function(p) logLik.MixMat(mixmat,dtbbinommix,ntr=sel(p,1),p.err=sel(p,2),p.mconv=sel(p,3),shape=sel(p,4))-start
 	start=optfun(pp[!fix])
-	
+
 	if (sum(!fix)==1) {
 		l=c(0,0,0,-10)
 		u=c(1,MAX_ERR,1,10)
@@ -419,7 +419,7 @@ tbbinom.optim=function(mixmat,par,fix=c(F,F,F,F)) {
 
 fit.MixMat=function(mixmat,par=default.model.par,type=c("binom","tubinom","tbbinom"),fix=rep(FALSE,4)) {
 	if (is.list(mixmat)) return(lapply(mixmat,fit.MixMat,par=par,type=type,fix=fix))
-	
+
 	opti=switch(type[1],
 			binom=binom.optim(mixmat,par,fix),
 			tubinom=tbbinom.optim(mixmat,model.par(ntr=par$ntr,p.err=par$p.err,p.mconv=par$p.mconv,0),fix=c(fix[1:3],FALSE)),
@@ -480,7 +480,7 @@ table.MixMatrix.KL=function(mixmat,percentage=0.95,models=list()) {
 		sapply(an,function(n) {
 			hak=0:n
 			k=as.vector(mixmat[hak,n])
-			P=fun(0:n,n,...) 
+			P=fun(0:n,n,...)
 			Q=k/sum(k)
 			sum((Q*(log(Q)-log(P)))[k>0])
 		})
@@ -521,23 +521,23 @@ table.MixMatrix.compare=function(mixmat,percentage=0.95,models=list()) {
 shape.adjust=function(ntr,global.par) {
     # how much of the new RNA measured at <labeling.time> has been made before t
     perc=function(x,d) 1-(1-exp(-(1-x)*d))/(1-exp(-1*d))
-    
+
     # cumulative distribution function for global parameters, and adjusted for given degradation rates
     x=seq(global.par$p.err,global.par$p.mconv,length.out = 100)
     pnew=function(shape) ptbeta(x,global.par$p.err,global.par$p.mconv,exp(shape),exp(-shape))
     pnew.adj=function(shape,d) perc(pnew(shape),d)
-    
+
     # compute degradation rate for ntr
     ntr2d=function(ntr) -1/1*log(1-ntr)
-    
+
     global.d=ntr2d(global.par$ntr)
 
     # find shape if there was no degradation
     opt.fun=function(shape) sum((pnew(global.par$shape)-pnew.adj(shape,global.d))^2)
     global.shape.d0=optimize(opt.fun,lower=global.par$shape-5,upper=global.par$shape+5)$minimum
-    
+
     opt.fun=function(shape,this.d) sum((pnew(shape)-pnew.adj(global.shape.d0,this.d))^2)
-    
+
     sapply(ntr,function(n) {
         d=max(1E-12,ntr2d(n))
         optimize(opt.fun,this.d=d,lower=global.par$shape-5,upper=global.par$shape+5)$minimum
@@ -553,10 +553,10 @@ PlotShapeAdjust=function(...) {
         df$shape=g$shape
         df
     }
-    
+
     global.par=list(...)
     df=do.call("rbind",lapply(global.par,function(g) make.df(g)))
-    
+
     ggplot(df,aes(ntr,shape.adj,color=name))+
     geom_line()+
     geom_vline(data=unique(df[,c("gntr","shape","name")]),mapping=aes(xintercept=gntr,color=name),linetype=2,show.legend = FALSE)+

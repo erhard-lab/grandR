@@ -1,36 +1,5 @@
 
 
-CreateDESeq2<-function(data,Total=TRUE,New=FALSE,Old=FALSE, conditions=colnames(data$data$count), formula=~Sample*Type) {
-	cbindcheck=function(a,b) if (is.null(a)) b else cbind(a,b)
-	coldata=NULL
-	cnt=NULL
-	if (Total) {
-		coldata=rbind(coldata,cbind(data$coldata[conditions,],data.frame(Type="Total")))
-		cnt=cbindcheck(cnt,GetData(data,"count",table = TRUE,conditions=conditions))
-	}
-	if (New) {
-		coldata=rbind(coldata,cbind(data$coldata[conditions,],data.frame(Type="New")))
-		cnt=cbindcheck(cnt,GetData(data,"new.count",table = TRUE,conditions=conditions))
-	}
-	if (Old) {
-		coldata=rbind(coldata,cbind(data$coldata[conditions,],data.frame(Type="Old")))
-		cnt=cbindcheck(cnt,GetData(data,"old.count",table = TRUE,conditions=conditions))
-	}
-	allzero=apply(cnt,2,function(v) all(v==0))
-	cnt=cnt[,!allzero]
-	coldata=droplevels(coldata[!allzero,])
-	for (i in 1:ncol(coldata)) {
-		if (is.factor(coldata[,i])) levels(coldata[,i]) = gsub("+","_P_",gsub("-","_M_",levels(coldata[,i]),fixed=TRUE),fixed=TRUE)
-	}
-	DESeq(DESeqDataSetFromMatrix(countData = cnt ,colData = coldata,design = formula))
-}
-
-CreateDESeq2NewOld<-function(data,...) CreateDESeq2(data,Total=FALSE,New=TRUE,Old=TRUE,...)
-CreateDESeq2New<-function(data,...) CreateDESeq2(data,Total=FALSE,New=TRUE,Old=FALSE,...)
-CreateDESeq2Old<-function(data,...) CreateDESeq2(data,Total=FALSE,New=FALSE,Old=TRUE,...)
-
-
-
 cnt=function(m) {
 	mode(m) <- "integer"
 	m
@@ -55,16 +24,16 @@ AddDiffExp=function(data,name,mode,table) {
   invisible(data)
 }
 
-TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE,subset=!data$coldata$no4sU,total=TRUE,new=TRUE,old=TRUE) {
-	colData=droplevels(data$coldata[subset,])
-	countData=data$data$count[,subset]
-	ntrData=data$data$ntr[,subset]
-	
+TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FALSE,columns=!data$coldata$no4sU,total=TRUE,new=TRUE,old=TRUE) {
+	colData=droplevels(data$coldata[columns,])
+	countData=data$data$count[,columns]
+	ntrData=data$data$ntr[,columns]
+
 	colData=as.data.frame(lapply(colData,function(c) {
 	  if (is.factor(c)) levels(c)=make.names(levels(c),unique = TRUE)
 	  c
 	}))
-	
+
 	if (total) {
   	if (verbose) cat("Testing total...\n")
   	dds.tot <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData),colData=colData,design = target),test="LRT", reduced=background)
@@ -77,7 +46,7 @@ TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE
   	                  Q=p.adjust(res.tot$pvalue,method="BH"))
   	)
 	}
-	
+
 	if(new) {
   	if (verbose) cat("Testing new...\n")
   	dds.new <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*ntrData),colData=colData,design = target),test="LRT", reduced=background)
@@ -90,8 +59,8 @@ TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE
   	                  Q=p.adjust(res.new$pvalue,method="BH"))
   	)
 	}
-	
-	
+
+
 	if (old) {
   	if (verbose) cat("Testing old...\n")
   	dds.old <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*(1-ntrData)),colData=colData,design = target),test="LRT", reduced=background)
@@ -104,14 +73,14 @@ TestGenesLRT=function(data,target=~Sample,background=~1,name="lrt",verbose=FALSE
   	                  Q=p.adjust(res.old$pvalue,method="BH"))
   	)
 	}
-	
+
 	invisible(data)
 }
 
 TestPairwise=function(data,contrasts,total=TRUE,new=TRUE,old=TRUE) {
   comp=function(type,name) {
-    mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
-    
+    mat=as.matrix(GetTable(data,type=type,ntr.na=FALSE))
+
     l=setNames(lapply(contrasts,function(ctr) {
       B=mat[,ctr==1,drop=FALSE]
       A=mat[,ctr==-1,drop=FALSE] # reverse compared to LFC! (does not matter in the end, only the q val is extracted)
@@ -137,7 +106,7 @@ TestPairwise=function(data,contrasts,total=TRUE,new=TRUE,old=TRUE) {
 
 LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=TRUE,compute.test=FALSE,...) {
   comp=function(type,name) {
-    mat=as.matrix(GetData(data,type=type,table=TRUE,keep.ntr.na=FALSE))
+    mat=as.matrix(GetTable(data,type=type,ntr.na=FALSE))
     l=setNames(lapply(contrasts,function(ctr) {
       LFC.fun(rowSums(mat[,ctr==1,drop=FALSE]),rowSums(mat[,ctr==-1,drop=FALSE]),...)
     }),colnames(contrasts))
@@ -182,15 +151,15 @@ GetSummarizeMatrix <- function (x, ...) {
   UseMethod("GetSummarizeMatrix", x)
 }
 GetSummarizeMatrix.grandR=function(data,...) GetSummarizeMatrix.default(data$coldata,...)
-GetSummarizeMatrix.default=function(coldata,column="Sample",subset=!coldata$no4sU,average=TRUE) {
+GetSummarizeMatrix.default=function(coldata,group=Design$Condition,columns=!coldata$no4sU,average=TRUE) {
 	re=NULL
-	for (v in unique(coldata[,column])) re=cbind(re,ifelse(coldata[,column]==v,1,0))
+	for (v in unique(coldata[,group])) re=cbind(re,ifelse(coldata[,group]==v,1,0))
 	rownames(re)=rownames(coldata)
-	colnames(re)=unique(coldata[,column])
-	if (!is.null(subset)) {
-  	save=re[subset,]
+	colnames(re)=unique(coldata[,group])
+	if (!is.null(columns)) {
+  	save=re[columns,]
   	re[,]=0
-  	re[subset,]=save
+  	re[columns,]=save
 	}
 	re=re[,colSums(re)>0]
 	if (average) re=t(t(re)/colSums(re))
@@ -200,58 +169,58 @@ GetSummarizeMatrix.default=function(coldata,column="Sample",subset=!coldata$no4s
 GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
-GetContrasts.grandR=function(data,subset=!data$coldata$no4sU,...) GetContrasts.default(coldata=data$coldata,subset=subset,...)
-GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,name=NULL,covariate=NULL,subset=NULL) {
+GetContrasts.grandR=function(data,columns=!data$coldata$no4sU,...) GetContrasts.default(coldata=data$coldata,columns=columns,...)
+GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,name=NULL,group=NULL,columns=NULL) {
   # either level 1 against level 2 of some coldata column (3 entries in contrast)
   # or each level against one specific level (2 entries)
   # or each all pairwise comparison (1 entry)
-  # in both cases, covariates would just subset by the covariate levels first, and then do it for each subset separately
+  # in both cases, groups would just subset by the group levels first, and then do it for each subset separately
   if (!(length(contrast) %in% 1:3) || !contrast[1]%in%names(coldata) || (length(contrast)>1 && !all(contrast[2:length(contrast)] %in% coldata[,contrast[1]]))) stop("Illegal contrasts (either a name from design (all pairwise comparisons), a name and a reference level (all comparisons vs. the reference), or a name and two levels (exactly this comparison))")
-  
+
   make.col=function(contrast,use=TRUE) {
     re=rep(0,nrow(coldata))
     re[coldata[,contrast[1]]==contrast[2] & use]=1
     re[coldata[,contrast[1]]==contrast[3] & use]=-1
-    if (!is.null(subset)) {
+    if (!is.null(columns)) {
       save=re
       re=rep(0,nrow(coldata))
-      re[subset]=save[subset]
+      re[columns]=save[columns]
     }
     matrix(re)
   }
-  
+
   contr=if (length(contrast)==3) {
     function(use=TRUE) make.col(contrast,use)
   } else if (length(contrast)==2) {
     function(use=TRUE) {
-      if (is.null(subset)) subset=TRUE
-      ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[subset,contrast[1]])) else unique(coldata[subset,contrast[1]])
+      if (is.null(columns)) columns=TRUE
+      ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[columns,contrast[1]])) else unique(coldata[columns,contrast[1]])
       ll=setdiff(ll,contrast[2])
       re=sapply(ll,function(l) make.col(c(contrast[1],l,contrast[2]),use))
       #re=matrix(0,nrow=nrow(coldata),ncol=length(ll))
       #re[coldata[,contrast[1]]==contrast[2] & use,]=-1
       #for (c in 1:length(ll)) re[coldata[,contrast[1]]==ll[c] & use,c]=1
-      #if (!is.null(subset)) {
+      #if (!is.null(columns)) {
       #  save=re
       #  re=matrix(0,nrow=nrow(coldata),ncol=length(ll))
-      #  re[subset,]=save[subset,]
+      #  re[columns,]=save[columns,]
       #}
       colnames(re)=ll
       re
     }
   } else {
     function(use=TRUE) {
-      if (is.null(subset)) subset=TRUE
-      ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[subset,contrast[1]])) else unique(coldata[subset,contrast[1]])
+      if (is.null(columns)) columns=TRUE
+      ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[columns,contrast[1]])) else unique(coldata[columns,contrast[1]])
       re=combn(ll,2,FUN=function(v) make.col(c(contrast,v),use)[,1])
       colnames(re)=combn(ll,2,FUN=paste,collapse=" vs ")
       re
     }
   }
-  re=if (is.null(covariate)) {
+  re=if (is.null(group)) {
     as.data.frame(contr())
   } else {
-    covvec=interaction(coldata[covariate],drop=FALSE,sep=".")
+    covvec=interaction(coldata[group],drop=FALSE,sep=".")
     names=levels(covvec)
     re=lapply(levels(covvec),function(bin) contr(use=covvec==bin))
     re=if (!is.null(colnames(re))) setNames(re,paste0(names,names(re),sep=".")) else setNames(re,names)
@@ -266,7 +235,7 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,d
   }
   re=re[,!apply(re==0,2,all),drop=FALSE]
   rownames(re)=rownames(coldata)
-  
+
   remove=apply(re>=0,2,all) | apply(re<=0,2,all)
   if (sum(remove)>0) {
     warning(sprintf("Removed columns without matching experiment: %s",paste(colnames(re)[remove],collapse = ",")))
@@ -315,22 +284,22 @@ MAPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutof
 
 # Normalization of NTRs such that: median logFC new RNA vs. new RNA is 0, there is no correlation of this logFC vs the NTR
 NormalizeEffectiveLabeling=function(data,reference=colnames(data),slot="norm",verbose=FALSE) {
-  w=rowMeans(GetTable(data,slot,subset=reference),na.rm=TRUE)
-  ntr=rowMeans(GetTable(data,"ntr",subset=reference),na.rm=TRUE)
+  w=rowMeans(GetTable(data,type=slot,columns=reference),na.rm=TRUE)
+  ntr=rowMeans(GetTable(data,type="ntr",columns=reference),na.rm=TRUE)
   w=w*ntr
   use=!is.na(w) && w>0
   w=w[use]
-  
+
   for (s in colnames(data)[!data$coldata$no4sU])  {
     if (verbose) cat(sprintf("Fitting model for %s...\n",s))
     d.ntr=data$data$ntr[use,s]
-    d=GetTable(data,slot,subset=s)[use,1]
+    d=GetTable(data,type=slot,columns=s)[use,1]
     df=data.frame(ntr=ntr,lfc=log2(d.ntr*d/w))
     df=df[!is.na(df$lfc) & !is.infinite(df$lfc),]
     fit=quantreg::lprq(df$ntr,df$lfc,h = 0.05)
     fn=splinefun(fit$xx,fit$fv)
     data$data$ntr[,s]=pmax(pmin(1,data$data$ntr[,s]/2^fn(ntr)),0)
   }
-  
+
   data
 }

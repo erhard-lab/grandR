@@ -9,20 +9,20 @@ ServeData=function(data,
                    show.sessionInfo=FALSE,
                    help=list(".Q: multiple testing corrected p values",".LFC: log2 fold changes") ) {
 
-  
+
   if (length(plot.single)==0) plot.single=list(PlotGeneOldVsNew)
   if (length(sizes)==1) sizes=rep(floor(12/min(4,length(plot.single))),min(4,length(plot.single)))
   if (length(sizes)!=length(plot.single)) stop("sizes need to be length 1 or same length as plots!")
   sizes=c(sizes,rep(1,8))
-  
+
 #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
-  
+
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
 	server=function(input, output,session) {
-	  output$tab <- DT::renderDataTable(DT::datatable(df, 
+	  output$tab <- DT::renderDataTable(DT::datatable(df,
 	                                                  callback = JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
 	                                                  selection = 'single',
-	                                                  rownames = FALSE, 
+	                                                  rownames = FALSE,
 	                                                  escape=-1,
 	                                                  filter = "top",
 	                                                  options = list(
@@ -46,11 +46,11 @@ ServeData=function(data,
 	  })
 	  observeEvent(input$clipbtn, {showNotification(
 	    sprintf("Copied %d names",length(input$tab_rows_all)),
-	    duration = 2, 
+	    duration = 2,
 	    type = "message"
 	  )})
-	  
-	  
+
+
 	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.single[[1]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
 	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=2) plot.single[[2]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
 	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=3) plot.single[[3]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
@@ -60,7 +60,7 @@ ServeData=function(data,
 	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=7) plot.single[[7]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
 	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=8) plot.single[[8]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
 	  output$helpText=renderText({ if (length(input$tab_rows_selected)==0 && !is.null(help)) help  })
-	  
+
 	  for (n in names(plot.static)) {
 	    create=function(n) {
 	      env=new.env()
@@ -79,7 +79,7 @@ ServeData=function(data,
 	    }
 	    output[[paste0(n,"plot")]]=create(n)
 	  }
-	  
+
 	  for (n in names(plot.set)) {
 	    create=function(n) {
 	      env=new.env()
@@ -100,53 +100,53 @@ ServeData=function(data,
 	    e=new.env()
 	    e$ddf=attr(plot.set[[n]](df.set),"df")
 	    e$n=n
-	    
+
 	    observe({
 	      brushgenes=rownames(brushedPoints(ddf, input[[make.names(paste0(n,"plotsetbrush"))]]))
 	      updateTextAreaInput(session, make.names(paste0(n,"plotsetgenes")), value = paste(brushgenes,collapse="\n"), label=sprintf("Selected genes (n=%d)",length(brushgenes)))
 	    },env=e)
-	    
+
 	  }
-	  
+
 	  if (show.sessionInfo) output$sessionInfo <- renderPrint({
 	    capture.output(sessionInfo())
 	  })
-	  
-	  
+
+
 	} # end server
 
-	
+
 	plot.static.ui=NULL
 	if (length(plot.static)>0) {
-	  
+
 	  plist=c(lapply(names(plot.static),function(n) tabPanel(n,
 	                                                         selectInput(paste0(n,"list"),n,names(plot.static[[n]]),selectize=FALSE,size=10),
 	                                                         plotOutput(paste0(n,"plot"))
 	  )),list(title="Plots"))
-	  
+
 	  plot.static.ui=do.call("navbarMenu",plist)
 	}
-	
+
 	plot.set.ui=NULL
 	if (length(plot.set)>0) {
-	  
+
 	  plist=c(lapply(names(plot.set),function(n) tabPanel(n,
-	                                                      fluidRow( 
+	                                                      fluidRow(
 	                                                        column(8,plotOutput(make.names(paste0(n,"plotset")),brush = brushOpts(id = make.names(paste0(n,"plotsetbrush"))))),
 	                                                        column(4,textAreaInput(make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40))
 	                                                      )
 	  )),list(title="Global level"))
-	  
+
 	  plot.set.ui=do.call("navbarMenu",plist)
 	}
-	
+
 	more=NULL
 	if (show.sessionInfo)
 	  more=navbarMenu("More",
 	                  tabPanel("Info",verbatimTextOutput("sessionInfo"))
 	  )
-	
-	
+
+
 	ui=list(
         	  tabPanel("Gene level",
         	  fluidPage(
@@ -193,12 +193,12 @@ ServeData=function(data,
         	  )
         	  #do.call("fluidRow",lapply(1:length(plot.funs),function(i) column(sizes[i],plotOutput(paste0("plot.funs",i),height=height))))
         	)),
-        	
+
         	plot.set.ui,
         	plot.static.ui,
-        	
+
         	more,
-        	  
+
         	tags$head(
         	  tags$style(
         	    HTML("#shiny-notification-panel {
@@ -214,99 +214,20 @@ ServeData=function(data,
         	    )
         	  )
         	),
-        	
+
         	tags$script(HTML(sprintf("
         	var header = $('.navbar> .container-fluid');
           header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">%s</span></div>')",
         	                         VersionString(data)
         	)))
 	)
-	
+
 	ui=ui[!sapply(ui,is.null)]
 	myui=function(...) navbarPage(title,...)
 	ui=do.call("myui",ui)
-	
+
 	shinyApp(ui = ui, server = server)
 }
 
-
-
-ServeData.legacy=function(data,df=GetDiffExpTable(data,cols=c("LFC","Q")),aest=aes(color=Sample),aest.ts=aes(color=Sample),time="hpi",ggparam=NULL,ggparam.ts=NULL,average.lines=FALSE, plot2=NA, plot3=NA) {
-  
-  server=function(input, output,session) {
-    options(DT.options = list(pageLength = 12))
-    output$tab <- DT::renderDataTable(DT::datatable(df, selection = 'single',rownames = FALSE, escape=-1)) # %>%formatRound(names(df)[grepl("q$",names(df))], 2)
-    
-    output$plot1=renderPlot({
-      if (length(input$tab_rows_selected)==1) {
-        gene=df$Symbol[input$tab_rows_selected]
-        g=ggplot(GetData(data,gene=gene,type=c("tpm","ntr"),melt=F,coldata=T),modifyList(aes(tpm,ntr),aest))+geom_point(size=3)+scale_x_log10()
-        if (!is.null(ggparam)) g=g+ggparam
-        g
-      }
-    })
-    
-    output$plot2=renderPlot({
-      if (length(input$tab_rows_selected)==1) {
-        gene=df$Symbol[input$tab_rows_selected]
-        if (is.null(plot2)) {
-          NULL			
-        } else if (is.na(plot2)){
-          df=GetData(data,gene=gene,type=c("tpm"),melt=T,coldata=T)
-          aes=modifyList(aes_string(time,"Value"),aest.ts)
-          g=ggplot(df,mapping=aes)+geom_point()+scale_y_log10()+xlab(NULL)+ylab("Total TPM")
-          if (!is.null(ggparam.ts)) g=g+ggparam.ts
-          if (average.lines) {
-            # compute average line:
-            ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
-            ddf=ddply(ddf,.(x,colour),function(s) c(Value=mean(s$y,na.rm=TRUE)))
-            g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
-          }
-          g
-        } else {
-          plot2(gene)
-        }
-      }
-    })
-    
-    output$plot3=renderPlot({
-      if (length(input$tab_rows_selected)==1) {
-        gene=df$Symbol[input$tab_rows_selected]
-        if (is.null(plot3)) {
-          NULL			
-        } else if (is.na(plot3)){
-          df=GetData(data,gene=gene,type=c("new.tpm"),melt=T,coldata=T)
-          aes=modifyList(aes_string(time,"Value"),aest.ts)
-          g=ggplot(df,mapping=aes)+geom_point()+scale_y_log10()+xlab(NULL)+ylab("New TPM")
-          if (!is.null(ggparam.ts)) g=g+ggparam.ts
-          if (average.lines) {
-            # compute average line:
-            ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
-            ddf=ddply(ddf,.(x,colour),function(s) c(Value=mean(s$y,na.rm=TRUE)))
-            g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
-          }
-          g
-        } else {
-          plot3(gene)
-        }
-      }
-    })
-    
-  }
-  
-  
-  ui=fluidPage(
-    fluidRow(
-      column(12, DT::dataTableOutput('tab'))
-    ),
-    fluidRow(
-      column(4, plotOutput("plot1",height = 400)),
-      column(if (is.null(plot3)) 8 else 4, plotOutput("plot2",height = 400)),
-      column(4, plotOutput("plot3",height = 400))
-    )
-  )
-  
-  shinyApp(ui = ui, server = server)
-}
 
 

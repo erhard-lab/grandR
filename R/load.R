@@ -1,56 +1,39 @@
 
-library(ggplot2)
-library(cowplot)
-library(reshape2)
-library(plyr)
-library(lfc)
-library(rclipboard)
 
-comp.hl=function(p,time=1) ifelse(p==0,Inf,log(2)/(-1/time*log(1-p)))
 
-comp.tpm=function(cmat,lengths,subset=NULL) {
-	zerolen=lengths==0
-	lengths[zerolen]=1
-	rpk=cmat/(lengths/1000)
-	rpk[zerolen,]=NA
-	scale=colSums(if(!is.null(subset)) rpk[subset,] else rpk,na.rm=T)/1E6
-	re=t(t(rpk)/scale)
-	re
-}
-tomat=function(m,names,cnames){
-	m=as.matrix(m)
-	m[is.na(m)]=0
-	colnames(m)=gsub(" .*","",cnames)
-	rownames(m)=names
-	m
-}
 
+
+#' A list of functions. These are called one after the other by \link{ReadGRAND} to build the \emph{Type} column. The name of the first function returning TRUE is used as type.
+#' @title GeneType
+#' @export
 GeneType=list(
-	mito=function(data) grepl("^MT-",data$Symbol,ignore.case=TRUE),
-	ERCC=function(data) grepl("ERCC-[0-9]{5}",data$Gene),
-	Cellular=function(data) grepl("^ENS.*G\\d+$",data$Gene),
-	Unknown=function(data) rep(T,dim(data)[1])
+	mito=function(gene.info) grepl("^MT-",gene.info$Symbol,ignore.case=TRUE),
+	ERCC=function(gene.info) grepl("ERCC-[0-9]{5}",gene.info$Gene),
+	Cellular=function(gene.info) grepl("^ENS.*G\\d+$",gene.info$Gene),
+	Unknown=function(gene.info) rep(T,dim(gene.info)[1])
 )
 
 
 semantics.noop=function(s,name) setNames(data.frame(s),name)
 semantics.time=function(s,name) {
   time=rep(NA,length(s))
-  
+
   no4sU=c("no4sU","-")
   time[s %in% no4sU]=0
-  
+
   h=grepl("[0-9.]+h(p.)?",s)
   time[h]=as.numeric(gsub("([0-9.]+)h(p.)?","\\1",s[h]))
-  
+
   min=grepl("[0-9.]+min",s)
   time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))/60
-  
+
   if (any(is.na(time))) stop(paste0("Time semantics cannot be used for this: ",paste(s[is.na(time)],collapse=",")))
   setNames(data.frame(time),name)
 }
 
-
+#' A list of predefined names for design vectors
+#' @title Design
+#' @export
 Design=list(
   has.4sU="has.4sU",
   conc.4sU="concentration.4sU",
@@ -64,13 +47,12 @@ Design=list(
   Barcode="Barcode",
   Origin="Origin"
   )
-# Sample is without replicate! Condition might have multiple samples, but not the other way around; Condition is used all over the place (e.g. kinetic fitting) to identify
+#' A list of functions. A function is called by \link{MakeColdata} for each design vector element matching a name of this list.
+#' @title Design.Semantics
+#' @export
 Design.Semantics=list(
-  hpi=semantics.time,
-  hps=semantics.time,
-  dur.4sU=semantics.time
+  duration.4sU=semantics.time
 )
-GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fixed=TRUE),function(v) v[field])
 
 ConvFields=function(v) {
   if (is.data.frame(v) || is.matrix(v)) {
@@ -92,50 +74,139 @@ ConvFields=function(v) {
 }
 
 
-MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE) {
+
+#' MakeColdata
+#'
+#' Extract an annotation table from a formatted names vector
+#'
+#' @param names Formatted names vector (see details)
+#' @param design Titles for the columns of the annotation table
+#' @param semantics Additional semantics to apply to given annotations (see details)
+#' @param rownames Add rownames to the annotation table
+#' @param keep.originals To not discard the original values for all annotations where semantics were applied
+#'
+#' @return A data frame representing the annotation table
+#'
+#' @details The names have to contain dots (.) to separate the fields for the column annotation table. E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}. For such names, a design vector of length 3 has to be given, that describes the meaning of each field. A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}. Some names are predefined in the list \link{Design}.
+#' @details The names given in the design vector might even have additional semantics: E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4, or 30min into 0.5, or no4sU into 0).
+#' @details Semantics can be user-defined via the \emph{semantics} list: For each name in the design vector matchin to a name in this list, the corresponding function in the list is run. Functions must accept 2 parameters, the first is the original column in the annotation table, the second the original name. The function must return a data.frame with the number of rows matching to the annotation table.
+#'
+#' @export
+#'
+#' @seealso \link{ReadGRAND},\link{Design.Semantics}
+#'
+#' @examples
+#' coldata <- MakeColdata(c("Mock.0h.A","Mock.0h.B","Mock.2h.A","Mock.2h.B"), design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.originals=TRUE) {
   coldata=data.frame(Name=names,check.names=FALSE,stringsAsFactors = TRUE)
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
-  
+
   for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,ConvFields(sapply(spl,function(v) v[i])))
   names(coldata)[-1]=design[!is.na(design)]
   if (rownames) rownames(coldata)=coldata$Name
-  coldata$Sample=interaction(coldata[ !(names(coldata) %in% c("Name","Replicate"))],drop=TRUE)
-  
+
   for (sname in names(semantics)) {
     if (sname %in% design) {
-      s=as.character(coldata[[sname]])
-      df=semantics[[sname]](s,sname)
+      s=coldata[[sname]]
+      df=semantics[[sname]](as.character(s),sname)
+      if (keep.originals) df=cbind(df,setNames(data.frame(s),paste0(sname,".original")))
       coldata=cbind(coldata[!names(coldata) %in% names(df)],df)
     }
   }
-  
-  
+
   coldata
 }
 
 
-ReadGRAND=function(prefix, verbose=FALSE, classify.genes=GeneType,design=c(Design$Condition,Design$Replicate),Unknown=NA,rename.samples=NULL,read.percent.conv=FALSE) {
+
+#' Read the output of GRAND-SLAM 2.0 into a grandR object.
+#'
+#' @title ReadGRAND
+#' @param prefix Can either be the prefix used to call GRAND-SLAM with, or the main output file ($prefix.tsv.gz); if the RCurl package is installed, this can also be a URL
+#' @param design Either a design vector (see details), or a data.frame providing metadata for all columns (samples/cells)
+#' @param classify.genes A list of functions that is used to add the \emph{type} column to the gene annotation table
+#' @param Unknown If no function from \emph{classify.genes} to a row in the gene annotation table, this is used as the \emph{type}
+#' @param read.percent.conv Should the percentage of convertions also be read?
+#' @param verbose Verbose status outputs
+#'
+#' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta) and potentially additional information of all genes detected by GRAND-SLAM
+#'
+#' @details If columns (samples/cells) are named systematically in a particular way, the design vector provides a powerful and easy way to create the column annotations.
+#' @details The column names have to contain dots (.) to separate the fields for the column annotation table. E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}. For such names, a design vector of length 3 has to be given, that describes the meaning of each field. A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}. Some names are predefined in the list \link{Design}.
+#' @details The names given in the design vector might even have additional semantics: E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4, or 30min into 0.5, or no4sU into 0). Semantics can be user-defined (see \code{\link{MakeColdata}}).
+#'
+#' @seealso \link{GeneType},\link{MakeColdata}
+#'
+#' @examples
+#' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz", design=c("Cell",Design$dur.4sU,Design$Replicate), verbose=TRUE)
+#'
+#' @export
+#'
+ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType,Unknown=NA,read.percent.conv=FALSE, verbose=FALSE) {
+
+  tomat=function(m,names,cnames){
+    m=as.matrix(m)
+    m[is.na(m)]=0
+    colnames(m)=gsub(" .*","",cnames)
+    rownames(m)=names
+    m
+  }
+
+  checknames=function(a,b){
+  	if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
+  	if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
+  }
+  do.callback=function() {}
+
+  url=NULL
+  if (has.package("RCurl")) {
+    if (RCurl::url.exists(prefix)) {
+      url=prefix
+    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
+      url=paste0(prefix,".tsv")
+    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
+      url=paste0(prefix,".tsv.gz")
+    } else {
+      url=NULL
+    }
+    if (!is.null(url)) {
+      file <- tempfile()
+      if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
+      download.file(url, file, quiet=!verbose)
+      prefix=gsub(".tsv(.gz)?$","",url)
+      do.callback=function() {
+        if (verbose) cat("Deleting temporary file...\n")
+        unlink(file)
+      }
+    }
+  }
+
+  if (is.null(url)) {
+  	file=if (file.exists(prefix)) prefix else paste0(prefix,".tsv")
+  	if (!file.exists(file) && file.exists(paste0(file,".gz"))) file = paste0(file,".gz")
+  	prefix=gsub(".tsv(.gz)?$","",file)
+  }
 
 
-checknames=function(a,b){
-	if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
-	if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
-}
-
-
-	file=if (file.exists(prefix)) prefix else paste0(prefix,".tsv")
-	if (!file.exists(file) && file.exists(paste0(file,".gz"))) file = paste0(file,".gz")
-	prefix=gsub(".tsv(.gz)?$","",file)
-	
 	if (verbose) cat("Checking file...\n")
 	con <- file(file,"r")
 	header <- strsplit(readLines(con,n=1),"\t")[[1]]
 	close(con)
 
 	if (header[1]!="Gene" || header[2]!="Symbol" || !grepl("Readcount$",header[3])) stop("File is not a GRAND-SLAM output file!")
-	conds=strsplit(gsub(" Readcount","",header[3]),".",fixed=TRUE)[[1]]
-	if (length(conds)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(conds,collapse=".")))
+	conds=gsub(" Readcount","",header[grepl(" Readcount",header)])
+	terms=strsplit(conds[1],".",fixed=TRUE)[[1]]
+
+	if (is.data.frame(design)) {
+	  if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(terms,collapse=".")))
+	  coldata=design
+	} else {
+  	if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
+  	coldata=MakeColdata(conds,design)
+	}
+
 
 	if (verbose) cat("Reading files...\n")
 	data=read.delim(file,stringsAsFactors=FALSE,check.names=FALSE)
@@ -151,12 +222,6 @@ checknames=function(a,b){
 	  warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
 		data$Symbol=make.unique(data$Symbol)
 	}
-	if (!is.null(rename.samples)) {
-		if (verbose) cat("Renaming samples...\n")
-		for (from in names(rename.samples)) {
-			names(data)=gsub(from,rename.samples[from],names(data))
-		}
-	}
 	if (verbose) cat("Processing...\n")
 
 	ntr.mean = grepl("Mean",names(data))
@@ -166,7 +231,7 @@ checknames=function(a,b){
 	count = grepl("Readcount",names(data))
 	conv = grepl("Conversions",names(data))
 	cove = grepl("Coverage",names(data)) & !grepl("Double-Hit Coverage",names(data))
-	
+
 	if (!is.na(Unknown)) names(classify.genes)[names(classify.genes)=="Unknown"]=Unknown
 	gene.info = data.frame(Gene=as.character(data$Gene),Symbol=as.character(data$Symbol),Length=data$Length,stringsAsFactors=FALSE)
 	gene.info$Type=NA
@@ -181,11 +246,11 @@ checknames=function(a,b){
 	re$ntr=tomat(data[,ntr],data$Gene,names(data)[ntr])
 	re$alpha=tomat(data[,alpha],data$Gene,names(data)[alpha])
 	re$beta=tomat(data[,beta],data$Gene,names(data)[beta])
-	
+
 	if (read.percent.conv) {
 	  re$percent_conv=tomat(data[,conv]/data[,cove],data$Gene,names(data)[conv])
 	}
-	
+
 	no4sU.cols=!(colnames(re$count) %in% colnames(re$ntr))
 	# remove no4sU conditions from ntr relevant matrices
 	if (sum(no4sU.cols)>0) {
@@ -206,293 +271,148 @@ checknames=function(a,b){
 	checknames(re$count,re$ntr.mean)
 	checknames(re$count,re$alpha)
 	checknames(re$count,re$beta)
-	
-	#coldata=data.frame(Name=colnames(re$count))
-	#spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
-	#for (i in 1:length(design)) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
-	#names(coldata)[-1]=design
-	#rownames(coldata)=coldata$Name
-	#coldata$Sample=interaction(coldata[ !(names(coldata) %in% c("Name","Replicate"))],drop=TRUE)
-	coldata=MakeColdata(colnames(re$count),design)
+
 	coldata$no4sU=no4sU.cols
 
-	re=grandR(prefix=prefix,gene.info=gene.info,data=re,coldata=coldata,metadata=list())
+	do.callback()
+
+	# insert name no rep and set this as default condition, if there is no condition field!
+	re=grandR(prefix=prefix,gene.info=gene.info,data=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 2.0 data"))
 	DefaultSlot(re)="count"
 	invisible(re)
 }
 
 
-grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,data=parent$gene.info,coldata=parent$coldata,metadata=parent$metadata,parent=NULL) {
-	info=list()
-	info$prefix=prefix
-	info$gene.info=gene.info
-	info$data=data
-	info$coldata=coldata
-	info$metadata=metadata
-	class(info)="grandR"
-	invisible(info)
-}
 
-VersionString=function(data) {
-  "grandR v0.1.0"
-}
 
-Title=function(data) {
-  x=strsplit(data$prefix,"/")[[1]]
-  x[length(x)]
-}
 
-`DefaultSlot<-` <- function(data, value) {
-  data$metadata$default.slot=value
-  data
-}
-DefaultSlot <- function(data) {
-  data$metadata$default.slot
-}
+# TODO: do not use read.delim or .csv, nor file.exists (to allow using urls!)
+isSparse=function(prefix) !file.exists(paste0(prefix,".targets/data.tsv.gz"))
 
-Slots=function(data) {
-  names(data$data)
-}
+ReadGrand3=function(prefix,...) if (isSparse(prefix)) ReadGrand3_sparse(prefix,...) else ReadGrand3_dense(prefix,...)
 
-Genes=function(data, use.symbols=TRUE) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]]
+ReadGrand3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design$Sample,Design$Barcode), label="4sU",estimator="Binom", read.CI=FALSE) {
 
-AddSlot=function(data,name,matrix) {
-  if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
-  if (!all(rownames(matrix)==rownames(data$data$count))) stop("Row names do not match!")
-  data$data[[name]]=matrix
-  data
-}
+  cols=readLines(paste0(prefix, ".targets/barcodes.tsv.gz"))
+  conds=strsplit(cols,".",fixed=TRUE)[[1]]
+  if (length(conds)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(conds,collapse=".")))
 
-dim.grandR=function(data) c(dim(data$gene.info)[1],dim(data$coldata)[1])
-is.grandR <- function(x) inherits(x, "grandR")
-dimnames.grandR=function(data) dimnames(data$data$count)
 
-data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
-	re=list()
-	for (l1 in names(data$data)) {
-		re[[l1]]=fun(data$data[[l1]],...)
-	}
-	ngene.info=if (!is.null(fun.gene.info)) fun.gene.info(data$gene.info,...) else data$gene.info
-	ncoldata=if (!is.null(fun.coldata)) fun.coldata(data$coldata,...) else data$coldata
-	invisible(grandR(parent=data,gene.info=ngene.info,data=re,coldata=ncoldata))
-}
+  if (verbose) cat("Reading count matrix...\n")
+  count=as(readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "dgCMatrix")
+  gene.info=read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
+  if (ncol(gene.info)==4) gene.info$Length=1
+  gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
 
-reorder.grandR=function(data,columns) {
-  r=subset.grandR(data,columns)
-  r$coldata=ConvFields(r$coldata)
-  r
-}
-subset.grandR=function(data,columns) {
-  keep=rownames(data$coldata)[columns]
-  data.apply(data,function(m) m[,intersect(keep,colnames(m))],fun.coldata = function(t) droplevels(t[columns,]))
-}
-
-split.grandR=function(data,column.name=Design$Condition) {
-  col=as.factor(data$coldata[[column.name]])
-  setNames(lapply(levels(col),function(c) {re=subset(data,col==c); re$coldata[[Design$Origin]]=c; re }),levels(col))
-}
-
-`Condition<-` <- function(data, value) {
-  data$coldata$Condition <- interaction(data$coldata[value])
-  data
-}
-
-RenameSamples=function(data,map=NULL,fun=NULL) {
-  if (!is.null(fun)) {
-    map=setNames(sapply(colnames(data),fun),colnames(data))
+  if (anyDuplicated(gene.info$Gene)) {
+    dupp=table(gene.info$Gene)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Gene=make.unique(gene.info$Gene)
   }
-  names=rownames(data$coldata)
-  names[names %in% names(map)]=unlist(map[names[names %in% names(map)]])
-  rownames(data$coldata)=names
-  data$coldata$Name=names
-  data.apply(data,function(m) {colnames(m)=names; m})
-}
-
-merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
-  list=c(list(...),list)
-  if (length(list)==1) return(list[[1]])
-  
-  re=list[[1]]
-  if (!is.null(names(list))) re$coldata[[column.name]]=names(list)[1]
-  for (i in 2:length(list)) {
-    add=list[[i]]
-    if (!is.null(names(list))) add$coldata[[column.name]]=names(list)[i]
-    if (any(colnames(add) %in% colnames(re))) stop("Sample names must be unique!")
-    if (any(rownames(add)!=rownames(re))) stop("Data sets must have the same genes!")
-    if (any(colnames(add$coldata)!=colnames(re$coldata))) stop("Data sets must have the coldata columns!")
-    if (!all(names(add$data) %in% names(re$data))) stop("Data sets must have the same data tables!")
-    re$coldata=rbind(re$coldata,add$coldata)
-    
-    for (n in names(re$data)) re$data[[n]]=cbind(re$data[[n]],add$data[[n]])
-    
+  if (anyDuplicated(gene.info$Symbol)) {
+    dupp=table(gene.info$Symbol)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Symbol=make.unique(gene.info$Symbol)
   }
-  re  
-}
 
-ComputeNtrCI=function(data,CI.size=0.95,name.lower="lower",name.upper="upper") {
-  data=ComputeNtrPosteriorLower(data=data,CI.size=CI.size,name=name.lower)
-  data=ComputeNtrPosteriorUpper(data=data,CI.size=CI.size,name=name.upper)
-  data
-}
-ComputeNtrPosteriorLower=function(data,CI.size=0.95,name="lower") ComputeNtrPosteriorQuantile(data=data,quantile=(1-CI.size)/2,name=name)
-ComputeNtrPosteriorUpper=function(data,CI.size=0.95,name="upper") ComputeNtrPosteriorQuantile(data=data,quantile=1-(1-CI.size)/2,name=name)
-
-ComputeNtrPosteriorQuantile=function(data,quantile,name) {
-  a=as.matrix(GetTable(data,type="alpha",name.by = "Gene"))
-  b=as.matrix(GetTable(data,type="beta",name.by = "Gene"))
-  v=qbeta(quantile,a,b)
-  AddSlot(data,name,v)
-}
-
-GetAbsolute=function(data,dilution=2E6,volume=200) {
-	fd=data.frame(gene_short_name=rownames(data$data$tpm))
-	rownames(fd)=rownames(data$data$tpm)
-	ercc=data$data$tpm[data$gene.info$Type=='ERCC',]
-
-	cds <- newCellDataSet(data$data$tpm,
-			featureData = new ("AnnotatedDataFrame",fd),
-		        lowerDetectionLimit = 0.1,
-		        expressionFamily = tobit(Lower = 0.1))
-	rpc_matrix <- monocle::relative2abs(cds, method = "num_genes", ERCC_controls=ercc, ERCC_annotation=monocle::spike_df,dilution=dilution, volume=volume)
-	rpc_matrix[data$data$tpm==0]=0
-
-	colnames(rpc_matrix)=colnames(data$data$tpm)
-	rownames(rpc_matrix)=rownames(data$data$tpm)
-	rpc_matrix[,grepl("test",colnames(rpc_matrix))]=NA
-
-	data$data$absolute=rpc_matrix
-	invisible(data)
-}
-
-ToIndex=function(data,gene) {
-	if (is.numeric(gene)) return(gene)
-  if (is.logical(gene) && length(gene)==nrow(data)) return(which(gene))
-  if (all(gene %in% data$gene.info$Gene)) return(setNames(1:nrow(data),data$gene.info$Gene)[gene])
-  if (all(gene %in% data$gene.info$Symbol)) return(setNames(1:nrow(data),data$gene.info$Symbol)[gene])
-	stop("Could not find all genes!")
-}
-
-
-
-GetTable=function(data,type,subset=NULL,gene=Genes(data),keep.ntr.na=TRUE,summarize=NULL,prefix=NULL,name.by="Symbol") {
-  r=GetData(data,type,subset=subset,gene,keep.ntr.na = keep.ntr.na,coldata=FALSE, table=TRUE,name.by = name.by)
-  if (!is.null(summarize)) {
-    if (is.logical(summarize) && length(summarize)==1) summarize=GetSummarizeMatrix(data)
-    r=as.data.frame(as.matrix(r) %*% summarize)
+  if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
+    ill=gene.info$Symbol[which(make.names(gene.info$Symbol)!=gene.info$Symbol)]
+    warning(sprintf("Illegal identifiers among the gene symbols (e.g. %s), making legal!",paste(head(ill),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Symbol=make.names(gene.info$Symbol)
   }
-  if (!is.null(prefix)) colnames(r)=paste0(prefix,colnames(r))
-  r
-}
-GetData=function(data,type=DefaultSlot(data),subset=NULL,gene=Genes(data),melt=FALSE,coldata=TRUE,table=FALSE,keep.ntr.na=TRUE,name.by="Symbol") {
-	if (table) { 
-		melt=FALSE
-		coldata=FALSE
-		if (length(type)!=1) stop("Only one type for table output!")
-	}
-  if (is.null(subset)) subset=colnames(data)
-	og=gene
-	gene=ToIndex(data,gene)
-	og=data$gene.info[[name.by]][gene]
-	uno=function(type) {
-		tno="t"
-		spl=strsplit(type,".",fixed=TRUE)[[1]]
-		if (length(spl)>1) {tno=spl[1]; type=spl[2];}
-		mf = switch(tolower(substr(tno,1,1)),t=1,n=data$data$ntr[gene,subset],o=1-data$data$ntr[gene,subset],stop(paste0(type," unknown!"))) 
-		if (!keep.ntr.na) {
-			mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
-		}
-		conv=if (type=="count") function(m) {mode(m) <- "integer";m} else if (type=="ntr" && !keep.ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
-		if (!(type %in% names(data$data))) stop(paste0(type," unknown!"))
-		if (length(gene)==1) data.frame(conv(data$data[[type]][gene,subset]*mf)) else as.data.frame(conv(t(data$data[[type]][gene,subset]*mf)))
-	}
-	re=as.data.frame(lapply(type,uno))
-	if(length(type)==1 && length(gene)==1) names(re)="Value" else if (length(type)==1) names(re)=og else if (length(gene)==1) names(re)=type else names(re)=paste0(rep(og,length(type))," ",rep(type,each=length(og)))
-	if (coldata) re = cbind(data$coldata[subset,],re)
-	if (melt && (length(gene)>1 || length(type)>1)) {
-		re = melt(re,id.vars=if(coldata) names(data$coldata) else c(),value.name="Value")
-		if (length(type)==1) names(re)[dim(re)[2]-1]="Gene" else if (length(gene)==1) names(re)[dim(re)[2]-1]="Type" else {
-			re=cbind(re[,c(1:(dim(re)[2]-2))],setNames(as.data.frame(t(as.data.frame(strsplit(as.character(re$variable)," ")))),c("Gene","Type")),Value=re$Value)
-		}
-	}
-	rownames(re)=NULL
-	if (table) {
-		names(re)=og
-		re=as.data.frame(t(re))
-		names(re)=data$coldata[subset,"Name"]
-	}
-	re
+  colnames(count)=cols
+  rownames(count)=gene.info$Symbol
+  re=list()
+  re$count=count
+
+  if (verbose) cat("Reading NTRs...\n")
+  ntr=as(readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+  colnames(ntr)=cols
+  rownames(ntr)=gene.info$Symbol
+  re$ntr=ntr
+
+  if (read.CI && file.exists(sprintf("%s.targets/%s.%s.lower.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.upper.mtx.gz",prefix,label,estimator))) {
+    if (verbose) cat("Reading CIs...\n")
+    lower=as(readMM(sprintf("%s.targets/%s.%s.lower.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    colnames(lower)=cols
+    rownames(lower)=gene.info$Symbol
+    re$lower=lower
+
+    upper=as(readMM(sprintf("%s.targets/%s.%s.upper.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    colnames(upper)=cols
+    rownames(upper)=gene.info$Symbol
+    re$upper=upper
+  }
+  gene.info$Type=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
+  gene.info$Type=factor(gene.info$Type,levels=unique(gene.info$Type))
+
+
+  # use make coldata instead. add no4sU column!
+  coldata=data.frame(Name=cols)
+  spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
+  for (i in 1:length(design)) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
+  names(coldata)[-1]=design
+  rownames(coldata)=coldata$Name
+
+  invisible(grandR(prefix,gene.info,re,coldata))
 }
 
-Normalize=function(data,sizeFactors=NULL,genes=NULL,name="norm",slot="count",return.sf=FALSE,set.to.default=TRUE) {
-  if (is.null(genes)) genes=1:nrow(data)
-  mat=as.matrix(GetTable(data,slot,gene=genes,keep.ntr.na = FALSE,name.by = "Gene"))
-	if (is.null(sizeFactors)) sizeFactors=DESeq2::estimateSizeFactorsForMatrix(mat)
-  if (return.sf) return(sizeFactors)
-  data=AddSlot(data,name,t(t(mat)/sizeFactors))
-	if (set.to.default) DefaultSlot(data)=name
-	data
-}
-NormalizeTPM=function(data,tlen=data$gene.info$Length,name="tpm",slot="count",set.to.default=TRUE) {
-  stopifnot(is.grandR(data))
-  mat=as.matrix(GetTable(data,slot,keep.ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.tpm(mat,tlen))
-  if (set.to.default) DefaultSlot(data)=name
-  data
-}
+ReadGrand3_dense=function(prefix, verbose=FALSE, design=c(design$Condition,Design$Replicate)) {
 
-NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition==levels(Condition)[1]),name="baseline",slot=DefaultSlot(data),set.to.default=TRUE,LFC.fun=PsiLFC,...) {
-  stopifnot(is.grandR(data))
-  mat=as.matrix(GetTable(data,slot,keep.ntr.na = FALSE,name.by = "Gene"))
-  mat=sapply(names(baseline),function(n) LFC.fun(mat[,n],rowMeans(mat[,baseline[[n]]]),...))
-  data=AddSlot(data,name,mat)
-  if (set.to.default) DefaultSlot(data)=name
-  data
 }
 
 
-FindReferences=function(data,reference, covariate=NULL) {
-  stopifnot(is.grandR(data))
-  df=data$coldata
-  df$group=if(is.null(covariate)) 1 else interaction(df[covariate],drop=FALSE,sep=".")
-  e=substitute(reference)
-  map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
-  pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
-  pairs
+ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,verbose=FALSE) {
+
+  cols=read.csv(cells,check.names = FALSE,stringsAsFactors = FALSE)
+  gene.info=setNames(read.csv(genes,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
+
+  if (verbose) cat("Reading total count matrix...\n")
+  count=as(readMM(total.matrix),Class = "dgCMatrix")
+
+  if (anyDuplicated(gene.info$Gene)) {
+    dupp=table(gene.info$Gene)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Gene=make.unique(gene.info$Gene)
+  }
+  if (anyDuplicated(gene.info$Symbol)) {
+    dupp=table(gene.info$Symbol)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Symbol=make.unique(gene.info$Symbol)
+  }
+
+  if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
+    ill=gene.info$Symbol[which(make.names(gene.info$Symbol)!=gene.info$Symbol)]
+    warning(sprintf("Illegal identifiers among the gene symbols (e.g. %s), making legal!",paste(head(ill),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Symbol=make.names(gene.info$Symbol)
+  }
+
+  colnames(count)=cols[,1]
+  rownames(count)=gene.info$Symbol
+
+  if (verbose) cat("Reading new count matrix...\n")
+  new=as(readMM(new.matrix),Class = "dgCMatrix")
+
+  if (verbose) cat("Computing NTRs...\n")
+  new=new/detection.rate
+  ntr=new/count
+  ntr@x[ntr@x>1]=1
+  ntr@x[is.nan(ntr@x)]=0
+  ntr=as(ntr,Class = "dgCMatrix")
+
+  colnames(ntr)=colnames(count)
+  rownames(ntr)=rownames(count)
+
+  re=list()
+  re$count=count
+  re$ntr=ntr
+
+  invisible(grandR("",gene.info,re,cols))
 }
-
-
-# minsamp: GetSummarizeMatrix(d,subset=NULL,average=FALSE), if all replicates of a sample exceed minval
-FilterGenes=function(data,type='count',minval=100,mincond=ncol(data)/2,minsamp=NULL,use=NULL,keep=NULL,return.genes=FALSE) {
-	if (!is.null(use) & !is.null(keep)) stop("Do not specify both use and keep!")
-
-	if (is.null(use)) {
-		t=GetData(data,type=type,table=TRUE)
-		if (!is.null(minsamp)) {
-		  m=GetSummarizeMatrix(d,subset=NULL,average=FALSE)
-		  use=rowSums(sapply(1:ncol(m),function(i) apply(t[,m[,i]>0]>=minval,1,all)))>=minsamp
-		} else {
-      use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincond)
-	  }
-		if (!is.null(keep)) use = use | rownames(t) %in% rownames(t[keep,])
-	} else {
-	  use=ToIndex(data,use)
-	}
-  
-  if (return.genes) return(data$gene.info$Gene[use])
-	return(data.apply(data,function(t) t[use,],fun.gene.info = function(t) t[use,]))
-}
-
-SwapSamples=function(data,s1,s2) {
-	i1=if(is.numeric(s1)) s1 else which(rownames(data$coldata)==s1)
-	i2=if(is.numeric(s2)) s2 else which(rownames(data$coldata)==s2)
-	return(data.apply(data,function(t) {
-		tmp=t[,i1]
-		t[,i1]=t[,i2]
-		t[,i2]=tmp
-		t
-	}))
-}
-
 
 
