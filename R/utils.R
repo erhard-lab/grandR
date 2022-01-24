@@ -49,4 +49,4 @@ SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
     opt$lapply<-function(...) lapply(...)
   }
 }
-
+IsParallel=function() grepl("mclapply",capture.output(print(opt$lapply))[1])

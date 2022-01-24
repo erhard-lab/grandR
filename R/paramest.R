@@ -355,7 +355,40 @@ logLik.MixMat=function(m,fun,...) {
 	re
 }
 
+fit.ntr=function(mixmat,par,beta.approx=FALSE,plot=FALSE) {
+  start=0
+  optfun=function(p) logLik.MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
+  start=optfun(par$ntr)
+  opt=optimize(optfun,maximum=TRUE,lower=0,upper=1)
+  if (!beta.approx) return(opt$maximum)
 
+  start=opt$objective+start
+
+  left=if(optfun(0)>log(1E-3)) 0 else uniroot(function(x) optfun(x)-log(1E-3),c(0,opt$maximum))$root
+  right=if(optfun(1)>log(1E-3)) 1 else uniroot(function(x) optfun(x)-log(1E-3),c(opt$maximum,1))$root
+
+  x=seq(left,right,length.out=100)
+  start=0
+  fs = sapply(x,optfun)-log(length(x)-1);
+  fs2=rep(NA,length(fs))
+
+  fs[1]=fs[1]-log(2);
+  fs2[1] = fs[1];
+
+  for (i in 2:length(fs)) {
+    fs2[i] =  lse(fs[i-1],fs[i]-log(2));
+    fs[i] = lse(fs[i-1],fs[i]);
+  }
+  fs2=exp(fs2-fs2[length(fs2)])
+  shapes=constrOptim(c(alpha=3,beta=3),function(par) sum((pbeta(x,par[1],par[2])-fs2)^2),grad=NULL,ui=cbind(c(1,0),c(0,1)),ci=c(0,0))$par
+
+  if (plot) {
+    plot(x,fs2,xlab="ntr",ylab="Cumulative freq",type='l')
+    lines(x,pbeta(x,shapes[1],shapes[2]),col='red')
+    legend("topleft",legend=c("Actual distribution","Beta approximation"),fill=c("black","red"))
+  }
+  c(ntr=opt$maximum,shapes)
+}
 
 binom.optim=function(mixmat,par,fix=c(F,F,F)) {
 	fix=fix[1:3]

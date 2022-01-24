@@ -25,7 +25,7 @@ AddDiffExp=function(data,name,mode,table) {
 }
 
 TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FALSE,columns=!data$coldata$no4sU,total=TRUE,new=TRUE,old=TRUE) {
-	colData=droplevels(data$coldata[columns,])
+	colData=droplevels(ColData(data)[columns,])
 	countData=data$data$count[,columns]
 	ntrData=data$data$ntr[,columns]
 
@@ -36,7 +36,7 @@ TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FA
 
 	if (total) {
   	if (verbose) cat("Testing total...\n")
-  	dds.tot <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData),colData=colData,design = target),test="LRT", reduced=background)
+  	dds.tot <- DESeq2::DESeq(DESeq2::DESeqDataSetFromMatrix(countData = cnt(countData),colData=colData,design = target),test="LRT", reduced=background)
   	res.tot <- DESeq2::results(dds.tot)
   	data=AddDiffExp(data,name,"Total",
   	                data.frame(
@@ -49,7 +49,7 @@ TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FA
 
 	if(new) {
   	if (verbose) cat("Testing new...\n")
-  	dds.new <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*ntrData),colData=colData,design = target),test="LRT", reduced=background)
+  	dds.new <- DESeq2::DESeq(DESeq2::DESeqDataSetFromMatrix(countData = cnt(countData*ntrData),colData=colData,design = target),test="LRT", reduced=background)
   	res.new <- DESeq2::results(dds.new)
   	data=AddDiffExp(data,name,"New",
   	                data.frame(
@@ -63,7 +63,7 @@ TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FA
 
 	if (old) {
   	if (verbose) cat("Testing old...\n")
-  	dds.old <- DESeq(DESeqDataSetFromMatrix(countData = cnt(countData*(1-ntrData)),colData=colData,design = target),test="LRT", reduced=background)
+  	dds.old <- DESeq2::DESeq(DESeq2::DESeqDataSetFromMatrix(countData = cnt(countData*(1-ntrData)),colData=colData,design = target),test="LRT", reduced=background)
   	res.old <- DESeq2::results(dds.old)
   	data=AddDiffExp(data,name,"Old",
   	                data.frame(

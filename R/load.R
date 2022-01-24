@@ -279,7 +279,7 @@ ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.
 	# insert name no rep and set this as default condition, if there is no condition field!
 	re=grandR(prefix=prefix,gene.info=gene.info,data=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 2.0 data"))
 	DefaultSlot(re)="count"
-	invisible(re)
+	re
 }
 
 

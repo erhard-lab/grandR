@@ -43,13 +43,7 @@ ComputeNtrPosteriorQuantile=function(data,quantile,name) {
   AddSlot(data,name,v)
 }
 
-ComputeNtrPosteriorQuantile=function(data,quantile,name) {
-  a=as.matrix(GetTable(data,type="alpha",name.by = "Gene"))
-  b=as.matrix(GetTable(data,type="beta",name.by = "Gene"))
-  v=qbeta(quantile,a,b)
-  AddSlot(data,name,v)
-}
-ComputeSteadyStateHalfLives=function(data,time,name) {
+ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name) {
   if (is.character(time) && length(time)==1) time=data$coldata[[time]]
   ntrs=as.matrix(GetTable(data,type="ntr",name.by = "Gene"))
   if (length(time)==1) time=rep(time,ncol(ntrs))
@@ -58,7 +52,7 @@ ComputeSteadyStateHalfLives=function(data,time,name) {
   hls = sapply(1:length(time),function(i) comp.hl(p = ntrs[,i],time = time[i]))
   colnames(hls)=colnames(ntrs)
 
-  AddSlot(data,name,v)
+  AddSlot(data,name,hls)
 }
 
 
@@ -94,24 +88,27 @@ Normalize=function(data,sizeFactors=NULL,genes=NULL,name="norm",slot="count",ret
   if (set.to.default) DefaultSlot(data)=name
   data
 }
-NormalizeFPKM=function(data,tlen=data$gene.info$Length,name="fpkm",slot="count",set.to.default=TRUE) {
+NormalizeFPKM=function(data,genes=Genes(data),tlen=data$gene.info$Length,name="fpkm",slot="count",set.to.default=TRUE) {
+  genes=ToIndex(data,genes)
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.fpkm(mat,tlen))
+  data=AddSlot(data,name,comp.fpkm(mat,tlen,subset = genes))
   if (set.to.default) DefaultSlot(data)=name
   data
 }
-NormalizeRPM=function(data,name="rpm",slot="count",set.to.default=TRUE) {
+NormalizeRPM=function(data,genes=Genes(data),name="rpm",slot="count",set.to.default=TRUE) {
+  genes=ToIndex(data,genes)
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.rpm(mat))
+  data=AddSlot(data,name,comp.rpm(mat,subset = genes))
   if (set.to.default) DefaultSlot(data)=name
   data
 }
-NormalizeTPM=function(data,tlen=data$gene.info$Length,name="tpm",slot="count",set.to.default=TRUE) {
+NormalizeTPM=function(data,genes=Genes(data),tlen=data$gene.info$Length,name="tpm",slot="count",set.to.default=TRUE) {
+  genes=ToIndex(data,genes)
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.tpm(mat,tlen))
+  data=AddSlot(data,name,comp.tpm(mat,tlen,subset = genes))
   if (set.to.default) DefaultSlot(data)=name
   data
 }

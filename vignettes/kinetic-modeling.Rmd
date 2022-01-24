@@ -76,8 +76,10 @@ PlotGeneKinetics(sars,"SRSF6")
 
 The curves represent the fitted model for this gene. As pointed out above, there are two ways to estimate the RNA kinetics in grandR. The default is the regression approach. The maximum likelihood approach can be used by supplying the `ntr.fit` parameter. It is also possible to exclude samples from the fit, and to drop the assumption of steady state for the virus infected samples:
 ```{r,fig.height=4.5,fig.width=7}
-(PlotGeneKinetics(sars,"SRSF6",bare.plot=T)|PlotGeneKinetics(sars,"SRSF6",ntr.fit = T,bare.plot=T))/
-  (PlotGeneKinetics(sars,"SRSF6",use.old=ColData(sars)$Name!="SARS.no4sU.A",bare.plot=T)|PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
+(PlotGeneKinetics(sars,"SRSF6",bare.plot=T) |
+   PlotGeneKinetics(sars,"SRSF6",ntr.fit = T,bare.plot=T))  /
+  (PlotGeneKinetics(sars,"SRSF6",use.old=ColData(sars)$Name!="SARS.no4sU.A",bare.plot=T) |
+     PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
 ```
 
 
@@ -85,4 +87,33 @@ The curves represent the fitted model for this gene. As pointed out above, there
 SetParallel()
 sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
 PlotScatter(sars,type="kinetics","Mock.Half-life","SARS.Half-life",log=T)+geom_abline()
+```
+
+
+
+```{r}
+SetParallel()
+sars<-NormalizeKinetic(sars,steady.state = c(Mock=T,SARS=F),set.to.default = FALSE)
+sars<-FitKinetics(sars,name="norm_kinetics",slot="norm",time="norm_time",steady.state = c(Mock=T,SARS=F))
+sars<-FitKinetics(sars,name="ntr_kinetics",type="ntr")
+sars<-FitKinetics(sars,name="normntr_kinetics",type="ntr",time="norm_time")
+sars<-FitKinetics(sars,name="lm_kinetics",type="lm")
+
+df<-cbind(GetTable(sars,c("kinetics"),columns="Mock.rmse"),GetTable(sars,c("norm_kinetics"),columns="Mock.rmse"))
+PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()
+```
+
+```{r}
+df<-cbind(
+  GetTable(sars,c("kinetics"),columns="Mock.Half-life"),
+  GetTable(sars,c("norm_kinetics"),columns="Mock.Half-life"),
+  GetTable(sars,c("ntr_kinetics"),columns="Mock.Half-life"),
+  GetTable(sars,c("normntr_kinetics"),columns="Mock.Half-life"),
+  GetTable(sars,c("lm_kinetics"),columns="Mock.Half-life")
+  )
+PlotScatter(df,xcol=1,ycol=5,log=T)+geom_abline()
+(PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()|
+PlotScatter(df,xcol=3,ycol=2,log=T)+geom_abline())/
+(PlotScatter(df,xcol=1,ycol=3,log=T)+geom_abline()|
+   PlotScatter(df,xcol=2,ycol=4,log=T)+geom_abline())
 ```
