@@ -266,7 +266,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
 }
 
 
-FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,group=Design$Condition,conf.int=0.95,return.vector=FALSE,total.fun=median,return.fields=c("Synthesis","Half-life","rmse"),return.extra=function(p) NULL) {
+FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,group=Design$Condition,unbiased=TRUE,conf.int=0.95,exact.ci=FALSE,return.vector=FALSE,total.fun=median,return.fields=c("Synthesis","Half-life","rmse"),return.extra=function(p) NULL) {
     if (length(group)>1) stop("Can only group using a single column!")
     if (is.null(group) || is.na(group)) group=paste0(names(ColData(data)),collapse="_")
     if (!all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
@@ -287,9 +287,9 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
     if (is.null(ntr[[group]])) ntr[[group]]="Data"
 
     #sloglik=function(d,a,b,t) (a-1)*log(1-exp(-t*d))-t*d*b
-    loglik=function(d,a,b,t) sum((a-1)*log(1-exp(-t*d))-t*d*b)
+    #loglik=function(d,a,b,t) sum((a-1)*log(1-exp(-t*d))-t*d*b)
     #sloglik=function(d,a,b,t) (a-1)*log1p(-exp(-t*d))-t*d*(b-1)
-    #loglik=function(d,a,b,t) sum((a-1)*log1p(-exp(-t*d))-t*d*(b-1))
+    loglik=if (unbiased) function(d,a,b,t) sum((a-1)*log1p(-exp(-t*d))-t*d*(b-1)) else function(d,a,b,t) sum((a-1)*log1p(-exp(-t*d))-t*d*b)
 
     t=a[,time]
     use=t>0
@@ -305,8 +305,20 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
         ploglik=function(x) loglik(x,a=a[ind],b=b[ind],t=t[ind])
         d=optimize(ploglik,bounds,maximum=T)$maximum
         max=ploglik(d)
-        lower=uniroot.save(function(x) ploglik(x)-max+crit,lower = bounds[1],upper=d)
-        upper=uniroot.save(function(x) ploglik(x)-max+crit,lower = d,upper=bounds[2])
+
+        if (exact.ci) {
+            plik=function(x) pmax(0,sapply(x,function(xx) exp(loglik(xx,a=a[ind],b=b[ind],t=t[ind])-max)))
+            inte = function(u) integrate(plik,bounds[1],u)$value
+            lower1=uniroot.save(function(x) ploglik(x)-max+log(1E6),lower = bounds[1],upper=d)
+            upper1=uniroot.save(function(x) ploglik(x)-max+log(1E6),lower = d,upper=bounds[2])
+
+            total.inte=inte(upper1)
+            lower=uniroot.save(function(x) inte(x)/total.inte-(1-conf.int)/2,lower = lower1,upper=d)
+            upper=uniroot.save(function(x) inte(x)/total.inte-(1+conf.int)/2,lower = d,upper=upper1)
+        } else {
+            lower=uniroot.save(function(x) ploglik(x)-max+crit,lower = bounds[1],upper=d)
+            upper=uniroot.save(function(x) ploglik(x)-max+crit,lower = d,upper=bounds[2])
+        }
 
         rmse=sum(sqrt(((1-exp(-t[ind]*d)-ntr[ind]))^2))/sum(ind)
 
@@ -388,6 +400,59 @@ FitKinetics=function(data,name="kinetics",type=c("full","ntr","lm"),...) {
 }
 
 
+ComputeSimpleKinetics=function(old,new,t=2,s=NULL,d=NULL,f0=NULL,name.suffix=NULL) {
+    if (is.null(s) + is.null(d) + is.null(f0)!=2) stop("Exactly two of of s,d,f0 have to be NULL!")
+
+    if (!is.null(f0)) {
+        if (any(f0<=old)) stop("It must be f0>old!")
+        d=-1/t*log(old/f0)
+        s=new/d*(1-old/f0)
+    } else if (!is.null(d)) {
+        f0=old/exp(-t*d)
+        s=new*d/(1-exp(-t*d))
+    } else {
+        if (any(s*t<=new)) stop("It must be s*t>new!")
+        d=pmax(0,lamW::lambertW0(-exp(-s*t/new)*s*t/new)/t+s/new)
+        f0=old/exp(-t*d)
+    }
+
+    t0=ifelse(f0<s/d,-1/d*log(1-(old+new)*d/s),NA)
+
+    re=cbind(f0=f0,s=s,d=d,t0=t0)
+    if (!is.null(name.suffix)) colnames(re)=paste0(colnames(re),name.suffix)
+    re
+}
+
+PlotSimpleKinetics=function(total1,total2,ntr1,ntr2,N=100) {
+    old1=total1*(1-ntr1)
+    old2=total2*(1-ntr2)
+    new1=total1*ntr1
+    new2=total2*ntr2
+
+    k1=as.data.frame(ComputeSimpleKinetics(old1,new1,f0=seq(old1+0.01,new1+old1,length.out=N),name.suffix = "_1"))
+    k2=as.data.frame(ComputeSimpleKinetics(old2,new2,f0=seq(old2+0.01,new2+old2,length.out=N),name.suffix = "_2"))
+    df=data.frame(i_1=rep(1:N,N),i_2=rep(1:N,each=N))
+    df=cbind(df,k1[df$i_1,])
+    df=cbind(df,k2[df$i_2,])
+
+
+    ((ggplot(k1,aes(f0_1,s_1))+geom_line() | ggplot(k2,aes(f0_2,s_2))+geom_line())  /
+    (ggplot(k1,aes(f0_1,log(2)/d_1))+geom_line()+ylab("HL_1")+coord_cartesian(ylim=c(0,24)) | ggplot(k2,aes(f0_2,log(2)/d_2))+geom_line()+ylab("HL_2")+coord_cartesian(ylim=c(0,24))) /
+    (ggplot(k1,aes(f0_1,t0_1))+geom_line() | ggplot(k2,aes(f0_2,t0_2))+geom_line())) |
+    (
+    (ggplot(df,aes(f0_1,f0_2,fill=log2(s_1/s_2)))+
+        geom_tile()+
+        scale_fill_viridis_c())/
+    (ggplot(df,aes(f0_1,f0_2,fill=log2(d_2/d_1)))+
+        geom_tile()+
+        scale_fill_viridis_c())/
+    (ggplot(df,aes(f0_1,f0_2,fill=log2(t0_1/t0_2)))+
+        geom_tile()+
+        scale_fill_viridis_c())
+    )
+}
+
+
 PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=data$gene.info[ToIndex(data,gene),"Symbol"], group=Design$Condition, type=c("full","ntr","lm"), bare.plot=FALSE,exact.tics=TRUE,return.tables=FALSE,...) {
     if (length(ToIndex(data,gene))==0) return(NULL)
 
@@ -435,7 +500,7 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
 
 SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,l0=s/d,times=seq(min.time,max.time,by=by),min.time=-1,max.time=10,length.out = 1000,by = ((max.time - 0)/(length.out - 1)),name=NULL,out=c("Old","New","Total","NTR")) {
     ode.new=function(t,s,d) ifelse(t<0,0,s/d*(1-exp(-t*d)))
-    ode.old=function(t,f0,s,d) ifelse(t<0,s/d,f0*exp(-t*d))
+    ode.old=function(t,f0,s,d) ifelse(t<0,l0,f0*exp(-t*d))
     old=ode.old(times,l0,s,d)
     new=ode.new(times,s,d)
     re=data.frame(
@@ -467,25 +532,26 @@ PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
 	)
 }
 
-PlotCompareNTRs=function(...) {
+PlotCompareKinetics=function(type="NTR",...) {
     dfs=list(...)
     df=do.call("rbind",dfs)
-    ggplot(df[df$Type=="NTR",],aes(Time,Value,color=Name))+
-        geom_line(size=1)
+    ggplot(df[df$Type %in% type,],aes(Time,Value,color=Name))+
+        geom_line(size=1)+
+        facet_wrap(~Type)
 }
 
-#sim.hl8.steady=Simulate(hl=8,name="Steady-state, 8h")
-#sim.hl4.steady=Simulate(hl=4,name="Steady-state, 4h")
-#sim.hl2.steady=Simulate(hl=2,name="Steady-state, 2h")
-#sim.hl1.steady=Simulate(hl=1,name="Steady-state, 1h")
-#sim.hl8.2x=Simulate(l0=10,hl=4,s=10*log(2)/8,name="2x down, 8h")
-#sim.hl4.2x=Simulate(l0=10,hl=2,s=10*log(2)/4,name="2x down, 4h")
-#sim.hl2.2x=Simulate(l0=10,hl=1,s=10*log(2)/2,name="2x down, 2h")
-#sim.hl1.2x=Simulate(l0=10,hl=0.5,s=10*log(2)/1,name="2x down, 1h")
-#sim.hl8.10x=Simulate(l0=10,hl=0.8,s=10*log(2)/8,name="10x down, 8h")
-#sim.hl4.10x=Simulate(l0=10,hl=0.4,s=10*log(2)/4,name="10x down, 4h")
-#sim.hl2.10x=Simulate(l0=10,hl=0.2,s=10*log(2)/2,name="10x down, 2h")
-#sim.hl1.10x=Simulate(l0=10,hl=0.1,s=10*log(2)/1,name="10x down, 1h")
+#sim.hl8.steady=SimulateKinetics(hl=8,name="Steady-state, 8h")
+#sim.hl4.steady=SimulateKinetics(hl=4,name="Steady-state, 4h")
+#sim.hl2.steady=SimulateKinetics(hl=2,name="Steady-state, 2h")
+#sim.hl1.steady=SimulateKinetics(hl=1,name="Steady-state, 1h")
+#sim.hl8.2x=SimulateKinetics(l0=100,hl=4,s=100*log(2)/8,name="2x down, 8h")
+#sim.hl4.2x=SimulateKinetics(l0=100,hl=2,s=100*log(2)/4,name="2x down, 4h")
+#sim.hl2.2x=SimulateKinetics(l0=100,hl=1,s=100*log(2)/2,name="2x down, 2h")
+#sim.hl1.2x=SimulateKinetics(l0=100,hl=0.5,s=100*log(2)/1,name="2x down, 1h")
+#sim.hl8.10x=SimulateKinetics(l0=100,hl=0.8,s=100*log(2)/8,name="10x down, 8h")
+#sim.hl4.10x=SimulateKinetics(l0=100,hl=0.4,s=100*log(2)/4,name="10x down, 4h")
+#sim.hl2.10x=SimulateKinetics(l0=100,hl=0.2,s=100*log(2)/2,name="10x down, 2h")
+#sim.hl1.10x=SimulateKinetics(l0=100,hl=0.1,s=100*log(2)/1,name="10x down, 1h")
 
 
 
@@ -507,13 +573,14 @@ PlotCompareNTRs=function(...) {
 #    ncol=2
 #)
 
-#plot_grid(
-#    PlotSimulation(sim.hl2.steady),
-#    PlotSimulation(sim.hl2.2x),
-#    PlotSimulation(sim.hl2.10x),
-#    PlotCompareNTRs(sim.hl2.steady,sim.hl2.2x,sim.hl2.10x),
-#    ncol=2
-#)
+plot_grid(
+    PlotSimulation(sim.hl2.steady),
+    PlotSimulation(sim.hl2.2x),
+    PlotSimulation(sim.hl2.10x),
+    PlotCompareNTRs(sim.hl2.steady,sim.hl2.2x,sim.hl2.10x),
+    ncol=2
+)
+
 
 #plot_grid(
 #    PlotSimulation(sim.hl1.steady),
