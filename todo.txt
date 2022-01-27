@@ -1,5 +1,5 @@
 get rid of accessing the inner of the data structure
 document all functions, use export and get rid of exporting everything
-toxicity (sars)
-differential expression testing ()
+toxicity (sars) -> vignette
+differential expression testing (simulation about being more sensitive for short term changes, simulation about changed synthesis or degradation; real data)
 kinetics (simulation, three fits (show unbiased), show deviation + CI; SARS data, show rmse; NXF1 data, lets see; llr test, sars and nxf1)
