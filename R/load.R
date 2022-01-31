@@ -189,6 +189,8 @@ ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.
   	prefix=gsub(".tsv(.gz)?$","",file)
   }
 
+  if (!file.exists(file)) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
+
 
 	if (verbose) cat("Checking file...\n")
 	con <- file(file,"r")

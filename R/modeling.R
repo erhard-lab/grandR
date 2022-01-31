@@ -224,7 +224,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
         s
     }
     olddf=GetData(data,mode.slot=paste0("old.",slot),genes=gene,ntr.na = FALSE)
-    olddf$use=1:nrow(olddf) %in% (1:nrow(olddf))[use.old]
+    olddf$use=1:nrow(olddf) %in% (1:nrow(olddf))
     olddf$time=olddf[[time]]
     if (is.null(olddf[[group]])) olddf[[group]]="Data"
     olddf=dlply(olddf,group,function(s) correct(s))
@@ -236,8 +236,12 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
         summ=summary(fit)
 
         par=setNames(c(exp(coef(fit)["(Intercept)"])*-coef(fit)["time"],-coef(fit)["time"]),c("s","d"))
-        conf.p=confint(fit,level=conf.int)
-        conf.p=apply(conf.p,2,function(v) setNames(pmax(0,c(exp(v["(Intercept)"])*par['d'],-v["time"])),c("s","d")))
+        if (sum(residuals(fit))>0) {
+            conf.p=confint(fit,level=conf.int)
+            conf.p=apply(conf.p,2,function(v) setNames(pmax(0,c(exp(v["(Intercept)"])*par['d'],-v["time"])),c("s","d")))
+        } else {
+            conf.p=matrix(rep(NaN,4),ncol = 2)
+        }
 
         modifier=NA
 
@@ -342,7 +346,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 
 }
 
-NormalizeKinetic=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,norm.name="kinetic",time.name="norm_time",group=Design$Condition,steady.state=NULL,n.estimate=1000,set.to.default=TRUE) {
+NormalizeKinetics=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,norm.name="kinetic",time.name="norm_time",group=Design$Condition,steady.state=NULL,n.estimate=1000,set.to.default=TRUE) {
 
     conds=ColData(data)
     if (is.null(conds[[group]])) {
@@ -393,7 +397,7 @@ NormalizeKinetic=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,norm.n
 }
 
 FitKinetics=function(data,name="kinetics",type=c("full","ntr","lm"),...) {
-    slam.param=as.data.frame(t(opt$sapply(data$gene.info$Gene,
+    slam.param=as.data.frame(t(opt$sapply(Genes(data),
                                    switch(substr(tolower(type[1]),1,1),n=FitKineticsGeneNtr,f=FitKineticsGeneLeastSquares,l=FitKineticsGeneLogSpaceLinear),
                                    data=data,return.vector=TRUE,...)))
     AddAnalysis(data,MakeAnalysis(name=name,analysis="FitKinetics"),slam.param)

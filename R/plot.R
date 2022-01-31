@@ -115,7 +115,7 @@ PlotHeatmap=function(data,
   if (tolower(type[1])=="old") slot=paste0("old.",slot)
   if (tolower(type[1])!="total" && is.null(columns)) columns=!data$coldata$no4sU
 
-  mat=as.matrix(GetTable(data,type=slot,gene = genes,columns=columns,summarize = summarize,ntr.na = FALSE))
+  mat=as.matrix(GetTable(data,type=slot,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE))
   mat=transform(mat)
 
   name=attr(mat,"label")
@@ -287,8 +287,8 @@ PlotScatter.data.frame=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=l
 
 
 PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
-	w=GetData(data,mode.slot="count",columns=w4sU,table=T)[,1]
-	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetData(data,mode.slot="count",columns=no4sU,table=T)[,1]
+	w=GetTable(data,type="count",columns=w4sU)[,1]
+	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetTable(data,type="count",columns=no4sU)[,1]
 	use=!is.na(w+n)
 	w=w[use]
 	n=n[use]

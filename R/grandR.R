@@ -67,7 +67,16 @@ Genes=function(data, use.symbols=TRUE) data$gene.info[[if (use.symbols) "Symbol"
 dim.grandR=function(data) c(dim(data$gene.info)[1],dim(data$coldata)[1])
 is.grandR <- function(x) inherits(x, "grandR")
 dimnames.grandR=function(data) dimnames(data$data$count)
-print.grandR=function(data) cat(sprintf("grandR: %s\nRead from %s\n%d genes, %d samples/cells\nAvailable data slots: %s\nAvailable analyses: %s\nDefault data slot: %s\n",data$metadata$Description,data$prefix,nrow(data),ncol(data),paste(Slots(data),collapse=","),paste(Analyses(data),collapse=","),DefaultSlot(data)))
+print.grandR=function(data) cat(
+  sprintf("grandR: %s\nRead from %s\n%d genes, %d samples/cells\nAvailable data slots: %s\nAvailable analyses: %s\nDefault data slot: %s\n",
+          data$metadata$Description,
+          data$prefix,
+          nrow(data),
+          ncol(data),
+          paste(Slots(data),collapse=","),
+          paste(Analyses(data),collapse=","),
+          DefaultSlot(data))
+  )
 data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
   re=list()
   for (l1 in names(data$data)) {
