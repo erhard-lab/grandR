@@ -573,13 +573,13 @@ PlotCompareKinetics=function(type="NTR",...) {
 #    ncol=2
 #)
 
-plot_grid(
-    PlotSimulation(sim.hl2.steady),
-    PlotSimulation(sim.hl2.2x),
-    PlotSimulation(sim.hl2.10x),
-    PlotCompareNTRs(sim.hl2.steady,sim.hl2.2x,sim.hl2.10x),
-    ncol=2
-)
+#plot_grid(
+#    PlotSimulation(sim.hl2.steady),
+#    PlotSimulation(sim.hl2.2x),
+#    PlotSimulation(sim.hl2.10x),
+#    PlotCompareNTRs(sim.hl2.steady,sim.hl2.2x,sim.hl2.10x),
+#    ncol=2
+#)
 
 
 #plot_grid(
