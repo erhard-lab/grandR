@@ -52,7 +52,7 @@ Design=list(
 )
 
 
-#' Add additional columns to the \code{\link{ColData}} table.
+#' Add additional columns to the \code{\link{Coldata}} table.
 #'
 #' Design.Semantics is a list of functions that is supposed to be used as \code{semantics} parameter when calling \code{\link{MakeColdata}}.
 #' For each design vector element matching a name of this list the corresponding function is called by \link{MakeColdata} to add additional columns.
@@ -60,8 +60,8 @@ Design=list(
 #'
 #' @name Design.Semantics
 #'
-#' @param s the original column in the \code{ColData} table column
-#' @param name the name of the column in the \code{ColData} table column
+#' @param s the original column in the \code{Coldata} table column
+#' @param name the name of the column in the \code{Coldata} table column
 #'
 #' @details
 #' \itemize{
@@ -85,7 +85,7 @@ Design=list(
 #'                   design=function(names) MakeColdata(names,c("Cell",Design$dur.4sU,Design$Replicate),semantics=sema),
 #'                   classify.genes=classi,
 #'                   verbose=TRUE)
-#' ColData(sars)
+#' Coldata(sars)
 #'
 NULL
 
@@ -147,7 +147,7 @@ Design.Semantics=list(
 #'
 #' @export
 #'
-#' @seealso \link{ReadGRAND},\link{Design.Semantics},\link{ColData}
+#' @seealso \link{ReadGRAND},\link{Design.Semantics},\link{Coldata}
 #'
 #' @examples
 #' coldata <- MakeColdata(c("Mock.0h.A","Mock.0h.B","Mock.2h.A","Mock.2h.B"), design=c("Cell",Design$dur.4sU,Design$Replicate))
@@ -207,7 +207,7 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4,
 #' or 30min into 0.5, or no4sU into 0). Semantics can be user-defined by calling \code{\link{MakeColdata}}
 #' and using the return value as the design parameter, or a function that calls MakeColdata.
-#' In most cases it is easier to manipulate the \code{\link{ColData}} table after loading data instead of using this mechanism;
+#' In most cases it is easier to manipulate the \code{\link{Coldata}} table after loading data instead of using this mechanism;
 #' the build-in semantics simply provide a convenient way to reduce this kind of manipulation in most cases.
 #'
 #' @seealso \link{GeneType},\link{MakeColdata},\link{Design.Semantics}

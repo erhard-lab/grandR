@@ -1,8 +1,4 @@
 
-Kinetics=function(a0,HL,steady) KineticsRates(a0,steady*log(2)/HL,log(2)/HL)
-KineticsRates=function(a0,s,d) function(t) (a0-s/d)*exp(-t*d)+s/d
-
-
 density2d=function(x, y, facet=NULL, n=100) {
   bandwidth.nrd.ex=function (x)
   {
@@ -102,9 +98,9 @@ PlotHeatmap=function(data,
                      col.names=colnames(data),
                      title=NULL,return.matrix=FALSE,...) {
 
-  if (length(genes)==1 && genes %in% names(data$diffexp) && "Q" %in% names(data$diffexp[[genes]][[type[1]]])) {
+  if (length(genes)==1 && genes %in% names(Analyses(data)) && "Q" %in% names(GetAnalysisTable(data,names=genes))) {
     n=genes
-    genes=data$diffexp[[genes]][[type[1]]]$Q<0.05
+    genes=GetAnalysisTable(data,names=genes,columns="Q")$Q<0.05
     if (verbose) cat(sprintf("Selected %d genes significant in %s\n",sum(genes),n))
     if (is.null(cluster.genes)) cluster.genes=TRUE
   }
@@ -149,8 +145,8 @@ PlotHeatmap=function(data,
   hm
 }
 
-PlotTestOverlap=function(data,name="lrt",alpha=0.05,type=c("venn","euler")) {
-  mat=GetDiffExpTable(f,gene.info=FALSE,name=name,cols='Q')
+PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
+  mat=GetAnalysisTable(data,gene.info=FALSE,names=names,columns='^Q$')
 	df=setNames(as.data.frame(mat<alpha & !is.na(mat)),gsub(".Q$","",names(mat)))
 	pl=switch(type[1],euler=eulerr::euler(df),venn=eulerr::venn(df))
 	plot(pl,main=name)

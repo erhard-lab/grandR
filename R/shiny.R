@@ -1,6 +1,6 @@
 
 ServeData=function(data,
-                   df=GetDiffExpTable(data,cols=c("LFC","Q")),
+                   df=GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q"),
                    df.set=df,
                    sizes=12,height=400,
                    plot.single=list(), plot.set=list(), plot.static=list(),

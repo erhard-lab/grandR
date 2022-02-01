@@ -5,3 +5,5 @@ differential expression testing (simulation about being more sensitive for short
 kinetics (simulation, three fits (show unbiased), show deviation + CI; SARS data, show rmse; NXF1 data, lets see; llr test, sars and nxf1)
 Test R version 3 and 4!
 Add testing (at least for loading the example data and checking some things including whether coldata consists of factors etc)
+Estimate changes of kinetic parameters for SARS (and the t0)
+Get rid of diffexp entry in the data structure; append .New etc to the name (just like the FitKinetics does for conditions)

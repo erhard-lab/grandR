@@ -19,6 +19,7 @@ Suggests: knitr,
     rclipboard,
     minpack.lm,
     parallel,
-    Matrix
+    Matrix,
+    lamW
 RoxygenNote: 7.1.2
 VignetteBuilder: knitr

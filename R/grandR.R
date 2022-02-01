@@ -54,7 +54,7 @@
 #' }
 #'
 #'
-#' @seealso \link{Slots}, \link{DefaultSlot}, \link{Genes}, \link{GeneInfo}, \link{ColData}, \link{GetTable}, \link{GetData}, \link{Analyses}, \link{GetAnalysisTable}
+#' @seealso \link{Slots}, \link{DefaultSlot}, \link{Genes}, \link{GeneInfo}, \link{Coldata}, \link{GetTable}, \link{GetData}, \link{Analyses}, \link{GetAnalysisTable}
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
@@ -298,7 +298,7 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE) {
 #' @details The condition can be set either by \code{data<-Condition(data,names)} or by \code{Condition(data)<-names}.
 #' @return Either the values of the condition column for Condition(data) or the grandR data object having the new condition column
 #'
-#' @seealso \link{ColData}
+#' @seealso \link{Coldata}
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
@@ -323,7 +323,9 @@ Condition <- function(data,value=NULL) {
 #' @rdname Condition
 #' @export
 `Condition<-` <- function(data, value) {
-  if (all(value %in% names(data$coldata))) {
+  if (is.null(value)) {
+    data$coldata$Condition=NULL
+  } else if (all(value %in% names(data$coldata))) {
     data$coldata$Condition <- interaction(data$coldata[value])
   } else{
     data$coldata$Condition <- as.factor(value)
@@ -342,6 +344,7 @@ Condition <- function(data,value=NULL) {
 #'
 #' @param data A grandR object
 #' @param use.symbols obtain the gene symbols instead of gene names
+#' @param genes which genes to use
 #' @param analysis The name of an analysis table
 #'
 #' @details \code{Genes(data,use.symbols=FALSE)} it the same as \code{rownames(data)}, and \code{Columns(data)} is the same as \code{colnames(data)}
@@ -350,7 +353,7 @@ Condition <- function(data,value=NULL) {
 #'
 #' @return Either the gene or column names of the grandR data object, or the columns of an analysis table in the grandR object
 #'
-#' @seealso \link{ColData}, \link{GeneInfo}, \link{Analyses}
+#' @seealso \link{Coldata}, \link{GeneInfo}, \link{Analyses}
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
@@ -362,11 +365,11 @@ Condition <- function(data,value=NULL) {
 #'
 #' @export
 #'
-Genes=function(data, use.symbols=TRUE) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]]
+Genes=function(data, use.symbols=TRUE, genes=NULL) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]][ToIndex(data,genes)]
 #' @rdname Genes
 #' @export
 Columns=function(data,analysis=NULL) {
-  if (is.null(analysis)) ColData(data)$Name else names(data$analysis[[analysis]])
+  if (is.null(analysis)) Coldata(data)$Name else names(data$analysis[[analysis]])
 }
 
 #' Get the gene annotation table or add additional columns to it
@@ -383,7 +386,7 @@ Columns=function(data,analysis=NULL) {
 #'
 #' @return Either the gene annotation table or a new grandR object having an updated gene annotation table
 #'
-#' @seealso \link{Genes}, \link{ColData}, \link{ReadGRAND}
+#' @seealso \link{Genes}, \link{Coldata}, \link{ReadGRAND}
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
@@ -498,6 +501,7 @@ check.mode.slot=function(data,mode.slot) {
 #' @export
 #'
 ToIndex=function(data,gene) {
+  if (is.null(gene)) return(1:nrow(data))
   if (is.numeric(gene)) return(gene)
   if (is.logical(gene) && length(gene)==nrow(data)) return(which(gene))
   if (all(gene %in% data$gene.info$Gene)) return(setNames(1:nrow(data),data$gene.info$Gene)[gene])
@@ -520,7 +524,7 @@ ToIndex=function(data,gene) {
 #' @param gene.info Should the table contain the \link{GeneInfo} values as well (at the beginning)?
 #' @param summarize Should replicates by summarized? Can only be specified if columns is NULL; either a summarization matrix (\link{GetSummarizeMatrix}) or TRUE (in which case \link{GetSummarizeMatrix}(data) is called)
 #' @param prefix Prepend each column in the output table (except for the gene.info columns) by the given prefix
-#' @param name.by A column name of \link{ColData}(data). This is used as the rownames of the output table
+#' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
 #'
 #' @return A data frame containing the desired values
 #'
@@ -536,7 +540,7 @@ ToIndex=function(data,gene) {
 #'
 #' head(GetTable(sars)) # DefaultSlot values, i.e. size factor normalized read counts for all samples
 #' head(GetTable(sars,summarize=TRUE)) # DefaultSlot values averaged over the two conditions
-#' head(GetTable(sars,type="new.count",columns=!ColData(sars)$no4sU)) # Estimated counts for new RNA for all samples with 4sU
+#' head(GetTable(sars,type="new.count",columns=!Coldata(sars)$no4sU)) # Estimated counts for new RNA for all samples with 4sU
 #'
 #' sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
 #' head(GetTable(sars,type="kinetics",columns="Half-life")) # Estimated RNA half-lives for both conditions
@@ -607,14 +611,14 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
 #' @param columns A vector of columns (i.e. condition/cell names; use colnames(data) to learn which columns are available); all condition/cell names if NULL
 #' @param genes Restrict the output table to the given genes (this typically is a single gene, or very few genes)
 #' @param melt Should the table be melted if multiple genes / mode.slots are given
-#' @param coldata Should the table contain the \link{ColData} values as well (at the beginning)?
+#' @param coldata Should the table contain the \link{Coldata} values as well (at the beginning)?
 #' @param ntr.na For columns representing a 4sU naive sample, should mode.slot \emph{ntr},\emph{new.count} and \emph{old.count} be 0,0 and count (ntr.na=FALSE; can be any other slot than count) or NA,NA and NA (ntr.na=TRUE)
-#' @param name.by A column name of \link{ColData}(data). This is used as the colnames of the output table
+#' @param name.by A column name of \link{Coldata}(data). This is used as the colnames of the output table
 #'
 #' @return A data frame containing the desired values
 #'
 #' @details To refer to data slots, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total) followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to obtain the \emph{new counts}.
-#' @details If only one mode.slot and one gene is given, the output table contains one column (and potentially columns from \link{ColData}) named \emph{Value}. If one gene and multiple mode.slots are given, the columns are named according to the mode.slots. If one mode.slot and multiple genes are given, the columns are named according to the genes. If multiple genes and mode.slots are given, columns are named gene.mode.slot.
+#' @details If only one mode.slot and one gene is given, the output table contains one column (and potentially columns from \link{Coldata}) named \emph{Value}. If one gene and multiple mode.slots are given, the columns are named according to the mode.slots. If one mode.slot and multiple genes are given, the columns are named according to the genes. If multiple genes and mode.slots are given, columns are named gene.mode.slot.
 #' @details If melt=TRUE, the table is molten such that each row contains only one value (for one of the genes and for one of the mode.slots). If only one gene and one mode.slot is given, melting does not have an effect.
 #'
 #' @seealso \link{GetTable},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes}
@@ -667,14 +671,14 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' This is a convenience method to find such reference samples, and provide them as a lookup table.
 #'
 #' @param data A grandR object
-#' @param reference Expression evaluating to a logical vector to indicate which columns are reference columns; evaluated in an environment having the columns of \link{ColData}(data)
-#' @param group a vector of colnames in \link{ColData}(data)
+#' @param reference Expression evaluating to a logical vector to indicate which columns are reference columns; evaluated in an environment having the columns of \link{Coldata}(data)
+#' @param group a vector of colnames in \link{Coldata}(data)
 #'
 #' @return A named list for each sample or cell containing all corresponding reference columns
 #'
 #' @details Without any group, the list simply contains all references for each sample/cell. With groups defined, each list entry consists of all references from the same group.
 #'
-#' @seealso \link{ColData},\link{Findno4sUPairs}, \link{Condition}
+#' @seealso \link{Coldata},\link{Findno4sUPairs}, \link{Condition}
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
@@ -710,8 +714,13 @@ FindReferences=function(data,reference, group="Condition") {
 #' @param analysis The name of the analysis tool
 #' @param mode An optional mode (new,old,total) on which the analysis has been run
 #' @param slot An optional data slot on which the analysis has been run
+#' @param columns An optional vector of columns the analysis was run on
 #'
 #' @return Either the analysis names or a grandR data with added/removed slots or the metatable to be used with AddAnalysis
+#'
+#' @details The columns in the analysis tables are defined by the analysis method (e.g. "Synthesis","Half-life" and "rmse" by \code{FitKinetics}).
+#' A call to an analysis function might produce more than one table (e.g. because kinetic modeling is done for multiple \link{Condition}s). In this case,
+#' AddAnalysisTable produces more than one analysis table.
 #'
 #' @details \code{AddAnalysis} (and therefore also \code{MakeAnalysis}) is usually not called directly by the user, but is
 #' used by analysis methods to add their final result to a grandR object (e.g., \link{FitKinetics},\link{TestGenesLRT},\link{TestPairwise},\link{LFC}).
@@ -748,7 +757,7 @@ AddAnalysis=function(data,description,table,warn.present=TRUE) {
     for (n in names(description)) ana[[n]]=description[[n]]
     attr(data$analysis[[description$name]],"analysis") = ana
   }
-  invisible(data)
+  data
 }
 
 
@@ -764,8 +773,8 @@ DropAnalysis=function(data,pattern=NULL) {
 }
 #' @describeIn Analyses Create a metatable for an analysis
 #' @export
-MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL) {
-  list(name=name,mode=mode,analysis=analysis,slot=slot)
+MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
+  list(name=name,mode=mode,analysis=analysis,slot=slot,columns=columns)
 }
 
 
@@ -775,11 +784,11 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL) {
 #' or \code{\link{GetData}} (as tidy table).
 #'
 #' @param data A grandR object
-#' @param names One or several analysis names (\link{Analyses})
-#' @param columns Regular expression to select columsn from the analysis table
+#' @param names One or several analysis names (\link{Analyses}); all analysis tables if NULL
+#' @param columns Regular expressions to select columns from the analysis table (all have to match!); all columns if NULL
 #' @param genes Restrict the output table to the given genes
 #' @param gene.info Should the table contain the \link{GeneInfo} values as well (at the beginning)?
-#' @param name.by A column name of \link{ColData}(data). This is used as the rownames of the output table
+#' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
 #'
 #' @return A data frame containing the analysis results
 #'
@@ -792,7 +801,7 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL) {
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
 #' SetParallel()
 #' sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
-#' head(GetAnalysisTable(sars,names="kinetics",columns="Half-life"))
+#' head(GetAnalysisTable(sars,columns="Half-life"))
 #'
 #' @export
 #'
@@ -800,6 +809,7 @@ GetAnalysisTable=function(data,names=NULL,columns=NULL,genes=Genes(data),gene.in
   if (!all(check.analysis(data,names))) stop(sprintf("Analysis name %s unknown!",paste(analysis[!check.analysis(mode.slot)],collapse=",")))
 
   genes=ToIndex(data,genes)
+  if (is.null(names)) names = Analyses(data)
 
   re=data$gene.info[genes,]
   if (!is.null(name.by)) {
@@ -808,13 +818,12 @@ GetAnalysisTable=function(data,names=NULL,columns=NULL,genes=Genes(data),gene.in
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
   for (name in names) {
     t=data$analysis[[name]][genes,]
-    analysis = attr(data$analysis[[name]],"analysis")
-    names(t)=if (is.null(analysis$mode)) paste(name,names(t),sep=".") else paste(name,analysis$mode,names(t),sep=".")
     if (!is.null(columns)) {
-      use = rep(FALSE,ncol(t))
-      for (r in columns) use=use|grepl(r,names(t))
+      use = rep(TRUE,ncol(t))
+      for (r in columns) use=use&grepl(r,names(t))
       t=t[,use,drop=FALSE]
     }
+    names(t)=paste0(name,".",names(t))
     re=cbind(re,t)
   }
   if (is.logical(gene.info) && !gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re),drop=FALSE]

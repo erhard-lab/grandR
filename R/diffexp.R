@@ -25,7 +25,7 @@ AddDiffExp=function(data,name,mode,table) {
 }
 
 TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FALSE,columns=!data$coldata$no4sU,total=TRUE,new=TRUE,old=TRUE) {
-	colData=droplevels(ColData(data)[columns,])
+	colData=droplevels(Coldata(data)[columns,])
 	countData=data$data$count[,columns]
 	ntrData=data$data$ntr[,columns]
 
@@ -170,7 +170,7 @@ GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
 GetContrasts.grandR=function(data,columns=NULL,...) GetContrasts.default(coldata=data$coldata,columns=columns,...)
-GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,name=NULL,group=NULL,columns=NULL) {
+GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColdata(names,design),contrast,name=NULL,group=NULL,columns=NULL) {
   # either level 1 against level 2 of some coldata column (3 entries in contrast)
   # or each level against one specific level (2 entries)
   # or each all pairwise comparison (1 entry)

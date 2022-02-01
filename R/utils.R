@@ -19,6 +19,40 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=TRUE,...) {
   t
 }
 
+
+
+#' Convert a structure into a vector
+#'
+#' The structure is supposed to be a list. Flattening is done by extracting the given fields (\code{return.fields})
+#' and applying the additional function (\code{return.extra}). This is mainly to be used within \code{sapply} and similar.
+#'
+#' @param d the data structure
+#' @param return.fields which fields should be extracted directly (may be NULL)
+#' @param return.extra apply a function returning a flat list or vector (may be NULL)
+#'
+#'
+#' @return the data flattened into a vector
+#' @export
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
+#' sars <- Normalize(sars)
+#' fit <- FitKineticsGeneLeastSquares(sars,"SRSF6")$Mock
+#' print(fit)
+#' kinetics2vector(fit)
+#'
+structure2vector=function(d,return.fields=NULL,return.extra=NULL) {
+  r=list()
+  if (!is.null(return.fields)) r=c(r,d[return.fields])
+  if (!is.null(return.extra)) r=c(r,return.extra(d))
+  unlist(r)
+}
+#' @describeIn structure2vector Convert the output of the FitKinetics methods into a vector
+#' @param condition if the original grandR object had \code{\link{Condition}} set, which condition to extract (NULL otherwise)
+#' @export
+kinetics2vector=function(d,condition=NULL,return.fields=c("Synthesis","Half-life","rmse"),return.extra=NULL) structure2vector(if (is.null(condition)) d else d[[condition]],return.fields=return.fields,return.extra=return.extra)
+
 my.precision=function (x)
 {
   x <- unique(x)

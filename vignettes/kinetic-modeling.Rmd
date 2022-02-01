@@ -10,7 +10,7 @@ vignette: >
 One of the main applications of metabolic RNA labeling is to model the kinetics of RNA expression levels [[1]](https://doi.org/10.1093/bioinformatics/bty256)[[2]](https://doi.org/10.1016/j.molcel.2021.06.016). The most natural and widely used model is to describe the change of RNA levels $a(t)$ at time $t$ is via first order reactions by the differential equation:
 
 $$
-\frac{da(t)}{dt}=\sigma - \delta \cdot a(t)
+\frac{da}{dt}=\sigma - \delta \cdot a(t)
 $$
 Here $\sigma$ is the net synthesis rate of RNA and $\delta$ is the degradation rate. This differential equation can be solved analytically (see e.g. [[1]](https://doi.org/10.1093/bioinformatics/bty256)). Based on this, there are two ways implemented in grandR to estimate both $\sigma$ and $\delta$ by either using non-linear regression on the estimated new and old RNA levels [[2]](https://doi.org/10.1016/j.molcel.2021.06.016) or by a maximum likelihood approach using the posterior distribution of the (new to total RNA ratio) NTR values transformed to degradation rates [[1]](https://doi.org/10.1093/bioinformatics/bty256). Both approaches make use of multiple time points (labeling durations) and are able to estimate both $\sigma$ and $\delta$. The maximum likelihood approach can only be applied under steady state assumptions, whereas the regression approach strictly depends on accurate normalization across individal samples.
 
