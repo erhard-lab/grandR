@@ -388,8 +388,7 @@ NormalizeKinetics=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,norm.
 
     norm.df=as.matrix(as.data.frame(norm.df)[,ColData(data)$Name])
 
-    data=AddSlot(data,norm.name,norm.df)
-    if (set.to.default) DefaultSlot(data)=norm.name
+    data=AddSlot(data,name=norm.name,matrix=norm.df,set.to.default=set.to.default)
     timecol[ColData(data)[[time]]==0]=0
     data=ColData(data,time.name,timecol)
 

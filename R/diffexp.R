@@ -169,7 +169,7 @@ GetSummarizeMatrix.default=function(coldata,group=Design$Condition,columns=!cold
 GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
-GetContrasts.grandR=function(data,columns=!data$coldata$no4sU,...) GetContrasts.default(coldata=data$coldata,columns=columns,...)
+GetContrasts.grandR=function(data,columns=NULL,...) GetContrasts.default(coldata=data$coldata,columns=columns,...)
 GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColData(names,design),contrast,name=NULL,group=NULL,columns=NULL) {
   # either level 1 against level 2 of some coldata column (3 entries in contrast)
   # or each level against one specific level (2 entries)

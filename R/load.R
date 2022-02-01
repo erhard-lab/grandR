@@ -3,19 +3,98 @@
 
 
 
-#' A list of functions. These are called one after the other by \link{ReadGRAND} to build the \emph{Type} column. The name of the first function returning TRUE is used as type.
-#' @title GeneType
+#' Build the type column for the gene info table.
+#'
+#' A list of functions. These are called one after the other by \code{\link{ReadGRAND}} or \code{\link{ReadGRAND3}} to build the \emph{Type} column in the \code{\link{GeneInfo}} table. The name of the first function returning TRUE for a row in the table is used as its \emph{type}.
+#'
+#' @details This is by default given to the \emph{classify.genes} parameter of \code{\link{ReadGRAND}} and \code{\link{ReadGRAND3}}.
+#' It will assign the type \emph{mito} if the gene symbol starts with \emph{mt-}, \emph{ERCC} if it starts with \emph{ERCC} and \emph{Cellular} if the gene name starts with \emph{ENS}.
+#'
+#' @seealso \link{ReadGRAND}, \link{ReadGRAND3}
+#' @examples
+#' classi <- c(GeneType,
+#'            `SARS-CoV-2`=function(gene.info) gene.info$Symbol %in%
+#'                     c('ORF3a','E','M','ORF6','ORF7a','ORF7b','ORF8','N','ORF10','ORF1ab','S')
+#'            )
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate),
+#'                   classify.genes=classi,
+#'                   verbose=TRUE)
+#' table(GeneInfo(sars)$Type)
+#'
 #' @export
 GeneType=list(
 	mito=function(gene.info) grepl("^MT-",gene.info$Symbol,ignore.case=TRUE),
 	ERCC=function(gene.info) grepl("ERCC-[0-9]{5}",gene.info$Gene),
-	Cellular=function(gene.info) grepl("^ENS.*G\\d+$",gene.info$Gene),
-	Unknown=function(gene.info) rep(T,dim(gene.info)[1])
+	Cellular=function(gene.info) grepl("^ENS.*G\\d+$",gene.info$Gene)
 )
 
 
-semantics.noop=function(s,name) setNames(data.frame(s),name)
-semantics.time=function(s,name) {
+
+#' A list of predefined names for design vectors
+#'
+#' These predefined names mainly are implemented here to harmonize analyses.
+#' It is good practise to use these names if sensible.
+#'
+#' @export
+Design=list(
+  has.4sU="has.4sU",
+  conc.4sU="concentration.4sU",
+  dur.4sU="duration.4sU",
+  Replicate="Replicate",
+  Condition="Condition",
+  hpi="hpi",
+  hps="hps",
+  Library="Library",
+  Sample="Sample",
+  Barcode="Barcode",
+  Origin="Origin"
+)
+
+
+#' Add additional columns to the \code{\link{ColData}} table.
+#'
+#' Design.Semantics is a list of functions that is supposed to be used as \code{semantics} parameter when calling \code{\link{MakeColdata}}.
+#' For each design vector element matching a name of this list the corresponding function is called by \link{MakeColdata} to add additional columns.
+#' By default, \code{duration.4sU} is mapped to \code{\link{Semantics.time}}.
+#'
+#' @name Design.Semantics
+#'
+#' @param s the original column in the \code{ColData} table column
+#' @param name the name of the column in the \code{ColData} table column
+#'
+#' @details
+#' \itemize{
+#'   \item{\strong{Semantics.noop:} Just add the column as is}
+#'   \item{\strong{Semantics.time:} Contents such as 3h or 30min are converted into a numerical value (in hours), and no4sU is converted into 0.}
+#'   }
+#'
+#' @format
+#' @seealso \link{MakeColdata}
+#' @examples
+#'
+#' Semantics.time(c("5h","30min","no4sU"),"Test")
+#'
+#'
+#' sema <- list(duration.4sU=
+#'      function(s,name) {
+#'         r<-Semantics.time(s,name)
+#'         cbind(r,data.frame(hpi=paste0(r$duration.4sU+3,"h")))
+#'      })
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=function(names) MakeColdata(names,c("Cell",Design$dur.4sU,Design$Replicate),semantics=sema),
+#'                   classify.genes=classi,
+#'                   verbose=TRUE)
+#' ColData(sars)
+#'
+NULL
+
+#' @rdname Design.Semantics
+#' @export
+Semantics.noop=function(s,name) setNames(data.frame(s),name)
+#' @rdname Design.Semantics
+#' @export
+Semantics.time=function(s,name) {
   time=rep(NA,length(s))
 
   no4sU=c("no4sU","-")
@@ -31,53 +110,16 @@ semantics.time=function(s,name) {
   setNames(data.frame(time),name)
 }
 
-#' A list of predefined names for design vectors
-#' @title Design
-#' @export
-Design=list(
-  has.4sU="has.4sU",
-  conc.4sU="concentration.4sU",
-  dur.4sU="duration.4sU",
-  Replicate="Replicate",
-  Condition="Condition",
-  hpi="hpi",
-  hps="hps",
-  Library="Library",
-  Sample="Sample",
-  Barcode="Barcode",
-  Origin="Origin"
-  )
-#' A list of functions. A function is called by \link{MakeColdata} for each design vector element matching a name of this list.
-#' @title Design.Semantics
+#' @rdname Design.Semantics
 #' @export
 Design.Semantics=list(
-  duration.4sU=semantics.time
+  duration.4sU=Semantics.time
 )
 
-ConvFields=function(v) {
-  if (is.data.frame(v) || is.matrix(v)) {
-    re=as.data.frame(lapply(as.data.frame(v),ConvFields))
-    colnames(re)=colnames(v)
-    rownames(re)=rownames(v)
-    return(re)
-  }
-  v=as.character(v)
-  if (sum(is.na(suppressWarnings(as.logical(v))))==0) {
-    as.logical(v)
-  } else if (sum(is.na(suppressWarnings(as.integer(v))))==0) {
-    as.integer(v)
-  } else if (sum(is.na(suppressWarnings(as.double(v))))==0) {
-    as.double(v)
-  } else {
-    factor(v,levels=unique(v))
-  }
-}
 
-
-
-#' MakeColdata
-#'
 #' Extract an annotation table from a formatted names vector
+#'
+#' If columns (i.e. sample or cell) follow a specific naming pattern, this can be used to conveniently set up an annotation table.
 #'
 #' @param names Formatted names vector (see details)
 #' @param design Titles for the columns of the annotation table
@@ -87,13 +129,25 @@ ConvFields=function(v) {
 #'
 #' @return A data frame representing the annotation table
 #'
-#' @details The names have to contain dots (.) to separate the fields for the column annotation table. E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}. For such names, a design vector of length 3 has to be given, that describes the meaning of each field. A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}. Some names are predefined in the list \link{Design}.
-#' @details The names given in the design vector might even have additional semantics: E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4, or 30min into 0.5, or no4sU into 0).
-#' @details Semantics can be user-defined via the \emph{semantics} list: For each name in the design vector matchin to a name in this list, the corresponding function in the list is run. Functions must accept 2 parameters, the first is the original column in the annotation table, the second the original name. The function must return a data.frame with the number of rows matching to the annotation table.
+#' @details The names have to contain dots (.) to separate the fields for the column annotation table.
+#' E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}.
+#' For such names, a design vector of length 3 has to be given, that describes the meaning of each field.
+#' A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}.
+#' Some names are predefined in the list \link{Design}.
+#'
+#' @details The names given in the design vector might even have additional semantics:
+#' E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4, or 30min into 0.5, or no4sU into 0).
+#'
+#' @details Semantics can be user-defined via the \emph{semantics} list:
+#' For each name in the design vector matching to a name in this list, the corresponding function in the list is run.
+#' Functions must accept 2 parameters, the first is the original column in the annotation table, the second the original name.
+#' The function must return a data.frame with the number of rows matching to the annotation table.
+#' In most cases it is easier to manipulate the returned data frame instead of changing the semantics.
+#' However, the build-in semantics provide a convenient way to reduce this kind of manipulation in most cases.
 #'
 #' @export
 #'
-#' @seealso \link{ReadGRAND},\link{Design.Semantics}
+#' @seealso \link{ReadGRAND},\link{Design.Semantics},\link{ColData}
 #'
 #' @examples
 #' coldata <- MakeColdata(c("Mock.0h.A","Mock.0h.B","Mock.2h.A","Mock.2h.B"), design=c("Cell",Design$dur.4sU,Design$Replicate))
@@ -103,7 +157,7 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
 
-  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,ConvFields(sapply(spl,function(v) v[i])))
+  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,type.convert(sapply(spl,function(v) v[i]),as.is=FALSE))
   names(coldata)[-1]=design[!is.na(design)]
   if (rownames) rownames(coldata)=coldata$Name
 
@@ -123,21 +177,40 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 
 #' Read the output of GRAND-SLAM 2.0 into a grandR object.
 #'
-#' @title ReadGRAND
-#' @param prefix Can either be the prefix used to call GRAND-SLAM with, or the main output file ($prefix.tsv.gz); if the RCurl package is installed, this can also be a URL
-#' @param design Either a design vector (see details), or a data.frame providing metadata for all columns (samples/cells)
+#' Metabolic labeling - nucleotide conversion RNA-seq data (such as generated by SLAM-seq,TimeLapse-seq or TUC-seq)
+#' must be carefully analyzed to remove bias due to incomplete labeling. GRAND-SLAM is a software package that
+#' employs a binomial mixture modeling approach to obtain precise estimates of the new-to-total RNA ratio (NTR) per gene and sample (or cell).
+#' This function directly reads the output of GRAND-SLAM 2.0 into a grandR object.
+#'
+#' @param prefix Can either be the prefix used to call GRAND-SLAM with, or the main output file ($prefix.tsv.gz);
+#' if the RCurl package is installed, this can also be a URL
+#' @param design Either a design vector (see details), or a data.frame providing metadata for all columns (samples/cells),
+#' or a function that is called with the condition name vector and is supposed to return this data.frame.
 #' @param classify.genes A list of functions that is used to add the \emph{type} column to the gene annotation table
 #' @param Unknown If no function from \emph{classify.genes} to a row in the gene annotation table, this is used as the \emph{type}
 #' @param read.percent.conv Should the percentage of convertions also be read?
 #' @param verbose Verbose status outputs
 #'
-#' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta) and potentially additional information of all genes detected by GRAND-SLAM
+#' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta)
+#' and potentially additional information of all genes detected by GRAND-SLAM
 #'
-#' @details If columns (samples/cells) are named systematically in a particular way, the design vector provides a powerful and easy way to create the column annotations.
-#' @details The column names have to contain dots (.) to separate the fields for the column annotation table. E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}. For such names, a design vector of length 3 has to be given, that describes the meaning of each field. A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}. Some names are predefined in the list \link{Design}.
-#' @details The names given in the design vector might even have additional semantics: E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4, or 30min into 0.5, or no4sU into 0). Semantics can be user-defined (see \code{\link{MakeColdata}}).
+#' @details If columns (samples/cells) are named systematically in a particular way, the design vector provides
+#' a powerful and easy way to create the column annotations.
 #'
-#' @seealso \link{GeneType},\link{MakeColdata}
+#' @details The column names have to contain dots (.) to separate the fields for the column annotation table.
+#' E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}.
+#' For such names, a design vector of length 3 has to be given, that describes the meaning of each field.
+#' A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}.
+#' Some names are predefined in the list \link{Design}.
+#'
+#' @details The names given in the design vector might even have additional semantics:
+#' E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4,
+#' or 30min into 0.5, or no4sU into 0). Semantics can be user-defined by calling \code{\link{MakeColdata}}
+#' and using the return value as the design parameter, or a function that calls MakeColdata.
+#' In most cases it is easier to manipulate the \code{\link{ColData}} table after loading data instead of using this mechanism;
+#' the build-in semantics simply provide a convenient way to reduce this kind of manipulation in most cases.
+#'
+#' @seealso \link{GeneType},\link{MakeColdata},\link{Design.Semantics}
 #'
 #' @examples
 #' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz", design=c("Cell",Design$dur.4sU,Design$Replicate), verbose=TRUE)
@@ -204,6 +277,9 @@ ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.
 	if (is.data.frame(design)) {
 	  if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(terms,collapse=".")))
 	  coldata=design
+	} else if (is.function(design)) {
+	  coldata=design(conds)
+	  if (length(conds)!=nrow(coldata)) stop(paste0("Design parameter (function) is incompatible with input data: ",paste(terms,collapse=".")))
 	} else {
   	if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
   	coldata=MakeColdata(conds,design)
@@ -234,6 +310,8 @@ ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.
 	conv = grepl("Conversions",names(data))
 	cove = grepl("Coverage",names(data)) & !grepl("Double-Hit Coverage",names(data))
 
+
+	classify.genes=c(classify.genes,Unknown=function(gene.info) rep(T,dim(gene.info)[1]))
 	if (!is.na(Unknown)) names(classify.genes)[names(classify.genes)=="Unknown"]=Unknown
 	gene.info = data.frame(Gene=as.character(data$Gene),Symbol=as.character(data$Symbol),Length=data$Length,stringsAsFactors=FALSE)
 	gene.info$Type=NA
@@ -279,7 +357,7 @@ ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.
 	do.callback()
 
 	# insert name no rep and set this as default condition, if there is no condition field!
-	re=grandR(prefix=prefix,gene.info=gene.info,data=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 2.0 data"))
+	re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 2.0 data"))
 	DefaultSlot(re)="count"
 	re
 }
@@ -291,9 +369,9 @@ ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.
 # TODO: do not use read.delim or .csv, nor file.exists (to allow using urls!)
 isSparse=function(prefix) !file.exists(paste0(prefix,".targets/data.tsv.gz"))
 
-ReadGrand3=function(prefix,...) if (isSparse(prefix)) ReadGrand3_sparse(prefix,...) else ReadGrand3_dense(prefix,...)
+ReadGRAND3=function(prefix,...) if (isSparse(prefix)) ReadGRAND3_sparse(prefix,...) else ReadGRAND3_dense(prefix,...)
 
-ReadGrand3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design$Sample,Design$Barcode), label="4sU",estimator="Binom", read.CI=FALSE) {
+ReadGRAND3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design$Sample,Design$Barcode), label="4sU",estimator="Binom", read.CI=FALSE) {
 
   cols=readLines(paste0(prefix, ".targets/barcodes.tsv.gz"))
   conds=strsplit(cols,".",fixed=TRUE)[[1]]
@@ -359,10 +437,10 @@ ReadGrand3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design
   names(coldata)[-1]=design
   rownames(coldata)=coldata$Name
 
-  invisible(grandR(prefix,gene.info,re,coldata))
+  grandR(prefix,gene.info,slots=re,coldata)
 }
 
-ReadGrand3_dense=function(prefix, verbose=FALSE, design=c(design$Condition,Design$Replicate)) {
+ReadGRAND3_dense=function(prefix, verbose=FALSE, design=c(design$Condition,Design$Replicate)) {
 
 }
 
@@ -414,7 +492,7 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
   re$count=count
   re$ntr=ntr
 
-  invisible(grandR("",gene.info,re,cols))
+  grandR("",gene.info,slots=re,cols)
 }
 
 

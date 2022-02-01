@@ -86,7 +86,7 @@ SimulateTimeCourse=function(condition,gene.info,s,HL,s0=s,HL0=HL,num.reads=sum(s
   gene.info$true_s=s
   gene.info$true_HL0=HL0
 
-  re=grandR(prefix="Simulated",gene.info=gene.info,data=data,coldata=coldata,metadata=list(Description="Simulated data"))
+  re=grandR(prefix="Simulated",gene.info=gene.info,slots=data,coldata=coldata,metadata=list(Description="Simulated data"))
   DefaultSlot(re)="count"
 
   re

@@ -3,7 +3,7 @@
 \docType{data}
 \name{Design}
 \alias{Design}
-\title{Design}
+\title{A list of predefined names for design vectors}
 \format{
 An object of class \code{list} of length 11.
 }
@@ -11,6 +11,7 @@ An object of class \code{list} of length 11.
 Design
 }
 \description{
-A list of predefined names for design vectors
+These predefined names mainly are implemented here to harmonize analyses.
+It is good practise to use these names if sensible.
 }
 \keyword{datasets}

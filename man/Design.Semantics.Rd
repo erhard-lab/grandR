@@ -3,14 +3,55 @@
 \docType{data}
 \name{Design.Semantics}
 \alias{Design.Semantics}
-\title{Design.Semantics}
+\alias{Semantics.noop}
+\alias{Semantics.time}
+\title{Add additional columns to the \code{\link{ColData}} table.}
 \format{
+
+
 An object of class \code{list} of length 1.
 }
 \usage{
+Semantics.noop(s, name)
+
+Semantics.time(s, name)
+
 Design.Semantics
 }
+\arguments{
+\item{s}{the original column in the \code{ColData} table column}
+
+\item{name}{the name of the column in the \code{ColData} table column}
+}
 \description{
-A list of functions. A function is called by \link{MakeColdata} for each design vector element matching a name of this list.
+Design.Semantics is a list of functions that is supposed to be used as \code{semantics} parameter when calling \code{\link{MakeColdata}}.
+For each design vector element matching a name of this list the corresponding function is called by \link{MakeColdata} to add additional columns.
+By default, \code{duration.4sU} is mapped to \code{\link{Semantics.time}}.
+}
+\details{
+\itemize{
+  \item{\strong{Semantics.noop:} Just add the column as is}
+  \item{\strong{Semantics.time:} Contents such as 3h or 30min are converted into a numerical value (in hours), and no4sU is converted into 0.}
+  }
+}
+\examples{
+
+Semantics.time(c("5h","30min","no4sU"),"Test")
+
+
+sema <- list(duration.4sU=
+     function(s,name) {
+        r<-Semantics.time(s,name)
+        cbind(r,data.frame(hpi=paste0(r$duration.4sU+3,"h")))
+     })
+sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+                  design=function(names) MakeColdata(names,c("Cell",Design$dur.4sU,Design$Replicate),semantics=sema),
+                  classify.genes=classi,
+                  verbose=TRUE)
+ColData(sars)
+
+}
+\seealso{
+\link{MakeColdata}
 }
 \keyword{datasets}

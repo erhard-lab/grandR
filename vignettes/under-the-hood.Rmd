@@ -15,3 +15,5 @@ Glossary
   - Slot: Contains particular values (read counts, NTRs, normalized read counts, etc.) per column and gene
   - Mode: Either \emph{total}, \emph{new} or \emph{old}
   - Analysis: A set of results from a particular analysis tool (kinetic parameters, differential expression fold changes/p values, etc.) per gene
+  
+  - NTR: New-to-total RNA ratio, the central parameter that is estimated per gene and column by GRAND-SLAM.

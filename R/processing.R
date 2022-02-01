@@ -84,32 +84,28 @@ Normalize=function(data,sizeFactors=NULL,genes=NULL,name="norm",slot="count",ret
   if (return.sf) return(sizeFactors)
 
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,t(t(mat)/sizeFactors))
-  if (set.to.default) DefaultSlot(data)=name
+  data=AddSlot(data,name,matrix = t(t(mat)/sizeFactors),set.to.default=set.to.default)
   data
 }
 NormalizeFPKM=function(data,genes=Genes(data),tlen=data$gene.info$Length,name="fpkm",slot="count",set.to.default=TRUE) {
   genes=ToIndex(data,genes)
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.fpkm(mat,tlen,subset = genes))
-  if (set.to.default) DefaultSlot(data)=name
+  data=AddSlot(data,name,comp.fpkm(mat,tlen,subset = genes),set.to.default=set.to.default)
   data
 }
 NormalizeRPM=function(data,genes=Genes(data),name="rpm",slot="count",set.to.default=TRUE) {
   genes=ToIndex(data,genes)
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.rpm(mat,subset = genes))
-  if (set.to.default) DefaultSlot(data)=name
+  data=AddSlot(data,name,comp.rpm(mat,subset = genes),set.to.default=set.to.default)
   data
 }
 NormalizeTPM=function(data,genes=Genes(data),tlen=data$gene.info$Length,name="tpm",slot="count",set.to.default=TRUE) {
   genes=ToIndex(data,genes)
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.tpm(mat,tlen,subset = genes))
-  if (set.to.default) DefaultSlot(data)=name
+  data=AddSlot(data,name,comp.tpm(mat,tlen,subset = genes),set.to.default=set.to.default)
   data
 }
 
@@ -117,8 +113,7 @@ NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
   mat=sapply(names(baseline),function(n) LFC.fun(mat[,n],rowMeans(mat[,baseline[[n]]]),...))
-  data=AddSlot(data,name,mat)
-  if (set.to.default) DefaultSlot(data)=name
+  data=AddSlot(data,name,mat,set.to.default=set.to.default)
   data
 }
 

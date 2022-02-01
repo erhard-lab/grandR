@@ -2,7 +2,7 @@
 % Please edit documentation in R/load.R
 \name{MakeColdata}
 \alias{MakeColdata}
-\title{MakeColdata}
+\title{Extract an annotation table from a formatted names vector}
 \usage{
 MakeColdata(
   names,
@@ -27,19 +27,29 @@ MakeColdata(
 A data frame representing the annotation table
 }
 \description{
-Extract an annotation table from a formatted names vector
+If columns (i.e. sample or cell) follow a specific naming pattern, this can be used to conveniently set up an annotation table.
 }
 \details{
-The names have to contain dots (.) to separate the fields for the column annotation table. E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}. For such names, a design vector of length 3 has to be given, that describes the meaning of each field. A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}. Some names are predefined in the list \link{Design}.
+The names have to contain dots (.) to separate the fields for the column annotation table.
+E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}.
+For such names, a design vector of length 3 has to be given, that describes the meaning of each field.
+A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}.
+Some names are predefined in the list \link{Design}.
 
-The names given in the design vector might even have additional semantics: E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4, or 30min into 0.5, or no4sU into 0).
+The names given in the design vector might even have additional semantics:
+E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4, or 30min into 0.5, or no4sU into 0).
 
-Semantics can be user-defined via the \emph{semantics} list: For each name in the design vector matchin to a name in this list, the corresponding function in the list is run. Functions must accept 2 parameters, the first is the original column in the annotation table, the second the original name. The function must return a data.frame with the number of rows matching to the annotation table.
+Semantics can be user-defined via the \emph{semantics} list:
+For each name in the design vector matching to a name in this list, the corresponding function in the list is run.
+Functions must accept 2 parameters, the first is the original column in the annotation table, the second the original name.
+The function must return a data.frame with the number of rows matching to the annotation table.
+In most cases it is easier to manipulate the returned data frame instead of changing the semantics.
+However, the build-in semantics provide a convenient way to reduce this kind of manipulation in most cases.
 }
 \examples{
 coldata <- MakeColdata(c("Mock.0h.A","Mock.0h.B","Mock.2h.A","Mock.2h.B"), design=c("Cell",Design$dur.4sU,Design$Replicate))
 
 }
 \seealso{
-\link{ReadGRAND},\link{Design.Semantics}
+\link{ReadGRAND},\link{Design.Semantics},\link{ColData}
 }

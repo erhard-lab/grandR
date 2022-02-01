@@ -1,72 +1,100 @@
 
-grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,data=parent$data,coldata=parent$coldata,metadata=parent$metadata,parent=NULL) {
+#' Create a grandR object and retrieve basic information
+#'
+#' The grandR object contains
+#' \itemize{
+#'   \item{metadata about the origin (file/url) of the GRAND-SLAM output}
+#'   \item{the current state (e.g., what is the current default slot) of the grandR object}
+#'   \item{a gene info table (i.e. metadata for the rows of the data matrices)}
+#'   \item{a column annotation table (i.e. metadata for the columns of the data matrices)}
+#'   \item{several data matrices for read counts, normalized expression values, NTRs, etc. (genes x samples or genes x cells; stored in so-called \emph{slots})}
+#'   \item{potentially several analysis output tables (for kinetic modeling, differential gene expression testing)}
+#' }
+#' Usually, this contructor is not invoked directly (but by \code{\link{ReadGRAND}} or \code{\link{SimulateTimeCourse}}).
+#'
+#' @param prefix Can either be the prefix used to call GRAND-SLAM with, or the main output file ($prefix.tsv.gz);
+#' if the RCurl package is installed, this can also be a URL
+#' @param gene.info a data frame with metadata for all genes
+#' @param slots A list of matrices representing the slots
+#' @param coldata a data frame with metedata for all samples (or cells)
+#' @param metadata a metadata list
+#' @param parent A parent object containing default values for all other parameters (i.e. all parameters not specified are obtained from this object)
+#'
+#' @param data a grandR object
+#' @param order can either be an integer or character vector representing a permutation of the columns (samples or cells)
+#' @param columns can either be a logical, integer or character vector representing a selection of the columns (samples or cells)
+#' @param column.name The name of the annotation table according to which the object is split or the new annotation table column name denoting the origin after merging
+#' @param map named list or vector representing a lookup table (names are current column names)
+#' @param fun a function that maps a vector of names to a new vector of names
+#' @param s1,s2 column names
+#' @param list a list of grandR objects
+#'
+#' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta)
+#' and potentially additional information of all genes detected by GRAND-SLAM
+#'
+#' @details The dimensions (nrow, ncol) of the grandR object are considered to be the dimensions of the data tables,
+#' i.e. \code{nrow(data)} provides the number of genes and \code{ncol(data)} the number of samples (or cells).
+#'
+#' @details Currently, the object is implemented as a list of the above mentioned items. This implementation is subject to change.
+#' Make sure to use accessor functions to obtain the information you want.
+#'
+#' @section Functions:
+#' \describe{
+#'   \item{Title}{Obtain a useful title for the project (from the prefix parameter)}
+#'   \item{dim}{Obtain the dimensions (genes x samples or genes x cells)}
+#'   \item{is}{Check whether it is a grandR object}
+#'   \item{dimnames}{Obtain the row and column names of this object (genes x samples or genes x cells)}
+#'   \item{print}{Print information on this grandR object}
+#'   \item{reorder}{Create a new grandR object with reordered columns}
+#'   \item{subset}{Create a new grandR object with a subset of the columns (use \code{\link{FilterGenes}} to subset on genes)}
+#'   \item{split}{Split the grandR object into a list of multiple grandR objects (according to the levels of an annotation table column)}
+#'   \item{RenameColumns}{Rename the column names according to a lookup table (map) or a function (invoked on the current names)}
+#'   \item{SwapColumns}{Swap the order of two columns (samples or cells)}
+#'   \item{merge}{Merge several grandR objects into one}
+#' }
+#'
+#'
+#' @seealso \link{Slots}, \link{DefaultSlot}, \link{Genes}, \link{GeneInfo}, \link{ColData}, \link{GetTable}, \link{GetData}, \link{Analyses}, \link{GetAnalysisTable}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+#' dim(sars)               # this is the corona data from Finkel et al., Nature 2021, filtered for genes with >=100 reads in the SARS (3hpi) sample
+#' head(rownames(sars))
+#'
+#' @export
+#'
+grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$data,coldata=parent$coldata,metadata=parent$metadata,parent=NULL) {
   info=list()
   info$prefix=prefix
   info$gene.info=gene.info
-  info$data=data
+  info$data=slots
   info$coldata=coldata
   info$metadata=metadata
+  info$analysis=NULL
   class(info)="grandR"
-  invisible(info)
+  info
 }
 
-VersionString=function(data) {
-  "grandR v0.1.0"
-}
-
+#' @rdname grandR
+#' @export
 Title=function(data) {
   x=strsplit(data$prefix,"/")[[1]]
   x[length(x)]
 }
 
-`DefaultSlot<-` <- function(data, value) {
-  data$metadata$default.slot=value
-  data
-}
-DefaultSlot <- function(data,value=NULL) {
-  if (is.null(value)) data$metadata$default.slot else {
-    data$metadata$default.slot=value
-    data
-  }
-}
-
-Slots=function(data) names(data$data)
-
-DropSlot=function(data,pattern=NULL) {
-  if (is.null(pattern)) {
-    stop("Cannot drop all slots!")
-  } else {
-    data$data=data$data[!grepl(pattern,names(data$data))]
-  }
-  invisible(data)
-}
-AddSlot=function(data,name,matrix) {
-  if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
-  if (!all(rownames(matrix)==rownames(data$data$count))) stop("Row names do not match!")
-  if (!is.matrix(matrix)) stop("Must be a matrix!")
-  if (grepl(".",name,fixed=TRUE)) stop("Name may not contain a dot!")
-  data$data[[name]]=matrix
-  data
-}
-
-`Condition<-` <- function(data, value) {
-  data$coldata$Condition <- interaction(data$coldata[value])
-  data
-}
-Condition <- function(data,value=NULL) {
-  if (is.null(value)) data$coldata$Condition else {
-    Condition(data)<-value
-    data
-  }
-}
-
-
-Genes=function(data, use.symbols=TRUE) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]]
-
-
+#' @rdname grandR
+#' @export
 dim.grandR=function(data) c(dim(data$gene.info)[1],dim(data$coldata)[1])
+#' @rdname grandR
+#' @export
 is.grandR <- function(x) inherits(x, "grandR")
+#' @rdname grandR
+#' @export
 dimnames.grandR=function(data) dimnames(data$data$count)
+#' @rdname grandR
+#' @export
 print.grandR=function(data) cat(
   sprintf("grandR: %s\nRead from %s\n%d genes, %d samples/cells\nAvailable data slots: %s\nAvailable analyses: %s\nDefault data slot: %s\n",
           data$metadata$Description,
@@ -76,7 +104,16 @@ print.grandR=function(data) cat(
           paste(Slots(data),collapse=","),
           paste(Analyses(data),collapse=","),
           DefaultSlot(data))
-  )
+)
+#' Internal function to apply functions to all slots etc.
+#'
+#' @param data a grandR object
+#' @param fun apply this function to each data slot (i.e. it receives each data matrix)
+#' @param fun.gene.info apply this function to the gene info table
+#' @param fun.coldata apply this function to the column annotation table
+#'
+#' @details The additional parameters are provided to each of the functions.
+#' @return A new grandR object
 data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
   re=list()
   for (l1 in names(data$data)) {
@@ -84,50 +121,32 @@ data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
   }
   ngene.info=if (!is.null(fun.gene.info)) fun.gene.info(data$gene.info,...) else data$gene.info
   ncoldata=if (!is.null(fun.coldata)) fun.coldata(data$coldata,...) else data$coldata
-  invisible(grandR(parent=data,gene.info=ngene.info,data=re,coldata=ncoldata))
+  grandR(parent=data,gene.info=ngene.info,slots=re,coldata=ncoldata)
 }
 
-GeneInfo=function(data,column=NULL,value=NULL) {
-  if (is.null(column)) data$gene.info else {
-    data$gene.info[[colum]]=value
-    data
-  }
-}
-ColData=function(data,column=NULL,value=NULL) {
-  if (is.null(column)) data$coldata else {
-    data$coldata[[column]]=value
-    data
-  }
-}
-Analyses=function(data) names(data$analysis)
-Columns=function(data,analysis=NULL) {
-  if (is.null(analysis)) ColData(data)$Name else names(data$analysis[[analysis]])
-}
-
-`GeneInfo<-` <- function(data, column, value) {
-  data$gene.info[[column]]=value
-  data
-}
-`ColData<-` <- function(data, column, value) {
-  data$coldata[[column]]=value
-  data
-}
-
-reorder.grandR=function(data,columns) {
+#' @rdname grandR
+#' @export
+reorder.grandR=function(data,order) {
   r=subset.grandR(data,columns)
-  r$coldata=ConvFields(r$coldata)
+  r$coldata=type.convert(r$coldata)
   r
 }
+#' @rdname grandR
+#' @export
 subset.grandR=function(data,columns) {
   keep=rownames(data$coldata)[columns]
   data.apply(data,function(m) m[,intersect(keep,colnames(m))],fun.coldata = function(t) droplevels(t[columns,]))
 }
 
+#' @rdname grandR
+#' @export
 split.grandR=function(data,column.name=Design$Condition) {
   col=as.factor(data$coldata[[column.name]])
   setNames(lapply(levels(col),function(c) {re=subset(data,col==c); re$coldata[[Design$Origin]]=c; re }),levels(col))
 }
 
+#' @rdname grandR
+#' @export
 RenameColumns=function(data,map=NULL,fun=NULL) {
   if (!is.null(fun)) {
     map=setNames(sapply(colnames(data),fun),colnames(data))
@@ -138,6 +157,8 @@ RenameColumns=function(data,map=NULL,fun=NULL) {
   data$coldata$Name=names
   data.apply(data,function(m) {colnames(m)=names; m})
 }
+#' @rdname grandR
+#' @export
 SwapColumns=function(data,s1,s2) {
   i1=if(is.numeric(s1)) s1 else which(rownames(data$coldata)==s1)
   i2=if(is.numeric(s2)) s2 else which(rownames(data$coldata)==s2)
@@ -149,7 +170,8 @@ SwapColumns=function(data,s1,s2) {
   }))
 }
 
-
+#' @rdname grandR
+#' @export
 merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
   list=c(list(...),list)
   if (length(list)==1) return(list[[1]])
@@ -171,8 +193,282 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
   re
 }
 
+
+#' Get or set the default slot for a grandR object.
+#'
+#' The default slot is used by default by many functions including \code{\link{GetData}},\code{\link{GetTable}} or \code{\link{FitKinetics}}
+#'
+#' @param data A grandR object
+#' @param value the name of the new default slot
+#'
+#' @return Either the name of the default slot for DefaultSlot(data) or the grandR data object having the new default slot
+#'
+#' @details The default slot can be set either by \code{data<-DefaultSlot(data,"norm")} or by \code{DefaultSlot(data)<-"norm"}.
+#'
+#' @seealso \link{Slots}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+#' DefaultSlot(sars)
+#' sars <- Normalize(sars)     # default behavior is to update the default slot
+#' DefaultSlot(sars)
+#' DefaultSlot(sars)="count"
+#'
+#' @export
+#'
+DefaultSlot <- function(data,value=NULL) {
+  if (is.null(value)) data$metadata$default.slot else {
+    DefaultSlot(data)=value
+    data
+  }
+}
+
+#' @rdname DefaultSlot
+#' @export
+`DefaultSlot<-` <- function(data, value) {
+  data$metadata$default.slot=value
+  data
+}
+
+#' Slot functions
+#'
+#' Get slot names and add or remove slots
+#'
+#' @param data A grandR object
+#'
+#' @return Either the slot names or a grandR data with added/removed slots
+#'
+#' @seealso \link{DefaultSlot}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+#' sars <- Normalize(sars)     # default behavior is to update the default slot
+#' sars
+#' sars <- DropSlot(sars,"norm")
+#' sars                        # note that the defauls slot reverted to count
+#'
+#' @describeIn Slots Obtain the slot names
+#' @export
+#'
+Slots=function(data) names(data$data)
+
+#' @describeIn Slots Remove one or several slots from this grandR object
+#' @param pattern a regular expression matched against slot names
+#' @export
+DropSlot=function(data,pattern=NULL) {
+  if (is.null(pattern)) {
+    stop("Cannot drop all slots!")
+  } else {
+    data$data=data$data[!grepl(pattern,names(data$data))]
+  }
+  if (!DefaultSlot(data) %in% names(data$data)) DefaultSlot(data)=names(data$data)[1]
+  data
+}
+#' @describeIn Slots Add an additional slot to this grandR object
+#' @param name the slot name
+#' @param matrix the data matrix for the new slot
+#' @param set.to.default set the new slot as the default slot?
+#' @export
+AddSlot=function(data,name,matrix,set.to.default=FALSE) {
+  if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
+  if (!all(rownames(matrix)==rownames(data$data$count))) stop("Row names do not match!")
+  if (!is.matrix(matrix)) stop("Must be a matrix!")
+  if (grepl(".",name,fixed=TRUE)) stop("Name may not contain a dot!")
+  data$data[[name]]=matrix
+  if (set.to.default) DefaultSlot(data)=name
+  data
+}
+
+#' Get or set the conditions in the column annotation table.
+#'
+#' The conditions column from the column annotation table is used by several functions to stratify the columns (samples or cells)
+#' during the analysis (e.g. to estimate separate kinetic parameters with \code{\link{FitKinetics}} or it is used as covariate for
+#' \code{\link{LFC}} or \code{\link{TestGenesLRT}}). For that reason there are special functions to set and get this column.
+#'
+#' @param data A grandR object
+#' @param value Either a vector of column names from the column annotation table, or the condition names themselves
+#'
+#' @details If the conditions column does not exist (or has been set to NULL), all analysis functions will work without stratifying samples or cells.
+#' The condition can also be set up directly when loading data, by using \emph{Condition} as one of the design vector entries (see below).
+#'
+#' @details The condition can be set either by \code{data<-Condition(data,names)} or by \code{Condition(data)<-names}.
+#' @return Either the values of the condition column for Condition(data) or the grandR data object having the new condition column
+#'
+#' @seealso \link{ColData}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+#' Condition(sars)
+#' Condition(sars) <- c("Cell","duration.4sU.original")
+#' Condition(sars)
+#'
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
+#' Condition(sars)
+#'
+#' @export
+#'
+Condition <- function(data,value=NULL) {
+  if (is.null(value)) data$coldata$Condition else {
+    Condition(data)<-value
+    data
+  }
+}
+#' @rdname Condition
+#' @export
+`Condition<-` <- function(data, value) {
+  if (all(value %in% names(data$coldata))) {
+    data$coldata$Condition <- interaction(data$coldata[value])
+  } else{
+    data$coldata$Condition <- as.factor(value)
+  }
+  data
+}
+
+
+
+
+
+#' Get the genes and sample (or cell) names for a grandR object, or add an additional gene annotation column
+#'
+#' The genes are either the (often unreadable) gene ids (e.g. Ensembl ids), or the symbols. The Columns function
+#' can also return the columns from a given analysis table instead of the sample (or cell) names.
+#'
+#' @param data A grandR object
+#' @param use.symbols obtain the gene symbols instead of gene names
+#' @param analysis The name of an analysis table
+#'
+#' @details \code{Genes(data,use.symbols=FALSE)} it the same as \code{rownames(data)}, and \code{Columns(data)} is the same as \code{colnames(data)}
+#'
+#' @details If both column and value are specified for \code{GeneInfo}, a new column is added to the gene annotation table
+#'
+#' @return Either the gene or column names of the grandR data object, or the columns of an analysis table in the grandR object
+#'
+#' @seealso \link{ColData}, \link{GeneInfo}, \link{Analyses}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+#' all(Genes(sars,use.symbols = FALSE)==rownames(sars))
+#' all(Columns(sars)==colnames(sars))
+#'
+#'
+#' @export
+#'
+Genes=function(data, use.symbols=TRUE) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]]
+#' @rdname Genes
+#' @export
+Columns=function(data,analysis=NULL) {
+  if (is.null(analysis)) ColData(data)$Name else names(data$analysis[[analysis]])
+}
+
+#' Get the gene annotation table or add additional columns to it
+#'
+#' The gene annotation table contains meta information for the rows of a grandR object.
+#' When loaded from the GRAND-SLAM output, this this contains gene ids, gene symbols, the
+#' transcript length and the type.
+#'
+#' @param data A grandR object
+#' @param column The name of the additional annotation column
+#' @param value The additional annotation per gene
+#'
+#' @details New columns can be added either by \code{data<-GeneInfo(data,name,values)} or by \code{GeneInfo(data,name)<-values}.
+#'
+#' @return Either the gene annotation table or a new grandR object having an updated gene annotation table
+#'
+#' @seealso \link{Genes}, \link{ColData}, \link{ReadGRAND}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+#' head(GeneInfo(sars))
+#' GeneInfo(sars,"LengthCategory")<-cut(GeneInfo(sars)$Length,c(0,1500,2500,Inf),labels=c("Short","Medium","Long"))
+#' table(GeneInfo(sars)$LengthCategory)
+#'
+#' @export
+#'
+GeneInfo=function(data,column=NULL,value=NULL) {
+  if (is.null(column)) data$gene.info else {
+    data$gene.info[[colum]]=value
+    data
+  }
+}
+#' @rdname GeneInfo
+#' @export
+`GeneInfo<-` <- function(data, column, value) {
+  data$gene.info[[column]]=value
+  data
+}
+
+
+#' Get the column annotation table or add additional columns to it
+#'
+#' The colums of a grandR object are samples or cells.
+#' The column annotation table contains meta information for the columns of a grandR object.
+#' When loaded from the GRAND-SLAM output, this this constructed from the sample/cell names by
+#' \code{\link{MakeColdata}}
+#'
+#' @param data A grandR object
+#' @param column The name of the additional annotation column
+#' @param value The additional annotation per sample or cell
+#'
+#' @details New columns can be added either by \code{data<-Coldata(data,name,values)} or by \code{Coldata(data,name)<-values}.
+#'
+#' @details The column named \emph{Condition} has a special meaning in this table: It is used by several functions to stratify the columns
+#' during the analysis (e.g. to estimate separate kinetic parameters with \code{\link{FitKinetics}} or it is used as covariate for
+#' \code{\link{LFC}} or \code{\link{TestGenesLRT}}). For that reason there are special functions to set and get this column.
+#'
+#' @return Either the column annotation table or a new grandR object having an updated column annotation table
+#'
+#' @seealso \link{GeneInfo}, \link{MakeColdata}, \link{Condition}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+#' head(GeneInfo(sars))
+#' GeneInfo(sars,"LengthCategory")<-cut(GeneInfo(sars)$Length,c(0,1500,2500,Inf),labels=c("Short","Medium","Long"))
+#' table(GeneInfo(sars)$LengthCategory)
+#'
+#' @export
+#'
+Coldata=function(data,column=NULL,value=NULL) {
+  if (is.null(column)) data$coldata else {
+    data$coldata[[column]]=value
+    data
+  }
+}
+#' @rdname Coldata
+#' @export
+`Coldata<-` <- function(data, column, value) {
+  data$coldata[[column]]=value
+  data
+}
+
+
+#' Internal functions to check for a valid analysis or slot names.
+#'
+#' @param data a grandR object
+#' @param analysis an analysis name
+#' @param slot a slot name
+#' @param mode.slot a mode.slot
+#'
+#' @details A mode.slot is a mode followed by a dot followed by a slot name, or just a slot name. A mode is either \emph{total}, \emph{new} or \emph{old}
+#'
+#' @return Whether or not the given name is valid and unique for the grandR object
+#'
 check.analysis=function(data,analysis) analysis %in% names(data$analysis)
+#' @rdname check.analysis
 check.slot=function(data,slot) slot %in% names(data$data)
+#' @rdname check.analysis
 check.mode.slot=function(data,mode.slot) {
   sapply(strsplit(mode.slot,".",fixed=TRUE),function(spl) {
     if (length(spl)>2 || length(spl)==0) return(FALSE)
@@ -183,14 +479,19 @@ check.mode.slot=function(data,mode.slot) {
 
 #' Obtain the indices of the given genes
 #'
-#' @title ToIndex
+#' Genes can be referred to by their names, symbols, row numbers in the gene table, or a logical vector referring to the gene table rows.
+#' This function accepts all these possibilities and returns the row number in the gene table for the given genes,
+#'
 #' @param data The grandR object
 #' @param gene A vector of genes. Can be either numeric indices, gene names, gene symbols or a logical vector
 #'
 #' @return Numeric indices corresponding to the given genes
 #'
+#' @seealso \link{GeneInfo}
+#'
 #' @examples
-#' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz", design=c("Cell",Design$dur.4sU,Design$Replicate), verbose=TRUE)
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
 #' ToIndex(sars,c("MYC"))
 #' ToIndex(sars,GeneInfo(sars)$Symbol=="MYC")
 #'
@@ -208,7 +509,9 @@ ToIndex=function(data,gene) {
 
 #' Obtain a genes x values table
 #'
-#' @title GetTable
+#' This is the main function to access slot data for all genes as a large matrix. If data from a particular gene (or a small set of genes)
+#' must be retrieved, use the \code{\link{GetData}} function. For analysis results, use the \code{\link{GetAnalysisTable}} function.
+#'
 #' @param data A grandR object
 #' @param type Either a mode.slot (see details) or an analysis name. Can also be a vector; If NULL, \link{DefaultSlot}(data) is used
 #' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
@@ -227,7 +530,8 @@ ToIndex=function(data,gene) {
 #' @seealso \link{GetData},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes},\link{GetSummarizeMatrix}
 #'
 #' @examples
-#' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz", design=c("Condition",Design$dur.4sU,Design$Replicate), verbose=TRUE)
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
 #' sars <- Normalize(FilterGenes(sars))
 #'
 #' head(GetTable(sars)) # DefaultSlot values, i.e. size factor normalized read counts for all samples
@@ -293,9 +597,11 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
 }
 
 
-#' Obtain a tidy table of values for a gene or a (preferentially) small set of genes
+#' Obtain a tidy table of values for a gene or a small set of genes
 #'
-#' @title GetData
+#' This is the main function to access slot data data from a particular gene (or a small set of genes) as a tidy table. If data for all genes
+#' must be retrieved (as a large matrix), use the \code{\link{GetTable}} function. For analysis results, use the \code{\link{GetAnalysisTable}} function.
+#'
 #' @param data A grandR object
 #' @param mode.slot Which kind of data to access (see details)
 #' @param columns A vector of columns (i.e. condition/cell names; use colnames(data) to learn which columns are available); all condition/cell names if NULL
@@ -314,7 +620,8 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
 #' @seealso \link{GetTable},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes}
 #'
 #' @examples
-#' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz", design=c("Condition",Design$dur.4sU,Design$Replicate), verbose=TRUE)
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
 #' GetData(sars,mode.slot="ntr",gene="MYC") # one gene, one mode.slot
 #' GetData(sars,mode.slot=c("count","ntr"),gene="MYC",coldata = F) # one gene, multiple mode.slots
 #' GetData(sars,mode.slot=c("count","ntr"),gene=c("SRSF6","MYC"),melt=TRUE) # multiple genes, multiple mode.slots, molten
@@ -356,7 +663,9 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 
 #' Obtain reference columns (samples or cells) for all columns (samples or cells) in the data set
 #'
-#' @title FindReferences
+#' In some situations (see examples) it is required to find a reference sample of some kind for each sample in a data set.
+#' This is a convenience method to find such reference samples, and provide them as a lookup table.
+#'
 #' @param data A grandR object
 #' @param reference Expression evaluating to a logical vector to indicate which columns are reference columns; evaluated in an environment having the columns of \link{ColData}(data)
 #' @param group a vector of colnames in \link{ColData}(data)
@@ -365,20 +674,22 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #'
 #' @details Without any group, the list simply contains all references for each sample/cell. With groups defined, each list entry consists of all references from the same group.
 #'
-#' @seealso \link{ColData},\link{Findno4sUPairs}
+#' @seealso \link{ColData},\link{Findno4sUPairs}, \link{Condition}
 #'
 #' @examples
-#' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz", design=c("Condition",Design$dur.4sU,Design$Replicate), verbose=TRUE)
-#' FindReferences(sars,reference=no4sU) # obtain the corresponding no4sU sample for each sample
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
+#' FindReferences(sars,reference=no4sU) # obtain the corresponding no4sU sample for each sample; use the Condition column
 #' FindReferences(sars,Condition=="Mock",group="duration.4sU.original") # obtain for each sample the corresponding sample in the Mock condition
+#' FindReferences(sars,Condition=="Mock",group=c("duration.4sU.original","Replicate")) # obtain for each sample the corresponding sample in the Mock condition, paying attention to replicates
 #'
 #' @export
 #'
 FindReferences=function(data,reference, group="Condition") {
   if (!is.grandR(data)) stop("Data is not a grandR object!")
 
-  df=ColData(data)
-  df$group=if(is.null(group)) 1 else interaction(df[group],drop=FALSE,sep=".")
+  df=Coldata(data)
+  df$group=as.character(if(is.null(group)) 1 else interaction(df[group],drop=FALSE,sep="."))
   e=substitute(reference)
   map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
   pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
@@ -386,60 +697,44 @@ FindReferences=function(data,reference, group="Condition") {
 }
 
 
-
-
-#' Remove analyses from the grandR object
+#' Analysis table functions
 #'
-#' @title DropAnalysis
+#' Get analysis names and add or remove analyses
+#'
 #' @param data A grandR object
 #' @param pattern A regular expression that is matched to analysis names
-#'
-#' @return A new grandR object without the dropped analyses
-#'
-#' @seealso \link{Analyses}
-#'
-#' @export
-#'
-DropAnalysis=function(data,pattern=NULL) {
-  if (is.null(pattern)) {
-    data$analysis=NULL
-  } else {
-    data$analysis=data$analysis[!grepl(pattern,names(data$analysis))]
-  }
-  invisible(data)
-}
-#' Create a metatable for an analysis
-#'
-#' @title MakeAnalysis
+#' @param description A metatable created by MakeAnalysis
+#' @param table The analysis table to add
+#' @param warn.present Warn if an analysis with the same name is already present (and then overwrite)
 #' @param name The user-defined analysis name
 #' @param analysis The name of the analysis tool
 #' @param mode An optional mode (new,old,total) on which the analysis has been run
 #' @param slot An optional data slot on which the analysis has been run
 #'
-#' @return A metatable to be used as description parameter for \link{AddAnalysis}
+#' @return Either the analysis names or a grandR data with added/removed slots or the metatable to be used with AddAnalysis
 #'
-#' @seealso \link{AddAnalysis}
+#' @details \code{AddAnalysis} (and therefore also \code{MakeAnalysis}) is usually not called directly by the user, but is
+#' used by analysis methods to add their final result to a grandR object (e.g., \link{FitKinetics},\link{TestGenesLRT},\link{TestPairwise},\link{LFC}).
 #'
+#' @seealso \link{Slots}, \link{DefaultSlot}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'
+#' sars <- Normalize(sars)     # default behavior is to update the default slot; this calls AddSlot
+#' Slots(sars)
+#' DefaultSlot(sars)
+#' sars <- DropSlot(sars,"norm")
+#' sars                        # note that the defauls slot reverted to count
+#'
+#' @describeIn Analyses Obtain the analyses names
 #' @export
 #'
-MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL) {
-  list(name=name,mode=mode,analysis=analysis,slot=slot)
-}
+Analyses=function(data) names(data$analysis)
 
-#' Create a new analysis within a grandR object
-#'
-#' @title AddAnalysis
-#' @param data The grandR object
-#' @param description A metatable created by \link{MakeAnalysis}
-#' @param table The analysis table
-#' @param warn.present Warn if an analysis with the same name is already present (and then overwrite)
-#'
-#' @return A new grandR object containing the given analysis
-#'
-#' @seealso \link{FitKinetics},\link{TestGenesLRT},\link{TestPairwise},\link{LFC}
-#'
+#' @describeIn Analyses Add an analysis table
 #' @export
-#'
 AddAnalysis=function(data,description,table,warn.present=TRUE) {
   stopifnot(!is.null(description$name))
   if (is.null(data$analysis)) data$analysis=list()
@@ -457,9 +752,28 @@ AddAnalysis=function(data,description,table,warn.present=TRUE) {
 }
 
 
+#' @describeIn Analyses Remove analyses from the grandR object
+#' @export
+DropAnalysis=function(data,pattern=NULL) {
+  if (is.null(pattern)) {
+    data$analysis=NULL
+  } else {
+    data$analysis=data$analysis[!grepl(pattern,names(data$analysis))]
+  }
+  invisible(data)
+}
+#' @describeIn Analyses Create a metatable for an analysis
+#' @export
+MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL) {
+  list(name=name,mode=mode,analysis=analysis,slot=slot)
+}
+
+
 #' Obtain a table of analysis results values
 #'
-#' @title GetAnalysisTable
+#' This is the main function to access analysis results. For slot data, use \code{\link{GetTable}} (as a large matrix)
+#' or \code{\link{GetData}} (as tidy table).
+#'
 #' @param data A grandR object
 #' @param names One or several analysis names (\link{Analyses})
 #' @param columns Regular expression to select columsn from the analysis table
@@ -467,17 +781,18 @@ AddAnalysis=function(data,description,table,warn.present=TRUE) {
 #' @param gene.info Should the table contain the \link{GeneInfo} values as well (at the beginning)?
 #' @param name.by A column name of \link{ColData}(data). This is used as the rownames of the output table
 #'
-#' @return A data frame containing the desired values
+#' @return A data frame containing the analysis results
 #'
 #' @details The names for the output table are <Analysis name>.<columns name>
 #'
-#' @seealso \link{GetTable},\link{Genes}
+#' @seealso \link{GetTable},\link{GetData},\link{Genes}
 #'
 #' @examples
-#' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz", design=c("Condition",Design$dur.4sU,Design$Replicate), verbose=TRUE)
-#' GetData(sars,mode.slot="ntr",gene="MYC") # one gene, one mode.slot
-#' GetData(sars,mode.slot=c("count","ntr"),gene="MYC",coldata = F) # one gene, multiple mode.slots
-#' GetData(sars,mode.slot=c("count","ntr"),gene=c("SRSF6","MYC"),melt=TRUE) # multiple genes, multiple mode.slots, molten
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#' SetParallel()
+#' sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
+#' head(GetAnalysisTable(sars,names="kinetics",columns="Half-life"))
 #'
 #' @export
 #'
