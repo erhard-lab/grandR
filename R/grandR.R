@@ -566,7 +566,8 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
   r1=NULL
   if (any(mode.slot)) {
     r1=as.data.frame(t(GetData(data,type[mode.slot],columns=columns,genes,ntr.na = ntr.na,coldata=FALSE, melt=FALSE, name.by = name.by)))
-    names(r1)=data$coldata[columns,"Name"]
+    #REVIEWED by Teresa. before colnames of r1 were NA
+    names(r1) = data$coldata[,"Name"]
     if (!is.null(summarize)) {
       if (is.logical(summarize) && length(summarize)==1) summarize=GetSummarizeMatrix(data)
       r1=as.data.frame(as.matrix(r1) %*% summarize)
@@ -811,22 +812,25 @@ GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene
   if (is.null(patterns)) patterns = Analyses(data)
 
   re=data$gene.info[genes,]
+
   if (!is.null(name.by)) {
     rownames(re)=if (name.by %in% names(data$gene.info)) data$gene.info[[name.by]][genes] else data$gene.info[genes,1]
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
   analyses=unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
+  #REVIEWED by Teresa:
   for (name in Analyses(data)[analyses]) {
-    t=data$analysis[[name]][genes,]
+        t=data$analysis[[name]][genes,]
+        names(t)=paste0(name,".",names(t))
     if (!is.null(columns)) {
-      use = rep(TRUE,ncol(t))
-      for (r in columns) use=use&grepl(r,names(t))
-      t=t[,use,drop=FALSE]
+     use = rep(TRUE,ncol(t))
+     for (r in columns) use = use&grepl(r,names(t))
+     t=t[,use,drop=FALSE]
     }
-    names(t)=paste0(name,".",names(t))
     re=cbind(re,t)
   }
+
   if (is.logical(gene.info) && !gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re),drop=FALSE]
   if (is.character(gene.info)) re=re[,-which(!names(data$gene.info) %in% gene.info),drop=FALSE]
   re

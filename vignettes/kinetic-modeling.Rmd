@@ -93,7 +93,7 @@ PlotScatter(sars,type="kinetics","Mock.Half-life","SARS.Half-life",log=T)+geom_a
 
 ```{r}
 SetParallel()
-sars<-NormalizeKinetics(sars,steady.state = c(Mock=T,SARS=F),set.to.default = FALSE)
+sars<-CalibrateTimes(sars,steady.state = c(Mock=T,SARS=F))
 sars<-FitKinetics(sars,name="norm_kinetics",slot="norm",time="norm_time",steady.state = c(Mock=T,SARS=F))
 sars<-FitKinetics(sars,name="ntr_kinetics",type="ntr")
 sars<-FitKinetics(sars,name="normntr_kinetics",type="ntr",time="norm_time")
