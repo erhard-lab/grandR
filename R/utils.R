@@ -99,6 +99,7 @@ opt$lapply=function(...) lapply(...)
 opt$sapply=function(...) simplify2array(opt$lapply(...))
 SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
   if (cores>1) {
+    if (.Platform$OS.type!="unix") stop("Parallelism is not supported under windows!")
     opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)
   } else {
     opt$lapply<-function(...) lapply(...)

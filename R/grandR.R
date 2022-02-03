@@ -460,7 +460,7 @@ Coldata=function(data,column=NULL,value=NULL) {
 #' Internal functions to check for a valid analysis or slot names.
 #'
 #' @param data a grandR object
-#' @param analysis an analysis name
+#' @param patterns a regex to be matched to analysis names
 #' @param slot a slot name
 #' @param mode.slot a mode.slot
 #'
@@ -468,7 +468,7 @@ Coldata=function(data,column=NULL,value=NULL) {
 #'
 #' @return Whether or not the given name is valid and unique for the grandR object
 #'
-check.analysis=function(data,analysis) analysis %in% names(data$analysis)
+check.analysis=function(data,patterns) sapply(patterns,function(pattern) any(grepl(pattern,Analyses(data))))
 #' @rdname check.analysis
 check.slot=function(data,slot) slot %in% names(data$data)
 #' @rdname check.analysis
@@ -517,7 +517,7 @@ ToIndex=function(data,gene) {
 #' must be retrieved, use the \code{\link{GetData}} function. For analysis results, use the \code{\link{GetAnalysisTable}} function.
 #'
 #' @param data A grandR object
-#' @param type Either a mode.slot (see details) or an analysis name. Can also be a vector; If NULL, \link{DefaultSlot}(data) is used
+#' @param type Either a mode.slot (see details) or a regex to be matched against analysis names. Can also be a vector; If NULL, \link{DefaultSlot}(data) is used
 #' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
 #' @param genes Restrict the output table to the given genes
 #' @param ntr.na For columns representing a 4sU naive sample, should types \emph{ntr},\emph{new.count} and \emph{old.count} be 0,0 and count (ntr.na=FALSE; can be any other slot than count) or NA,NA and NA (ntr.na=TRUE)
@@ -552,7 +552,6 @@ ToIndex=function(data,gene) {
 GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol") {
   if (!is.null(columns) && !is.null(summarize)) stop("columns and summarize may not be set simultaneously!")
   if (is.null(type)) type=DefaultSlot(data)
-  if (is.null(columns)) columns=colnames(data)
 
   genes=ToIndex(data,genes)
 
@@ -784,7 +783,7 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
 #' or \code{\link{GetData}} (as tidy table).
 #'
 #' @param data A grandR object
-#' @param names One or several analysis names (\link{Analyses}); all analysis tables if NULL
+#' @param patterns One or several regex to be matched against analysis names (\link{Analyses}); all analysis tables if NULL
 #' @param columns Regular expressions to select columns from the analysis table (all have to match!); all columns if NULL
 #' @param genes Restrict the output table to the given genes
 #' @param gene.info Should the table contain the \link{GeneInfo} values as well (at the beginning)?
@@ -805,18 +804,20 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
 #'
 #' @export
 #'
-GetAnalysisTable=function(data,names=NULL,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol") {
-  if (!all(check.analysis(data,names))) stop(sprintf("Analysis name %s unknown!",paste(analysis[!check.analysis(mode.slot)],collapse=",")))
+GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol") {
+  if (!all(check.analysis(data,patterns))) stop(sprintf("No analysis found for pattern %s!",paste(patterns[!check.analysis(data,patterns)],collapse=",")))
 
   genes=ToIndex(data,genes)
-  if (is.null(names)) names = Analyses(data)
+  if (is.null(patterns)) patterns = Analyses(data)
 
   re=data$gene.info[genes,]
   if (!is.null(name.by)) {
     rownames(re)=if (name.by %in% names(data$gene.info)) data$gene.info[[name.by]][genes] else data$gene.info[genes,1]
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
-  for (name in names) {
+
+  analyses=unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
+  for (name in Analyses(data)[analyses]) {
     t=data$analysis[[name]][genes,]
     if (!is.null(columns)) {
       use = rep(TRUE,ncol(t))
