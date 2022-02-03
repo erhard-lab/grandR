@@ -1,14 +1,61 @@
 
-SimulateReadsForSample=function(num.reads=2E7,rel.freq=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),beta.approx=FALSE,u.content=0.25,u.content.sd=0.05,read.length=75,p.old=1E-4,p.new=0.04) {
+#' Simulate metabolic labeling - nucleotide conversion RNA-seq data.
+#'
+#' This function takes a vector of \emph{true} relative abundances and NTRs, and then simulates
+#' (i) read counts per gene and (ii) 4sU incorporation and conversion events. Subsequently, it
+#' uses the same approach as implemented in the GRAND-SLAM 2.0 software (Juerges et al., Bioinformatics 2018)
+#' to estimate the NTR from these simulated data.
+#'
+#' @param num.reads the total amount of reads for simulation
+#' @param rel.abundance named (according to genes) vector of the true relative abundances. Is divided by its sum.
+#' @param ntr vector of true NTRs
+#' @param beta.approx should the beta approximation of the NTR posterior be computed?
+#' @param u.content the relative frequency of uridines in the reads
+#' @param u.content.sd the standard deviation of the u content
+#' @param read.length the read length for simulation
+#' @param p.old the probability for a conversion in reads originating from old RNA
+#' @param p.new the probability for a conversion in reads originating from new RNA
+#' @param seed seed value for the random number generator (set to make it deterministic!)
+#'
+#' @return a matrix containing, per column, the simulated counts, the simulated NTRs,
+#' (potentially the shape parameters of the beta distribution approximation,) and the true relative frequencies and ntrs
+#'
+#' @details The simulation proceeds as follows:
+#' \enumerate{
+#'   \item Draw for each gene the number of reads from a multinomia distribution parmetrized with the relative abundances
+#'   \item For each gene: Draw for each read the number of uridines according to a beta binomial distribution for the given read length
+#'   (the beta prior is parametrized to match the u.content and u.content.sd parameters)
+#'   \item For each read: Draw the number of conversions according to the binomial mixture model of GRAND-SLAM
+#'   (parametrized with p_old, p_new, the gene specific NTR and the read specific number of uridines)
+#'   \item Estimate the NTR by using the GRAND-SLAM approach
+#' }
+#'
+#'
+#' @seealso \link{SimulateTimeCourse}
+#' @export
+#'
+#' @examples
+#' SimulateReadsForSample(num.reads = 10000,rel.abundance = rep(1,5),ntr=0.9)
+#' SimulateReadsForSample(num.reads = 10000,rel.abundance = rep(1,5),ntr=0.9,seed=1337)
+#' SimulateReadsForSample(num.reads = 10000,rel.abundance = rep(1,5),ntr=0.9,seed=1337)
+#' # the second and third matrix should be equal, the first should be distinct
+#'
+#' mat=SimulateReadsForSample(num.reads = 10000,rel.abundance = rep(1,100),ntr=0.5,beta.approx = TRUE)
+#' plot(ecdf(pbeta(0.5,mat[,3],mat[,4])))
+#' abline(0,1)
+#' # this should roughly be a uniform distibution, which means that the posterior distributions are properly approximated!
+#'
+SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),beta.approx=FALSE,u.content=0.25,u.content.sd=0.05,read.length=75,p.old=1E-4,p.new=0.04, seed=NULL) {
 
-  mat=cbind(rel.freq/sum(rel.freq,na.rm=TRUE),ntr)
-  mat=cbind(mat,rmultinom(1,num.reads,rel.freq))
+  if(!is.null(seed)) set.seed(seed)
+
+  mat=cbind(rel.abundance/sum(rel.abundance,na.rm=TRUE),ntr)
+  mat=cbind(mat,rmultinom(1,num.reads,rel.abundance))
 
   shape1=u.content*(u.content*(1-u.content)/u.content.sd^2-1)
   shape2=(1-u.content)/u.content * shape1
 
-
-  sim.ntr=t(opt$sapply(1:nrow(mat),function(i)  {
+  sim.ntr=t(psapply(1:nrow(mat),function(i)  {
     reads=unname(mat[i,3])
     ntr=unname(mat[i,2])
     if (beta.approx) {
@@ -27,14 +74,36 @@ SimulateReadsForSample=function(num.reads=2E7,rel.freq=setNames(rlnorm(1E4,meanl
     para=model.par(ntr=ntr,p.err=p.old,p.conv=p.new)
     mixmat=CreateMixMatrix(n.vector = u.histo,par=para)
     fit.ntr(mixmat,para,plot=FALSE,beta.approx=beta.approx)
-  }))
+  },seed=seed))
   if (!beta.approx) {sim.ntr=t(sim.ntr); colnames(sim.ntr)="ntr"}
 
   cbind(count=mat[,3],sim.ntr,true_freq=mat[,1],true_ntr=mat[,2])
 }
 
 
-SimulateTimeCourse=function(condition,gene.info,s,HL,s0=s,HL0=HL,num.reads=sum(s*HL)/log(2),timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,...) {
+#' Simulate a complete time course of metabolic labeling - nucleotide conversion RNA-seq data.
+#'
+#' This function takes a vector of \emph{true} synthesis rates and RNA half-lives, and then simulates
+#' data for multiple time points and replicates. Both synthesis rate and RNA half-lives are assumed to be constant,
+#' but the system might not be in steady-state.
+#'
+#' @param condition A user-defined condition name (which is placed into the \link{\code{Coldata}} of the final grandR object)
+#' @param gene.info either a data frame containing gene annotation or a vector of gene names
+#' @param s a vector of synthesis rates
+#' @param HL a vector of RNA half-lives
+#' @param f0 the abundance at time t=0
+#' @param num.reads a vector representing the number of reads for each sample
+#' @param timepoints a vector representing the labeling duration (in h) for each sample
+#' @param beta.approx should the beta approximation of the NTR posterior be computed?
+#' @param verbose output status updates
+#' @param seed seed value for the random number generator (set to make it deterministic!)
+#' @param ... provided to \link{\code{SimulateReadsForSample}}
+#'
+#' @return a grandR object containing the simulated data in its data slots and the true parameters in the gene annotation table
+#' @export
+#'
+#' @examples
+SimulateTimeCourse=function(condition,gene.info,s,HL,f0=s/log(2)*HL,num.reads=rep(1E7,length(timepoints)),timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
 
   if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))
 
@@ -42,15 +111,7 @@ SimulateTimeCourse=function(condition,gene.info,s,HL,s0=s,HL0=HL,num.reads=sum(s
   names=as.character(ddply(data.frame(Name=factor(tt,levels=unique(tt))),.(Name),function(s) data.frame(Name=paste(condition,s$Name,LETTERS[1:length(s$Name)],sep=".")))$Name)
   coldata=MakeColdata(names,design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
 
-  # adapt s and s0 to match num.reads
-  ns=s/sum(s*HL)*log(2)*num.reads
-  s0=s0/s*ns
-  s=ns
-
   d=log(2)/HL
-  d0=log(2)/HL0
-
-  rel.freq=s0/d0
 
 
   data=list(
@@ -68,12 +129,13 @@ SimulateTimeCourse=function(condition,gene.info,s,HL,s0=s,HL0=HL,num.reads=sum(s
 
   for (i in seq_along(timepoints)) {
     if (verbose) cat(sprintf("Simulating %s (%d/%d)...\n",names[i],i,length(timepoints)))
-    ntr=if (timepoints[i]==0) rep(NA,length(s)) else f.new(timepoints[i],s,d)/(f.new(timepoints[i],s,d)+f.old.nonequi(timepoints[i],s0/d0,s,d))
-    sim=SimulateReadsForSample(num.reads=num.reads,rel.freq=rel.freq,ntr=ntr,beta.approx = beta.approx,...)
+    total=(f.new(timepoints[i],s,d)+f.old.nonequi(timepoints[i],f0,s,d))
+    ntr=if (timepoints[i]==0) rep(NA,length(s)) else f.new(timepoints[i],s,d)/total
+    sim=SimulateReadsForSample(num.reads=num.reads[i],rel.abundance=total,ntr=ntr,beta.approx = beta.approx,seed=seed,...)
 
     data$count[,i]=sim[,"count"]
     data$ntr[,i]=sim[,"ntr"]
-    data$true_count[,i]=sim[,"true_freq"]*num.reads
+    data$true_count[,i]=sim[,"true_freq"]*num.reads[i]
     data$true_ntr[,i]=sim[,"true_ntr"]
     if (beta.approx){
       data$alpha[,i]=sim[,"alpha"]
@@ -81,10 +143,9 @@ SimulateTimeCourse=function(condition,gene.info,s,HL,s0=s,HL0=HL,num.reads=sum(s
     }
   }
 
-  gene.info$true_s0=s0
+  gene.info$true_f0=f0
   gene.info$true_HL=HL
   gene.info$true_s=s
-  gene.info$true_HL0=HL0
 
   re=grandR(prefix="Simulated",gene.info=gene.info,slots=data,coldata=coldata,metadata=list(Description="Simulated data"))
   DefaultSlot(re)="count"

@@ -234,8 +234,8 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),
-             conf.lower=par-conf.p,
-             conf.upper=par+conf.p,
+             conf.lower=c(Synthesis=unname(par[1]-conf.p[1]),Degradation=unname(par[2]-conf.p[2]),`Half-Life`=unname(log(2)/(par[2]+conf.p[2]))),
+             conf.upper=c(Synthesis=unname(par[1]+conf.p[1]),Degradation=unname(par[2]+conf.p[2]),`Half-Life`=unname(log(2)/(par[2]-conf.p[2]))),
              f0=unname(par['s']/par['d']),
              logLik=logLik.nls.lm(model.p),
              rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
@@ -288,8 +288,8 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),
-             conf.lower=par-conf.m,
-             conf.upper=par+conf.m,
+             conf.lower=c(Synthesis=unname(par[1]-conf.m[1]),Degradation=unname(par[2]-conf.m[2]),`Half-Life`=log(2)/(par[2]+conf.m[2])),
+             conf.upper=c(Synthesis=unname(par[1]+conf.m[1]),Degradation=unname(par[2]+conf.m[2]),`Half-Life`=log(2)/(par[2]-conf.m[2])),
              f0=unname(f0),
              logLik=logLik.nls.lm(model.m),
              rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
@@ -650,7 +650,7 @@ CalibrateTimes=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.nam
     timecol[Coldata(data)[[time]]==0]=0
     data=Coldata(data,time.name,timecol)
 
-    dat
+    data
 }
 
 #' Fit kinetic models to all genes.
@@ -700,6 +700,10 @@ CalibrateTimes=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.nam
 #' @export
 #'
 FitKinetics=function(data,name="kinetics",type=c("full","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,return.fields=c("Synthesis","Half-life","rmse"),return.extra=NULL,...) {
+
+    if (substr(tolower(type[1]),1,1)=="n" && !all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
+
+
     result=opt$lapply(Genes(data),
                       switch(substr(tolower(type[1]),1,1),n=FitKineticsGeneNtr,f=FitKineticsGeneLeastSquares,l=FitKineticsGeneLogSpaceLinear),
                       data=data,

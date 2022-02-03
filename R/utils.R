@@ -73,6 +73,27 @@ has.package=function(name) name %in% rownames(installed.packages())
 
 GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fixed=TRUE),function(v) v[field])
 
+
+psapply=function(...,seed=NULL) simplify2array(plapply(...,seed=seed))
+plapply=function(...,seed=NULL) {
+  if (!IsParallel()) return(opt$lapply(...))
+
+  if (!is.null(seed)) {
+    rng=RNGkind()[1]
+    RNGkind("L'Ecuyer-CMRG") # make it deterministic!
+    set.seed(seed)
+  }
+
+  re=opt$lapply(...)
+
+  if (!is.null(seed)) {
+   RNGkind(rng)
+  }
+
+  re
+}
+
+
 opt <- new.env()
 opt$lapply=function(...) lapply(...)
 opt$sapply=function(...) simplify2array(opt$lapply(...))
