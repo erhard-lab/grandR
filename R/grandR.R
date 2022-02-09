@@ -847,22 +847,31 @@ GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene
 
 
   re=data$gene.info[genes,]
+
   if (!is.null(name.by)) {
     rownames(re)=if (name.by %in% names(data$gene.info)) data$gene.info[[name.by]][genes] else data$gene.info[genes,1]
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
+<<<<<<< HEAD
   analyses=if (is.null(patterns)) 1:length(Analyses(data)) else unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
   for (name in Analyses(data)[analyses]) {
     t=data$analysis[[name]][genes,,drop=FALSE]
+=======
+  analyses=unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
+  #REVIEWED by Teresa:
+  for (name in Analyses(data)[analyses]) {
+        t=data$analysis[[name]][genes,]
+        names(t)=paste0(name,".",names(t))
+>>>>>>> 99b9d56379771d683f7f2e187c9ec2b551489a19
     if (!is.null(columns)) {
-      use = rep(TRUE,ncol(t))
-      for (r in columns) use=use&grepl(r,names(t))
-      t=t[,use,drop=FALSE]
+     use = rep(TRUE,ncol(t))
+     for (r in columns) use = use&grepl(r,names(t))
+     t=t[,use,drop=FALSE]
     }
-    names(t)=paste0(name,".",names(t))
     re=cbind(re,t)
   }
+
   if (is.logical(gene.info) && !gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re),drop=FALSE]
   if (is.character(gene.info)) re=re[,-which(!names(data$gene.info) %in% gene.info),drop=FALSE]
   re
