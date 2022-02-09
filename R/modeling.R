@@ -526,7 +526,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
     t=t[use]
     uniroot.save=function(fun,lower,upper) if (fun(lower)*fun(upper)>=0) mean(lower,upper) else uniroot(fun,lower=lower,upper=upper)$root
     fits=lapply(levels(c),function(cc) {
-        ind=c==cc
+        ind=c==cc & !is.na(a) & !is.na(b)
         if(any(is.nan(c(a[ind],b[ind])))) return(NaN)
         ploglik=function(x) loglik(x,a=a[ind],b=b[ind],t=t[ind])
         d=optimize(ploglik,bounds,maximum=T)$maximum
@@ -736,13 +736,17 @@ FitKinetics=function(data,name="kinetics",type=c("full","ntr","lm"),slot=Default
 #'
 #' @param old the abundance of old RNA at time t
 #' @param new the abundance of new RNA at time t
+#' @param total the abundance of total RNA at time t
+#' @param ntr the new-to-total RNA ratio at time t
 #' @param t the time t
 #' @param s the synthesis rate
 #' @param d the degradation rate
 #' @param f0 the total abundance at time t=0
-#' @param name.suffix append this suffix to the column names of the output matrix (which are f0,s,d,t0)
+#' @param name.prefix prepend this prefix to the column names of the output matrix (which are f0,s,d,t0)
 #'
 #' @return A matrix with columns f0,s,d and t0; the first three are the given or computed parameters, t0 is the time where the abundance was \eqn{f(t0)=0}
+#'
+#' @details Can either be parametrized using old and new, or using total and ntr
 #'
 #' @details Because old RNA cannot increase over time, and for \eqn{d>0} it has to decrease, it must be f0>old.
 #'
@@ -774,18 +778,32 @@ FitKinetics=function(data,name="kinetics",type=c("full","ntr","lm"),slot=Default
 #'  t0=unname(TransformKineticParameters(old,new,t,s=s)[,'t0'])
 #'  f.new(-t0,s,d)
 #'
-TransformKineticParameters=function(old,new,t=2,s=NULL,d=NULL,f0=NULL,name.suffix=NULL) {
+TransformKineticParameters=function(old=NULL,new=NULL,total=NULL,ntr=NULL,t=2,s=NULL,d=NULL,f0=NULL,name.prefix=NULL) {
     if (is.null(s) + is.null(d) + is.null(f0)!=2) stop("Exactly two of of s,d,f0 have to be NULL!")
 
+    total.ntr=!is.null(total) & !is.null(ntr)
+    old.new=!is.null(old) & !is.null(new)
+
+    if (total.ntr+old.new!=1) stop("Must be parametrized either with old and new, or with total and ntr!")
+    if (total.ntr) {
+        new=total*ntr
+        old=total-new
+    }
+
     if (!is.null(f0)) {
-        if (any(f0<=old)) stop("It must be f0>old!")
-        d=-1/t*log(old/f0)
-        s=new*d/(1-exp(-t*d))
+        if (any(f0<=old)) {
+            warning("It must be f0>old!")
+        }
+        F=old/f0
+        d=-1/t*log(F)
+        s=-1/t*new * ifelse(F>=1,-1,ifelse(is.infinite(F),0,log(F)/(1-F)))
     } else if (!is.null(d)) {
         f0=old/exp(-t*d)
         s=new*d/(1-exp(-t*d))
     } else {
-        if (any(s*t<=new)) stop("It must be s*t>new!")
+        if (any(s*t<=new)) {
+            warning("It must be s*t>new!")
+        }
         d=pmax(0,lamW::lambertW0(-exp(-s*t/new)*s*t/new)/t+s/new)
         f0=old/exp(-t*d)
     }
@@ -793,7 +811,7 @@ TransformKineticParameters=function(old,new,t=2,s=NULL,d=NULL,f0=NULL,name.suffi
     t0=t-ifelse(f0<s/d,-1/d*log(1-(old+new)*d/s),NA)
 
     re=cbind(f0=f0,s=s,d=d,t0=t0)
-    if (!is.null(name.suffix)) colnames(re)=paste0(colnames(re),name.suffix)
+    if (!is.null(name.prefix)) colnames(re)=paste0(name.prefix,".",colnames(re))
     re
 }
 
@@ -832,8 +850,8 @@ PlotSimpleKinetics=function(total1,total2,ntr1,ntr2,f0.above.ss.factor=1,t=2,N=1
     new1=total1*ntr1
     new2=total2*ntr2
 
-    k1=as.data.frame(TransformKineticParameters(old1,new1,t=t,f0=seq(old1+0.01,total1*f0.above.ss.factor,length.out=N),name.suffix = "_1"))
-    k2=as.data.frame(TransformKineticParameters(old2,new2,t=t,f0=seq(old2+0.01,total2*f0.above.ss.factor,length.out=N),name.suffix = "_2"))
+    k1=as.data.frame(TransformKineticParameters(old=old1,new=new1,t=t,f0=seq(old1+0.01,total1*f0.above.ss.factor,length.out=N),name.suffix = "_1"))
+    k2=as.data.frame(TransformKineticParameters(old=old2,new=new2,t=t,f0=seq(old2+0.01,total2*f0.above.ss.factor,length.out=N),name.suffix = "_2"))
     df=data.frame(i_1=rep(1:N,N),i_2=rep(1:N,each=N))
     df=cbind(df,k1[df$i_1,])
     df=cbind(df,k2[df$i_2,])

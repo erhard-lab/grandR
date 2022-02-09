@@ -126,7 +126,7 @@ FilterGenes=function(data,type='count',minval=100,mincol=ncol(data)/2,min.cond=N
   if (is.null(use)) {
     t=GetTable(data,type=type)
     if (!is.null(min.cond)) {
-      m=GetSummarizeMatrix(d,columns=NULL,average=FALSE)
+      m=GetSummarizeMatrix(data,columns=NULL,average=FALSE)
       use=rowSums(sapply(1:ncol(m),function(i) apply(t[,m[,i]>0]>=minval,1,all)))>=min.cond
     } else {
       use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincol)

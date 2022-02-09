@@ -8,3 +8,5 @@ Add testing (at least for loading the example data and checking some things incl
 Estimate changes of kinetic parameters for SARS (and the t0)
 Get rid of diffexp entry in the data structure; append .New etc to the name (just like the FitKinetics does for conditions)
 do not use opt$xapply!
+
+Show by simulation that a change in the RNA stability also affects new RNA, and that using PairwiseRegulation does not pick up a change in synthesis

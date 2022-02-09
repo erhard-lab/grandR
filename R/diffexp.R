@@ -5,25 +5,6 @@ cnt=function(m) {
 	m
 }
 
-DropDiffExp=function(data,pattern=NULL) {
-  if (is.null(pattern)) {
-    data$diffexp=NULL
-  } else {
-    data$diffexp=data$diffexp[!grepl(pattern,names(data$diffexp))]
-  }
-  invisible(data)
-}
-AddDiffExp=function(data,name,mode,table) {
-  if (is.null(data$diffexp)) data$diffexp=list()
-  if (is.null(data$diffexp[[name]])) data$diffexp[[name]]=list()
-  if (is.null(data$diffexp[[name]][[mode]])) {
-    data$diffexp[[name]][[mode]]=table
-  } else {
-    for (n in names(table)) data$diffexp[[name]][[mode]][[n]]=table[[n]]
-  }
-  invisible(data)
-}
-
 TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FALSE,columns=!data$coldata$no4sU,total=TRUE,new=TRUE,old=TRUE) {
 	colData=droplevels(Coldata(data)[columns,])
 	countData=data$data$count[,columns]
@@ -104,6 +85,81 @@ TestPairwise=function(data,contrasts,total=TRUE,new=TRUE,old=TRUE) {
   invisible(data)
 }
 
+PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Design$dur.4sU,steady.state.columns,N=10000,seed=NULL) {
+
+  if(!is.null(seed)) set.seed(seed)
+
+  alpha=as.matrix(GetTable(data,type="alpha"))
+  beta=as.matrix(GetTable(data,type="beta"))
+
+  ss=as.matrix(GetTable(data,type="count",columns=colnames(data)[steady.state.columns]))
+  ss.norm=as.matrix(GetTable(data,type=slot,columns=colnames(data)[steady.state.columns]))
+
+  ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=slot,analysis="Regulation",FUN=function(mat,A,B) {
+    count.A=mat[,A,drop=FALSE]
+    count.B=mat[,B,drop=FALSE]
+
+    alpha.A=alpha[,A,drop=FALSE]
+    alpha.B=alpha[,B,drop=FALSE]
+    beta.A=beta[,A,drop=FALSE]
+    beta.B=beta[,B,drop=FALSE]
+
+    t=unique(c(Coldata(data)[[time]][A],Coldata(data)[[time]][B]))
+
+    if (ncol(ss)==1) {
+      #cannot estimate dispersion, set them to (very conservative) 1
+      disp=rep(1,ncol(count.A))
+    } else {
+      # estimate dispersions and size factors ( must be done even if normalized values were already computed, no way to tell whether any slot is valid data for DESeq2)
+      dds=DESeq2::DESeqDataSetFromMatrix(countData = cnt(ss),colData=data.frame(rep(1,ncol(ss))),design = ~1)
+      dds=DESeq2::estimateSizeFactors(dds)
+      dds=DESeq2::estimateDispersions(dds,quiet=TRUE)
+      disp=DESeq2::dispersions(dds)
+      disp[is.na(disp)]=1 # ss=0 0 0 ...
+    }
+
+    re=plapply(1:nrow(count.A),function(i) {
+      # for each column: sample from the posterior of s and d:
+    #for (i in 1:nrow(count.A)) {
+      f0=rnbinom(N,size=1/disp[i],mu=mean(ss.norm[i,]))
+      sample.A=lapply(1:ncol(alpha.A), function(c){
+        if (count.A[i,c]==0) return(cbind(s=rep(1,N),d=rep(0,N)))
+        ntr.A=rbeta(N,alpha.A[i,c],beta.A[i,c])
+        F.A=count.A[i,c]*(1-ntr.A)/f0
+        d=-1/t*log(F.A)
+        s=-1/t*count.A[i,c]*ntr.A * ifelse(F.A>=1,-1,ifelse(is.infinite(F.A),0,log(F.A)/(1-F.A)))
+        cbind(s,d)
+      })
+      sample.B=lapply(1:ncol(alpha.B), function(c){
+        if (count.B[i,c]==0) return(cbind(s=rep(1,N),d=rep(0,N)))
+        ntr.B=rbeta(N,alpha.B[i,c],beta.B[i,c])
+        F.B=count.B[i,c]*(1-ntr.B)/f0
+        d=-1/t*log(F.B)
+        s=-1/t*count.B[i,c]*ntr.B * ifelse(F.B>=1,-1,ifelse(is.infinite(F.B),0,log(F.B)/(1-F.B)))
+        cbind(s,d)
+      })
+      s.A=do.call("c",lapply(sample.A,function(m) m[,'s']))
+      d.A=do.call("c",lapply(sample.A,function(m) m[,'d']))
+      s.B=do.call("c",lapply(sample.B,function(m) m[,'s']))
+      d.B=do.call("c",lapply(sample.B,function(m) m[,'d']))
+
+      mean.and.sig=function(a,b) {
+        use=a>0&b>0
+        all=log2(a[use]/b[use])
+        LFC=mean(c(all,rep(0,sum(!use))))
+        c(LFC,max(0,sum(sign(all)==sign(LFC))/length(a)*2-1))
+      }
+
+      setNames(c(mean.and.sig(s.A,s.B),mean.and.sig(d.B,d.A)),c("LFC.s","Prob.s","LFC.HL","Prob.HL"))  # that's right d.B/d.A is HL.A/HL.B
+    },seed=seed)
+
+    as.data.frame(t(simplify2array(re)))
+  })
+
+
+}
+
+
 LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=TRUE,compute.test=FALSE,...) {
   comp=function(type,name) {
     mat=as.matrix(GetTable(data,type=type,ntr.na=FALSE))
@@ -121,62 +177,141 @@ LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=
 }
 
 
-GetDiffExpTable=function(data,gene.info=TRUE,rownames="Symbol",names=NULL,modes=NULL,cols=NULL,sort=FALSE) {
-  if (!is.null(data$data$diffexp) && is.null(data$diffexp)) {
-    data$diffexp=data$data$diffexp
-    if (!is.null(cols)) cols=c(cols,tolower(cols))
+ApplyContrasts=function(data,name,contrasts,mode.slot="count",FUN,analysis=attr(FUN,"analysis"),...) {
+  mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
+  mode.slot=get.mode.slot(data,mode.slot)
+  for (n in names(contrasts)) {
+    re.df=FUN(mat,contrasts[[n]]==1,contrasts[[n]]==-1,...)
+    data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = analysis,mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
   }
-  re=data$gene.info
-  if (!is.null(rownames)) {
-    rownames(re)=if (rownames %in% names(data$gene.info)) data$gene.info[[rownames]] else data$gene.info[,1]
-  }
-  ord=rep(0,nrow(re))
-  sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
-  for (name in sintersect(names(data$diffexp),names)) {
-    for (mode in sintersect(names(data$diffexp[[name]]),modes)) {
-      t=data$diffexp[[name]][[mode]]
-      if (!is.null(cols)) t=t[,intersect(names(t),cols),drop=FALSE]
-      if (!is.null(t$Q)) ord=ord+log(t$Q)
-      names(t)=paste(name,mode,names(t),sep=".")
-      re=cbind(re,t)
-    }
-  }
-  if (sort) re=re[order(ord),]
-  if (is.logical(gene.info) && !gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re)]
-  if (is.character(gene.info)) re=re[,-which(!names(data$gene.info) %in% gene.info)]
-  re
+  data
 }
 
+LFC=function(data,name,contrasts,LFC.fun=PsiLFC,mode.slot="count",...) {
+  ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=mode.slot,analysis="LFC",FUN=function(mat,A,B) {
+    lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),...)
+    if (is.data.frame(lfcs)) lfcs else data.frame(LFC=lfcs)
+  })
+}
+
+#' Create a summarize matrix
+#'
+#' If this matrix is multiplied with a count table (e.g. obtained by \code{\link{GetTable}}),
+#' either the average (average=TRUE) or the sum (average=FALSE) of all columns (samples or cells)
+#' belonging to the same \code{\link{Condition}} is computed.
+#'
+#' @param data A grandR object
+#' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
+#' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
+#' @param average matrix to compute the average (TRUE) or the sum (FALSE)
+#' @param v a named vector (the names indicate the sample names, the value the conditions to be summarized)
+#' @param subset logical vector of which elements of the vector v to use (or NULL: use all)
+#'
+#' @return A matrix to be multiplied with a count table
+#'
+#' @details The method for grandR object simply calls the general method
+#'
+#' @seealso \link{GetTable}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
+#'
+#' GetSummarizeMatrix(sars)
+#' head(as.matrix(GetTable(sars)) %*% GetSummarizeMatrix(sars))   # average by matrix multiplication
+#' head(GetTable(sars,summarize = TRUE))                          # shortcut, does the same
+#'
+#' GetSummarizeMatrix(c(A=1,B=1,C=2,D=3))
+#'
+#' @export
+#'
 GetSummarizeMatrix <- function (x, ...) {
   UseMethod("GetSummarizeMatrix", x)
 }
-GetSummarizeMatrix.grandR=function(data,...) GetSummarizeMatrix.default(data$coldata,...)
-GetSummarizeMatrix.default=function(coldata,group=Design$Condition,columns=!coldata$no4sU,average=TRUE) {
+#' @rdname GetSummarizeMatrix
+#' @export
+GetSummarizeMatrix.grandR=function(data,no4sU=FALSE,columns=NULL,average=TRUE) {
+  if (is.null(Condition(data))) stop("Does not have conditions!")
+  columns=if (is.null(columns)) no4sU | !Coldata(data)$no4sU else columns&(no4sU | !Coldata(data)$no4sU)
+  GetSummarizeMatrix.default(setNames(Condition(data),colnames(data)),subset=columns,average=average)
+}
+#' @rdname GetSummarizeMatrix
+#' @export
+GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 	re=NULL
-	for (v in unique(coldata[,group])) re=cbind(re,ifelse(coldata[,group]==v,1,0))
-	rownames(re)=rownames(coldata)
-	colnames(re)=unique(coldata[,group])
-	if (!is.null(columns)) {
-  	save=re[columns,]
+	for (e in unique(v)) re=cbind(re,ifelse(v==e,1,0))
+	rownames(re)=names(v)
+	colnames(re)=unique(v)
+	if (!is.null(subset)) {
+  	save=re[subset,]
   	re[,]=0
-  	re[columns,]=save
+  	re[subset,]=save
 	}
 	re=re[,colSums(re)>0]
 	if (average) re=t(t(re)/colSums(re))
 	re
 }
 
+#' Create a contrast matrix
+#'
+#' Each column of a contrast matrix represents a pairwise comparison of all samples or cells of
+#' a grandR object (or a column annotation table). Elements being 1 are contrasted vs. elements being -1
+#' (and all 0 are irrelevant for this comparison).
+#'
+#' @param data A grandR object
+#' @param coldata A column annotation table
+#' @param contrast A vector describing what should be contrasted
+#' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
+#' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
+#' @param group Split the samples or cells according to this column of the column annotation table (and adapt the of the output table)
+#' @param name.format Format string for generating the column from the contrast vector (see details)
+#'
+#' @return A contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}
+#'
+#' @details To compare one specific factor level \emph{A} against another level \emph{B} in
+#' a particular column \emph{COL} of the column annotation table, specify contrast=c("COL","A","B")
+#'
+#' @details To compare all levels against a specific level \emph{A} in
+#' a particular column \emph{COL} of the column annotation table, specify contrast=c("COL","A")
+#'
+#' @details To perform all pairwise comparisons of all levels from
+#' a particular column \emph{COL} of the column annotation table, specify contrast=c("COL")
+#'
+#' @details If the column \emph{COL} only has two levels, all three are equivalent.
+#'
+#' @details In all cases, if groups is not NULL, the columns annotation table is first split and contrasts are applied within all samples or cells
+#' with the same \emph{group} factor level.
+#'
+#' @details The format string specifies the column name in the generated contrast matrix (which is used as the \emph{Analysis} name when calling
+#' \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}, etc.). The keywords \emph{$COL}, \emph{$A} and \emph{$B} are substituted
+#' by the respective elements of the contrast vector.
+#'
+#' @details The method for grandR objects simply calls the general method
+#'
+#' @seealso \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Condition","Time",Design$Replicate))
+#'
+#' GetContrasts(sars,contrast="Condition")                    # Compare all Mock vs. all SARS
+#' GetContrasts(sars,contrast=c("Condition","SARS","Mock"))   # This direction of the comparison is more reasonable
+#' GetContrasts(sars,contrast=c("Condition","SARS","Mock"),group="Time")   # Compare SARS vs Mock per time point
+#' GetContrasts(sars,contrast=c("Time","no4sU"), group="Condition",name.format="$COL ($A vs $B)")   # Compare each sample against the respective no4sU sample
+#'
+#' @export
+#'
 GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
-GetContrasts.grandR=function(data,columns=NULL,...) GetContrasts.default(coldata=data$coldata,columns=columns,...)
-GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColdata(names,design),contrast,name=NULL,group=NULL,columns=NULL) {
-  # either level 1 against level 2 of some coldata column (3 entries in contrast)
-  # or each level against one specific level (2 entries)
-  # or each all pairwise comparison (1 entry)
-  # in both cases, groups would just subset by the group levels first, and then do it for each subset separately
+GetContrasts.grandR=function(data,contrast="Condition",no4sU=FALSE,columns=NULL,group=NULL,name.format="$A vs $B") {
+  columns=if (is.null(columns)) no4sU | !Coldata(data)$no4sU else columns&(no4sU | !Coldata(data)$no4sU)
+  GetContrasts.default(coldata=Coldata(data),contrast=contrast,group=group,columns=columns,name.format=name.format)
+}
+GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.format="$A vs $B") {
   if (!(length(contrast) %in% 1:3) || !contrast[1]%in%names(coldata) || (length(contrast)>1 && !all(contrast[2:length(contrast)] %in% coldata[,contrast[1]]))) stop("Illegal contrasts (either a name from design (all pairwise comparisons), a name and a reference level (all comparisons vs. the reference), or a name and two levels (exactly this comparison))")
 
+  make.name=function(contrast) gsub("$COL",contrast[1], gsub("$A",contrast[2], gsub("$B",contrast[3], name.format,fixed=TRUE),fixed=TRUE),fixed=TRUE)
   make.col=function(contrast,use=TRUE) {
     re=rep(0,nrow(coldata))
     re[coldata[,contrast[1]]==contrast[2] & use]=1
@@ -186,7 +321,7 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColdata(names,d
       re=rep(0,nrow(coldata))
       re[columns]=save[columns]
     }
-    matrix(re)
+    setNames(data.frame(re,check.names=FALSE),make.name(contrast))
   }
 
   contr=if (length(contrast)==3) {
@@ -196,42 +331,26 @@ GetContrasts.default=function(names=NULL,design=NULL,coldata=MakeColdata(names,d
       if (is.null(columns)) columns=TRUE
       ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[columns,contrast[1]])) else unique(coldata[columns,contrast[1]])
       ll=setdiff(ll,contrast[2])
-      re=sapply(ll,function(l) make.col(c(contrast[1],l,contrast[2]),use))
-      #re=matrix(0,nrow=nrow(coldata),ncol=length(ll))
-      #re[coldata[,contrast[1]]==contrast[2] & use,]=-1
-      #for (c in 1:length(ll)) re[coldata[,contrast[1]]==ll[c] & use,c]=1
-      #if (!is.null(columns)) {
-      #  save=re
-      #  re=matrix(0,nrow=nrow(coldata),ncol=length(ll))
-      #  re[columns,]=save[columns,]
-      #}
-      colnames(re)=ll
-      re
+      as.data.frame(lapply(ll,function(l) make.col(c(contrast[1],l,contrast[2]),use)),check.names=FALSE)
     }
   } else {
     function(use=TRUE) {
       if (is.null(columns)) columns=TRUE
       ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[columns,contrast[1]])) else unique(coldata[columns,contrast[1]])
       re=combn(ll,2,FUN=function(v) make.col(c(contrast,v),use)[,1])
-      colnames(re)=combn(ll,2,FUN=paste,collapse=" vs ")
-      re
+      colnames(re)=combn(ll,2,FUN=function(v) names(make.col(c(contrast,v),use))[1])
+      as.data.frame(re,check.names=FALSE)
     }
   }
   re=if (is.null(group)) {
-    as.data.frame(contr())
+    contr()
   } else {
     covvec=interaction(coldata[group],drop=FALSE,sep=".")
     names=levels(covvec)
-    re=lapply(levels(covvec),function(bin) contr(use=covvec==bin))
-    re=if (!is.null(colnames(re))) setNames(re,paste0(names,names(re),sep=".")) else setNames(re,names)
-    as.data.frame(re,check.names=FALSE)
-  }
-  if (ncol(re)==1 && names(re)=="V1") {
-    names(re)=if (is.null(name)) contrast[1] else name;
-    name=NULL;
-  }
-  if (!is.null(name)) {
-    names(re)= if (length(name)==ncol(re)) name else paste(name,names(re),sep=".")
+    as.data.frame(lapply(levels(covvec),function(bin) {
+      r=contr(use=covvec==bin)
+      setNames(r,paste0(names(r),".",bin))
+    }),check.names=FALSE)
   }
   re=re[,!apply(re==0,2,all),drop=FALSE]
   rownames(re)=rownames(coldata)

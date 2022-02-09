@@ -153,7 +153,7 @@ Design.Semantics=list(
 #' coldata <- MakeColdata(c("Mock.0h.A","Mock.0h.B","Mock.2h.A","Mock.2h.B"), design=c("Cell",Design$dur.4sU,Design$Replicate))
 #'
 MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.originals=TRUE) {
-  coldata=data.frame(Name=names,check.names=FALSE,stringsAsFactors = TRUE)
+  coldata=data.frame(Name=factor(names,levels=unique(names)),check.names=FALSE,stringsAsFactors = FALSE)
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
 

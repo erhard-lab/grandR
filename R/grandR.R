@@ -464,7 +464,7 @@ Coldata=function(data,column=NULL,value=NULL) {
 #' @param slot a slot name
 #' @param mode.slot a mode.slot
 #'
-#' @details A mode.slot is a mode followed by a dot followed by a slot name, or just a slot name. A mode is either \emph{total}, \emph{new} or \emph{old}
+#' @details A mode.slot is a mode followed by a dot followed by a slot name, or just a slot name. A mode is either \emph{total}, \emph{new} or \emph{old}.
 #'
 #' @return Whether or not the given name is valid and unique for the grandR object
 #'
@@ -479,6 +479,28 @@ check.mode.slot=function(data,mode.slot) {
   })
 }
 
+#' Internal functions to parse mode.slot strings
+#'
+#' @param data a grandR object
+#' @param mode.slot a mode.slot
+#'
+#' @details A mode.slot is a mode followed by a dot followed by a slot name, or just a slot name. A mode is either \emph{total}, \emph{new} or \emph{old}
+#'
+#' @return a named list with elements mode and slot (or only slot in case of \emph{ntr},\emph{alpha} or \emph{beta})
+#'
+get.mode.slot=function(data,mode.slot) {
+  if (length(mode.slot)!=1) stop("mode.slot must be a vector of length 1")
+  if (!check.mode.slot(data,mode.slot)) stop("Invalid mode.slot")
+  tno="t"
+  spl=strsplit(mode.slot,".",fixed=TRUE)[[1]]
+  if (length(spl)>1) {
+    tno=spl[1]
+    mode.slot=spl[2]
+    if (mode.slot %in% c("ntr","alpha","beta")) stop(paste0(tno," may not be used with ntr, alpha or beta"))
+  }
+  tno = switch(tolower(substr(tno,1,1)),t="total",n="new",o="old",stop(paste0("Mode ",tno," unknown!")))
+  if (mode.slot %in% c("ntr","alpha","beta")) list(slot=mode.slot) else list(mode=tno,slot=mode.slot)
+}
 
 #' Obtain the indices of the given genes
 #'
@@ -550,7 +572,6 @@ ToIndex=function(data,gene) {
 #' @export
 #'
 GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol") {
-  if (!is.null(columns) && !is.null(summarize)) stop("columns and summarize may not be set simultaneously!")
   if (is.null(type)) type=DefaultSlot(data)
 
   genes=ToIndex(data,genes)
@@ -562,14 +583,29 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
   # check that columns is only used if type is either completely analysis or mode.slot
   if (!is.null(columns) && sum(mode.slot)>0 && sum(analysis)>0) stop("Columns can only be specified if type either refers to mode.slots or analyses")
 
+  if (!is.null(summarize)) {
+    if (is.logical(summarize) && length(summarize)==1 && !summarize) {
+      summarize=NULL
+    } else {
+      if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
+      if (!is.null(columns)) summarize=summarize[columns,]
+      summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
+    }
+  }
+
   # obtain mode.slot data
   r1=NULL
   if (any(mode.slot)) {
-    r1=as.data.frame(t(GetData(data,type[mode.slot],columns=columns,genes,ntr.na = ntr.na,coldata=FALSE, melt=FALSE, name.by = name.by)))
-    names(r1)=data$coldata[columns,"Name"]
-    if (!is.null(summarize)) {
-      if (is.logical(summarize) && length(summarize)==1) summarize=GetSummarizeMatrix(data)
-      r1=as.data.frame(as.matrix(r1) %*% summarize)
+    cols=if (is.null(columns)) colnames(data) else columns
+
+    for (tt in type[mode.slot]) {
+      rtt=as.data.frame(t(GetData(data,tt,columns=cols,genes,ntr.na = ntr.na,coldata=FALSE, melt=FALSE, name.by = name.by)))
+      names(rtt)=cols
+      if (!is.null(summarize)) {
+        rtt=as.data.frame(as.matrix(rtt) %*% summarize)
+      }
+      if (length(type[mode.slot])>1) names(rtt)=paste0(names(rtt),".",tt)
+      r1=if(is.null(r1)) rtt else cbind(r1,rtt)
     }
   }
 
@@ -634,6 +670,7 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
 GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),melt=FALSE,coldata=TRUE,ntr.na=TRUE,name.by="Symbol") {
   if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(mode.slot)],collapse=",")))
 
+
   if (is.null(columns)) columns=colnames(data)
   genes=ToIndex(data,genes)
   og=if (name.by %in% names(data$gene.info)) data$gene.info[[name.by]][genes] else data$gene.info[genes,1]
@@ -659,7 +696,6 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
       re=cbind(re[,c(1:(dim(re)[2]-2))],setNames(as.data.frame(t(as.data.frame(strsplit(as.character(re$variable)," ")))),c("Gene","Type")),Value=re$Value)
     }
   }
-  rownames(re)=NULL
   re
 }
 
@@ -808,7 +844,7 @@ GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene
   if (!all(check.analysis(data,patterns))) stop(sprintf("No analysis found for pattern %s!",paste(patterns[!check.analysis(data,patterns)],collapse=",")))
 
   genes=ToIndex(data,genes)
-  if (is.null(patterns)) patterns = Analyses(data)
+
 
   re=data$gene.info[genes,]
   if (!is.null(name.by)) {
@@ -816,9 +852,9 @@ GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
-  analyses=unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
+  analyses=if (is.null(patterns)) 1:length(Analyses(data)) else unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
   for (name in Analyses(data)[analyses]) {
-    t=data$analysis[[name]][genes,]
+    t=data$analysis[[name]][genes,,drop=FALSE]
     if (!is.null(columns)) {
       use = rep(TRUE,ncol(t))
       for (r in columns) use=use&grepl(r,names(t))

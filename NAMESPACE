@@ -8,8 +8,6 @@ S3method("subset","grandR",subset.grandR)
 S3method("split","grandR",split.grandR)
 S3method("merge","grandR",merge.grandR)
 S3method("dimnames","grandR",dimnames.grandR)
-S3method("PlotScatter","grandR",PlotScatter.grandR)
-S3method("PlotScatter","data.frame",PlotScatter.data.frame)
 S3method("GetSummarizeMatrix","grandR",GetSummarizeMatrix.grandR)
 S3method("GetContrasts","grandR",GetContrasts.grandR)
 
