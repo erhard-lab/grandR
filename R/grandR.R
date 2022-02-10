@@ -853,17 +853,9 @@ GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
-<<<<<<< HEAD
   analyses=if (is.null(patterns)) 1:length(Analyses(data)) else unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
   for (name in Analyses(data)[analyses]) {
     t=data$analysis[[name]][genes,,drop=FALSE]
-=======
-  analyses=unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
-  #REVIEWED by Teresa:
-  for (name in Analyses(data)[analyses]) {
-        t=data$analysis[[name]][genes,]
-        names(t)=paste0(name,".",names(t))
->>>>>>> 99b9d56379771d683f7f2e187c9ec2b551489a19
     if (!is.null(columns)) {
      use = rep(TRUE,ncol(t))
      for (r in columns) use = use&grepl(r,names(t))

@@ -205,7 +205,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
                        new=ndf[ndf$use,],
                        control=minpack.lm::nls.lm.control(maxiter = maxiter))
 
-        if (model.p$niter==maxiter) return(list(data=NA,modifier=NA,Synthesis=NA,Degradation=NA,`Half-Life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
+        if (model.p$niter==maxiter) return(list(data=NA,modifier=NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
         conf.p=try(sd.from.hessian(-model.p$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
         par=setNames(model.p$par,c("s","d"))
         rmse=sqrt(model.p$deviance/(nrow(ndf)+nrow(odf)))
@@ -234,8 +234,8 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),
-             conf.lower=c(Synthesis=unname(par[1]-conf.p[1]),Degradation=unname(par[2]-conf.p[2]),`Half-Life`=unname(log(2)/(par[2]+conf.p[2]))),
-             conf.upper=c(Synthesis=unname(par[1]+conf.p[1]),Degradation=unname(par[2]+conf.p[2]),`Half-Life`=unname(log(2)/(par[2]-conf.p[2]))),
+             conf.lower=c(Synthesis=unname(par[1]-conf.p[1]),Degradation=unname(par[2]-conf.p[2]),`Half-life`=unname(log(2)/(par[2]+conf.p[2]))),
+             conf.upper=c(Synthesis=unname(par[1]+conf.p[1]),Degradation=unname(par[2]+conf.p[2]),`Half-life`=unname(log(2)/(par[2]-conf.p[2]))),
              f0=unname(par['s']/par['d']),
              logLik=logLik.nls.lm(model.p),
              rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
@@ -254,7 +254,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
                        old=odf[oind,],
                        new=ndf[nind,],
                        control=minpack.lm::nls.lm.control(maxiter = maxiter))
-        if (model.m$niter==maxiter) return(list(data=NA,modifier=NA,Synthesis=NA,Degradation=NA,`Half-Life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
+        if (model.m$niter==maxiter) return(list(data=NA,modifier=NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
         par=setNames(model.m$par,c("s","d"))
         f0=par[3]
         conf.m=try(sd.from.hessian(-model.m$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
@@ -288,8 +288,8 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),
-             conf.lower=c(Synthesis=unname(par[1]-conf.m[1]),Degradation=unname(par[2]-conf.m[2]),`Half-Life`=log(2)/(par[2]+conf.m[2])),
-             conf.upper=c(Synthesis=unname(par[1]+conf.m[1]),Degradation=unname(par[2]+conf.m[2]),`Half-Life`=log(2)/(par[2]-conf.m[2])),
+             conf.lower=c(Synthesis=unname(par[1]-conf.m[1]),Degradation=unname(par[2]-conf.m[2]),`Half-life`=log(2)/(par[2]+conf.m[2])),
+             conf.upper=c(Synthesis=unname(par[1]+conf.m[1]),Degradation=unname(par[2]+conf.m[2]),`Half-life`=log(2)/(par[2]-conf.m[2])),
              f0=unname(f0),
              logLik=logLik.nls.lm(model.m),
              rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
