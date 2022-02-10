@@ -1,6 +1,7 @@
 
 
 cnt=function(m) {
+  m=as.matrix(m)
 	mode(m) <- "integer"
 	m
 }
@@ -58,32 +59,6 @@ TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FA
 	invisible(data)
 }
 
-TestPairwise=function(data,contrasts,total=TRUE,new=TRUE,old=TRUE) {
-  comp=function(type,name) {
-    mat=as.matrix(GetTable(data,type=type,ntr.na=FALSE))
-
-    l=setNames(lapply(contrasts,function(ctr) {
-      B=mat[,ctr==1,drop=FALSE]
-      A=mat[,ctr==-1,drop=FALSE] # reverse compared to LFC! (does not matter in the end, only the q val is extracted)
-      coldata=data.frame(comparison=c(rep("A",ncol(A)),rep("B",ncol(B))))
-      dds <- DESeqDataSetFromMatrix(countData = cbind(A,B),
-                                    colData = coldata,
-                                    design= ~ comparison-1)
-      results(DESeq(dds))
-    }),colnames(contrasts))
-    for (n in names(l)) data=AddDiffExp(data,n,name,data.frame(
-      M=l[[n]]$baseMean,
-      S=l[[n]]$stat,
-      P=l[[n]]$pvalue,
-      Q=l[[n]]$padj
-    ))
-    data
-  }
-  if (total) data=comp("total.count","Total")
-  if (new) data=comp("new.count","New")
-  if (old) data=comp("old.count","Old")
-  invisible(data)
-}
 
 PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Design$dur.4sU,steady.state.columns,N=10000,seed=NULL) {
 
@@ -107,15 +82,10 @@ PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Desi
     t=unique(c(Coldata(data)[[time]][A],Coldata(data)[[time]][B]))
 
     if (ncol(ss)==1) {
-      #cannot estimate dispersion, set them to (very conservative) 1
-      disp=rep(1,ncol(count.A))
+      #cannot estimate dispersion, set them to (quite high) 0.1
+      disp=rep(0.1,ncol(count.A))
     } else {
-      # estimate dispersions and size factors ( must be done even if normalized values were already computed, no way to tell whether any slot is valid data for DESeq2)
-      dds=DESeq2::DESeqDataSetFromMatrix(countData = cnt(ss),colData=data.frame(rep(1,ncol(ss))),design = ~1)
-      dds=DESeq2::estimateSizeFactors(dds)
-      dds=DESeq2::estimateDispersions(dds,quiet=TRUE)
-      disp=DESeq2::dispersions(dds)
-      disp[is.na(disp)]=1 # ss=0 0 0 ...
+      disp=estimate.dispersion(ss)
     }
 
     re=plapply(1:nrow(count.A),function(i) {
@@ -160,24 +130,7 @@ PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Desi
 }
 
 
-LFC=function(data,contrasts,LFC.fun=PsiLFC,slot="count",total=TRUE,new=TRUE,old=TRUE,compute.test=FALSE,...) {
-  comp=function(type,name) {
-    mat=as.matrix(GetTable(data,type=type,ntr.na=FALSE))
-    l=setNames(lapply(contrasts,function(ctr) {
-      LFC.fun(rowSums(mat[,ctr==1,drop=FALSE]),rowSums(mat[,ctr==-1,drop=FALSE]),...)
-    }),colnames(contrasts))
-    for (n in names(l)) data=AddDiffExp(data,n,name,data.frame(LFC=l[[n]]))
-    data
-  }
-  if (total) data=comp(paste0("total.",slot),"Total")
-  if (new) data=comp(paste0("new.",slot),"New")
-  if (old) data=comp(paste0("old.",slot),"Old")
-  if (compute.test) data = TestPairwise(data=data,contrasts=contrasts,total=total,new=new,old=old)
-  invisible(data)
-}
-
-
-ApplyContrasts=function(data,name,contrasts,mode.slot="count",FUN,analysis=attr(FUN,"analysis"),...) {
+ApplyContrasts=function(data,analysis,name,contrasts,mode.slot="count",FUN,...) {
   mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
   mode.slot=get.mode.slot(data,mode.slot)
   for (n in names(contrasts)) {
@@ -193,6 +146,77 @@ LFC=function(data,name,contrasts,LFC.fun=PsiLFC,mode.slot="count",...) {
     if (is.data.frame(lfcs)) lfcs else data.frame(LFC=lfcs)
   })
 }
+
+PairwiseDESeq2=function(data,name,contrasts,separate=FALSE) {
+
+  if (separate) {
+    ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot="count",analysis="DESeq2",FUN=function(mat,A,B) {
+      A=mat[,A,drop=FALSE]
+      B=mat[,B,drop=FALSE]
+      coldata=data.frame(comparison=c(rep("A",ncol(A)),rep("B",ncol(B))))
+      dds <- DESeq2::DESeqDataSetFromMatrix(countData = cbind(A,B),
+                                    colData = coldata,
+                                    design= ~ comparison-1)
+      l=DESeq2::results(DESeq2::DESeq(dds,quiet=TRUE))
+      data.frame(
+        M=l$baseMean,
+        S=l$stat,
+        P=l$pvalue,
+        Q=l$padj
+      )
+    })
+  }
+  else {
+    groups=list()
+    find.or.add=function(c) {
+      if (length(groups)>0) for (i in 1:length(groups)) {
+        ex=groups[[i]]
+        if (all(c==ex)) { # it's already there
+          return(as.character(i))
+        } else if (any(c&ex)) {
+          stop("Illegal intersection of contrasts for joint estimation of variance!")
+        }
+      }
+      groups<<-c(groups,list(c))
+      return(as.character(length(groups)))
+    }
+    dds.contrasts=list()
+    cond.vec=rep(NA,nrow(contrasts))
+    for (c in contrasts) {
+      A=find.or.add(c==1)
+      B=find.or.add(c==-1)
+      dds.contrasts=c(dds.contrasts,list(c(A,B)))
+      cond.vec[c==1]=A
+      cond.vec[c==-1]=B
+    }
+    coldata=data.frame(comparisons=cond.vec)
+    mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
+    mat=mat[,!is.na(cond.vec)]
+    cond.vec=cond.vec[!is.na(cond.vec)]
+    mode.slot=get.mode.slot(data,mode.slot)
+
+    dds <- DESeq2::DESeqDataSetFromMatrix(countData = mat,
+                                  colData = coldata,
+                                  design= ~ comparisons-1)
+    dds <- DESeq2::DESeq(dds,quiet=TRUE)
+
+    for (i in 1:length(contrasts)) {
+      n=names(contrasts)[i]
+      l=DESeq2::results(dds,contrast=c("comparisons",dds.contrasts[[i]][1],dds.contrasts[[i]][2]))
+      re.df=data.frame(
+        M=l[[n]]$baseMean,
+        S=l[[n]]$stat,
+        P=l[[n]]$pvalue,
+        Q=l[[n]]$padj
+      )
+      data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = "DESeq2",mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
+    }
+    return(data)
+  }
+}
+
+
+
 
 #' Create a summarize matrix
 #'
@@ -337,6 +361,7 @@ GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.form
     function(use=TRUE) {
       if (is.null(columns)) columns=TRUE
       ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[columns,contrast[1]])) else unique(coldata[columns,contrast[1]])
+      if (length(ll)<2) stop("Less than 2 levels in contrast!")
       re=combn(ll,2,FUN=function(v) make.col(c(contrast,v),use)[,1])
       colnames(re)=combn(ll,2,FUN=function(v) names(make.col(c(contrast,v),use))[1])
       as.data.frame(re,check.names=FALSE)

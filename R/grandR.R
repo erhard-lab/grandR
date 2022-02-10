@@ -173,7 +173,9 @@ SwapColumns=function(data,s1,s2) {
 #' @rdname grandR
 #' @export
 merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
+  nn=c(get.varargs.names(...),names(list))
   list=c(list(...),list)
+  names(list)=nn
   if (length(list)==1) return(list[[1]])
 
   re=list[[1]]
@@ -189,6 +191,15 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
 
     for (n in names(re$data)) re$data[[n]]=cbind(re$data[[n]],add$data[[n]])
 
+    # add potential additional gene annotations
+    gi=GeneInfo(add)
+    for (n in names(gi)) {
+      if (!n %in% names(GeneInfo(re))) {
+        GeneInfo(re,column = n)=gi[[n]]
+      } else if (!all(GeneInfo(re)[[n]]==gi[[n]])) {
+        GeneInfo(re,column = paste0(n,".",names(list)[i]))=gi[[n]]
+      }
+    }
   }
   re
 }

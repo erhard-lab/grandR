@@ -850,8 +850,8 @@ PlotSimpleKinetics=function(total1,total2,ntr1,ntr2,f0.above.ss.factor=1,t=2,N=1
     new1=total1*ntr1
     new2=total2*ntr2
 
-    k1=as.data.frame(TransformKineticParameters(old=old1,new=new1,t=t,f0=seq(old1+0.01,total1*f0.above.ss.factor,length.out=N),name.suffix = "_1"))
-    k2=as.data.frame(TransformKineticParameters(old=old2,new=new2,t=t,f0=seq(old2+0.01,total2*f0.above.ss.factor,length.out=N),name.suffix = "_2"))
+    k1=as.data.frame(TransformKineticParameters(old=old1,new=new1,t=t,f0=seq(old1+0.01,total1*f0.above.ss.factor,length.out=N),name.prefix = "1"))
+    k2=as.data.frame(TransformKineticParameters(old=old2,new=new2,t=t,f0=seq(old2+0.01,total2*f0.above.ss.factor,length.out=N),name.prefix = "2"))
     df=data.frame(i_1=rep(1:N,N),i_2=rep(1:N,each=N))
     df=cbind(df,k1[df$i_1,])
     df=cbind(df,k2[df$i_2,])

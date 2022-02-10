@@ -9,6 +9,7 @@
 #' @param num.reads the total amount of reads for simulation
 #' @param rel.abundance named (according to genes) vector of the true relative abundances. Is divided by its sum.
 #' @param ntr vector of true NTRs
+#' @param dispersion vector of dispersion parameters (should best be estimated by DESeq2)
 #' @param beta.approx should the beta approximation of the NTR posterior be computed?
 #' @param u.content the relative frequency of uridines in the reads
 #' @param u.content.sd the standard deviation of the u content
@@ -45,12 +46,14 @@
 #' abline(0,1)
 #' # this should roughly be a uniform distibution, which means that the posterior distributions are properly approximated!
 #'
-SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),beta.approx=FALSE,u.content=0.25,u.content.sd=0.05,read.length=75,p.old=1E-4,p.new=0.04, seed=NULL) {
+SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),dispersion=0.05,beta.approx=FALSE,u.content=0.25,u.content.sd=0.05,read.length=75,p.old=1E-4,p.new=0.04, seed=NULL) {
 
   if(!is.null(seed)) set.seed(seed)
 
   mat=cbind(rel.abundance/sum(rel.abundance,na.rm=TRUE),ntr)
-  mat=cbind(mat,rmultinom(1,num.reads,rel.abundance))
+  mu=mat[,1]*num.reads
+  mat=cbind(mat,rnbinom(length(mu),mu=mu,size=1/dispersion))
+  #mat=cbind(mat,rmultinom(1,num.reads,rel.abundance))  # this does not model overdispersion
 
   shape1=u.content*(u.content*(1-u.content)/u.content.sd^2-1)
   shape2=(1-u.content)/u.content * shape1
@@ -91,6 +94,7 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @param gene.info either a data frame containing gene annotation or a vector of gene names
 #' @param s a vector of synthesis rates
 #' @param HL a vector of RNA half-lives
+#' @param dispersion a vector of dispersion parameters (estimate from data using DESeq2, e.g. by the estimate.dispersion utility function)
 #' @param f0 the abundance at time t=0
 #' @param num.reads a vector representing the number of reads for each sample
 #' @param timepoints a vector representing the labeling duration (in h) for each sample
@@ -102,13 +106,14 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @return a grandR object containing the simulated data in its data slots and the true parameters in the gene annotation table
 #' @export
 #'
-SimulateTimeCourse=function(condition,gene.info,s,HL,f0=s/log(2)*HL,num.reads=rep(1E7,length(timepoints)),timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
+SimulateTimeCourse=function(condition,gene.info,s,HL,dispersion,f0=s/log(2)*HL,num.reads=rep(1E7,length(timepoints)),timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
 
   if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))
 
   tt=gsub("0h","no4sU",paste0(timepoints,"h"))
   names=as.character(ddply(data.frame(Name=factor(tt,levels=unique(tt))),.(Name),function(s) data.frame(Name=paste(condition,s$Name,LETTERS[1:length(s$Name)],sep=".")))$Name)
   coldata=MakeColdata(names,design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+  coldata$no4sU=timepoints==0
 
   d=log(2)/HL
 
@@ -126,11 +131,13 @@ SimulateTimeCourse=function(condition,gene.info,s,HL,f0=s/log(2)*HL,num.reads=re
     ))
   data=lapply(data,function(m) {rownames(m)=gene.info$Gene; colnames(m)=names; m})
 
+  if (!is.null(seed)) set.seed(seed)
+
   for (i in seq_along(timepoints)) {
     if (verbose) cat(sprintf("Simulating %s (%d/%d)...\n",names[i],i,length(timepoints)))
     total=(f.new(timepoints[i],s,d)+f.old.nonequi(timepoints[i],f0,s,d))
     ntr=if (timepoints[i]==0) rep(NA,length(s)) else f.new(timepoints[i],s,d)/total
-    sim=SimulateReadsForSample(num.reads=num.reads[i],rel.abundance=total,ntr=ntr,beta.approx = beta.approx,seed=seed,...)
+    sim=SimulateReadsForSample(num.reads=num.reads[i],rel.abundance=total,ntr=ntr,dispersion=dispersion,beta.approx = beta.approx,seed=if (is.null(seed)) NULL else runif(1,min=0,max=.Machine$integer.max),...)
 
     data$count[,i]=sim[,"count"]
     data$ntr[,i]=sim[,"ntr"]

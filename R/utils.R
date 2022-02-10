@@ -69,6 +69,25 @@ my.precision=function (x)
   }
 }
 
+
+get.varargs.names=function(...) sapply(as.list(substitute(list(...)))[-1L],as.character)
+
+#' Estimate dispersion parameters for a count matrix using DESeq2
+#'
+#' @param ss the count matrix
+#'
+#' @return a vector of dispersion parameters (to be used as size=1/dispersion for Xnbinom functions)
+#' @export
+#'
+estimate.dispersion=function(ss) {
+  dds=DESeq2::DESeqDataSetFromMatrix(countData = cnt(ss),colData=data.frame(rep(1,ncol(ss))),design = ~1)
+  dds=DESeq2::estimateSizeFactors(dds)
+  dds=DESeq2::estimateDispersions(dds,quiet=TRUE)
+  disp=DESeq2::dispersions(dds)
+  disp[is.na(disp)]=0.1 # ss=0 0 0 ...
+  disp
+}
+
 has.package=function(name) name %in% rownames(installed.packages())
 
 GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fixed=TRUE),function(v) v[field])
