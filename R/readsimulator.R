@@ -106,9 +106,11 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @return a grandR object containing the simulated data in its data slots and the true parameters in the gene annotation table
 #' @export
 #'
-SimulateTimeCourse=function(condition,gene.info,s,HL,dispersion,f0=s/log(2)*HL,num.reads=rep(1E7,length(timepoints)),timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
+SimulateTimeCourse=function(condition,gene.info,s,HL,dispersion,f0=s/log(2)*HL,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
 
   if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))
+
+  num.reads=rep(num.reads,length(timepoints))
 
   tt=gsub("0h","no4sU",paste0(timepoints,"h"))
   names=as.character(ddply(data.frame(Name=factor(tt,levels=unique(tt))),.(Name),function(s) data.frame(Name=paste(condition,s$Name,LETTERS[1:length(s$Name)],sep=".")))$Name)

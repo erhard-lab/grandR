@@ -411,7 +411,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
         list(data=odf,
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
-             `Half-life`=log(2)/unname(par['d']),
+             `Half-life`=log(2)/unname(par['d']),  # FIXME
              conf.lower=unname(c(conf.p[1,1],conf.p[2,2])),
              conf.upper=unname(c(conf.p[1,2],conf.p[2,1])),
              f0=unname(par['s']/par['d']),
