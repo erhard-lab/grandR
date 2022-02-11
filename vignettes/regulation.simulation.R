@@ -7,7 +7,7 @@ sars=Normalize(sars)
 SetParallel()
 sars=FitKinetics(sars,type="ntr")
 seed=1337
-control=SimulateTimeCourse("control",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,HL = GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = FALSE,num.reads=5E7,seed=seed)
+control=SimulateTimeCourse("control",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,HL = GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
 perturbed.hl=SimulateTimeCourse("HL",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,HL = GetAnalysisTable(sars)$`Half-life` *2^rnorm(nrow(sars),0,1) ,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
 perturbed.s=SimulateTimeCourse("s",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis *2^rnorm(nrow(sars),0,1) ,HL = GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
 
