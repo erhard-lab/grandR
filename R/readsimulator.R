@@ -99,7 +99,7 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @param num.reads a vector representing the number of reads for each sample
 #' @param timepoints a vector representing the labeling duration (in h) for each sample
 #' @param beta.approx should the beta approximation of the NTR posterior be computed?
-#' @param verbose output status updates
+#' @param verbose Print status updates
 #' @param seed seed value for the random number generator (set to make it deterministic!)
 #' @param ... provided to \link{\code{SimulateReadsForSample}}
 #'

@@ -70,6 +70,12 @@ my.precision=function (x)
 }
 
 
+cnt=function(m) {
+  m=as.matrix(m)
+  mode(m) <- "integer"
+  m
+}
+
 get.varargs.names=function(...) sapply(as.list(substitute(list(...)))[-1L],as.character)
 
 #' Estimate dispersion parameters for a count matrix using DESeq2

@@ -286,6 +286,60 @@ PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quant
 			coord_cartesian(ylim=ylim)
 }
 
+
+VulcanoPlot=function(data,name=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,highlight=NULL,label=NULL) {
+  df=GetAnalysisTable(data,patterns=name,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
+  aes=modifyList(aes(LFC,-log10(Q),color=density2d(LFC,-log10(Q))),aest)
+
+  g=ggplot(df,mapping=aes)+
+    geom_point(size=0.1)+
+    scale_color_viridis_c(guide='none')+
+    xlab(bquote(log[2]~FC))+
+    ylab(bquote("-"~log[10]~FDR))+
+    geom_hline(yintercept=-log10(p.cutoff),linetype=2)+
+    geom_vline(xintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
+    ggtitle(name)
+
+
+  if (!is.null(highlight)) {
+    if (is.list(highlight)){
+      for (col in names(highlight)) {
+        g=g+geom_point(data=df[highlight[[col]],],color=col,size=0.5)
+      }
+    } else {
+      g=g+geom_point(data=df[highlight,],color='red',size=0.5)
+    }
+  }
+  if (!is.null(label)) {
+    df2=df
+    df2$label=""
+    df2[label,"label"]=rownames(df2)[label]
+    g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE)
+  }
+
+  if (label.numbers) {
+    n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),factor(df$Q>p.cutoff,levels=c("FALSE","TRUE")))
+    g=g+annotate("label",x=c(-Inf,0,Inf,-Inf,0,Inf),y=c(Inf,Inf,Inf,-Inf,-Inf,-Inf),label=paste0("n=",as.numeric(n)),hjust=c(-0.1,0.5,1.1,-0.1,0.5,1.1),vjust=c(1.1,1.1,1.1,-0.1,-0.1,-0.1))
+  }
+  g
+}
+
+
+
+MAPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1) {
+  df=data$diffexp[[name]][[mode]]
+  aes=modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
+  g=ggplot(df,mapping=aes)+
+    geom_point(size=0.5)+
+    scale_x_log10()+
+    scale_color_manual(values=c(Sig.="black",NS="grey30"),guide=FALSE)+
+    ylab(bquote(log[2]~FC))+
+    xlab("Total expression")+
+    geom_hline(yintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
+    ggtitle(paste0(name," (",mode,")"))
+  g
+}
+
 PlotTypeDistribution=function(data,mode.slot=DefaultSlot(data),relative=FALSE) {
 	df=GetTable(data,type=mode.slot)
 	df=sapply(levels(data$gene.info$Type),function(type) colSums(df[ data$gene.info$Type==type,]))

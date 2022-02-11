@@ -479,7 +479,7 @@ Coldata=function(data,column=NULL,value=NULL) {
 #'
 #' @return Whether or not the given name is valid and unique for the grandR object
 #'
-check.analysis=function(data,patterns) sapply(patterns,function(pattern) any(grepl(pattern,Analyses(data))))
+check.analysis=function(data,patterns,regex) sapply(patterns,function(pattern) any(grepl(pattern,Analyses(data),fixed=!regex)))
 #' @rdname check.analysis
 check.slot=function(data,slot) slot %in% names(data$data)
 #' @rdname check.analysis
@@ -588,7 +588,7 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
   genes=ToIndex(data,genes)
 
   mode.slot=check.mode.slot(data,type)
-  analysis=check.analysis(data,type) & !mode.slot
+  analysis=check.analysis(data,type,TRUE) & !mode.slot
   if (!all(analysis|mode.slot)) stop(sprintf("Type %s is neither a mode.slot nor an analysis name!",paste(type[!analysis&!mode.slot],collapse=",")))
 
   # check that columns is only used if type is either completely analysis or mode.slot
@@ -792,16 +792,16 @@ Analyses=function(data) names(data$analysis)
 #' @export
 AddAnalysis=function(data,description,table,warn.present=TRUE) {
   stopifnot(!is.null(description$name))
+  description$results=names(table)
   if (is.null(data$analysis)) data$analysis=list()
   if (is.null(data$analysis[[description$name]])) {
     data$analysis[[description$name]]=table
-    attr(data$analysis[[description$name]],"analysis")=description
+    attr(data$analysis[[description$name]],"analysis")=list(description)
   } else {
-    if (warn.present) warning(sprintf("Analysis %s already present! Overwritting...",description$name))
+    if (warn.present & any(names(table)%in%names(data$analysis[[description$name]]))) warning(sprintf("Analysis %s already present! Overwritting...",description$name))
     for (n in names(table)) data$analysis[[description$name]][[n]]=table[[n]]
     ana = attr(data$analysis[[description$name]],"analysis")
-    for (n in names(description)) ana[[n]]=description[[n]]
-    attr(data$analysis[[description$name]],"analysis") = ana
+    attr(data$analysis[[description$name]],"analysis") = list(ana,description)
   }
   data
 }
@@ -831,6 +831,7 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
 #'
 #' @param data A grandR object
 #' @param patterns One or several regex to be matched against analysis names (\link{Analyses}); all analysis tables if NULL
+#' @param regex Use regex for patterns (TRUE) or don't (FALSE, i.e. must specify the exact name)
 #' @param columns Regular expressions to select columns from the analysis table (all have to match!); all columns if NULL
 #' @param genes Restrict the output table to the given genes
 #' @param gene.info Should the table contain the \link{GeneInfo} values as well (at the beginning)?
@@ -851,8 +852,8 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
 #'
 #' @export
 #'
-GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol") {
-  if (!all(check.analysis(data,patterns))) stop(sprintf("No analysis found for pattern %s!",paste(patterns[!check.analysis(data,patterns)],collapse=",")))
+GetAnalysisTable=function(data,patterns=NULL,regex=TRUE,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol") {
+  if (!all(check.analysis(data,patterns,regex))) stop(sprintf("No analysis found for pattern %s!",paste(patterns[!check.analysis(data,patterns,regex)],collapse=",")))
 
   genes=ToIndex(data,genes)
 
@@ -864,7 +865,7 @@ GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
-  analyses=if (is.null(patterns)) 1:length(Analyses(data)) else unlist(lapply(patterns,function(pat) grep(pat,Analyses(data))))
+  analyses=if (is.null(patterns)) 1:length(Analyses(data)) else unlist(lapply(patterns,function(pat) grep(pat,Analyses(data),fixed=!regex)))
   for (name in Analyses(data)[analyses]) {
     t=data$analysis[[name]][genes,,drop=FALSE]
     if (!is.null(columns)) {
@@ -872,6 +873,7 @@ GetAnalysisTable=function(data,patterns=NULL,columns=NULL,genes=Genes(data),gene
      for (r in columns) use = use&grepl(r,names(t))
      t=t[,use,drop=FALSE]
     }
+    if (length(Analyses(data)[analyses])>1) names(t)=paste0(name,".",names(t))
     re=cbind(re,t)
   }
 

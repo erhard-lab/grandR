@@ -189,7 +189,7 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' @param classify.genes A list of functions that is used to add the \emph{type} column to the gene annotation table
 #' @param Unknown If no function from \emph{classify.genes} to a row in the gene annotation table, this is used as the \emph{type}
 #' @param read.percent.conv Should the percentage of convertions also be read?
-#' @param verbose Verbose status outputs
+#' @param verbose Print status updates
 #'
 #' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta)
 #' and potentially additional information of all genes detected by GRAND-SLAM

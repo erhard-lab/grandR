@@ -1,163 +1,98 @@
 
+#' Compute a likelihood ratio test.
+#'
+#' The test is computed on any of total/old/new counts using DESeq2 based on two models
+#' specified using formulas.
+#'
+#' @param data A grandR object
+#' @param name the user defined analysis name to store the results
+#' @param mode either "total", "new" or "old"
+#' @param target formula specifying the target model (you can use any column name from the \code{\link{Coldata}(data)))
+#' @param background formula specifying the background model (you can use any column name from the \code{\link{Coldata}(data)))
+#' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
+#' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
+#' @param verbose Print status updates
+#'
+#' @return a new grandR object including a new analysis table
+#'
+#' @export
+#'
+LikelihoodRatioTest=function(data,name="LRT",mode="total",target=~Condition,background=~1,no4sU=FALSE,columns=NULL,verbose=FALSE) {
+  mode.slot=paste0(mode,".count")
+  if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
 
-cnt=function(m) {
-  m=as.matrix(m)
-	mode(m) <- "integer"
-	m
-}
+  columns=if (is.null(columns)) no4sU | !Coldata(data)$no4sU else columns&(no4sU | !Coldata(data)$no4sU)
 
-TestGenesLRT=function(data,target=~Condition,background=~1,name="lrt",verbose=FALSE,columns=!data$coldata$no4sU,total=TRUE,new=TRUE,old=TRUE) {
 	colData=droplevels(Coldata(data)[columns,])
-	countData=data$data$count[,columns]
-	ntrData=data$data$ntr[,columns]
+	mat=GetTable(data,mode.slot=mode.slot,columns = columns)
 
 	colData=as.data.frame(lapply(colData,function(c) {
 	  if (is.factor(c)) levels(c)=make.names(levels(c),unique = TRUE)
 	  c
 	}))
 
-	if (total) {
-  	if (verbose) cat("Testing total...\n")
-  	dds.tot <- DESeq2::DESeq(DESeq2::DESeqDataSetFromMatrix(countData = cnt(countData),colData=colData,design = target),test="LRT", reduced=background)
-  	res.tot <- DESeq2::results(dds.tot)
-  	data=AddDiffExp(data,name,"Total",
-  	                data.frame(
-  	                  M=res.tot$baseMean,
-  	                  S=res.tot$stat,
-  	                  P=res.tot$pvalue,
-  	                  Q=p.adjust(res.tot$pvalue,method="BH"))
-  	)
-	}
+	dds.tot <- DESeq2::DESeq(DESeq2::DESeqDataSetFromMatrix(countData = cnt(countData),colData=colData,design = target),test="LRT", reduced=background,quiet=!verbose)
+	res.tot <- DESeq2::results(dds.tot)
 
-	if(new) {
-  	if (verbose) cat("Testing new...\n")
-  	dds.new <- DESeq2::DESeq(DESeq2::DESeqDataSetFromMatrix(countData = cnt(countData*ntrData),colData=colData,design = target),test="LRT", reduced=background)
-  	res.new <- DESeq2::results(dds.new)
-  	data=AddDiffExp(data,name,"New",
-  	                data.frame(
-  	                  M=res.new$baseMean,
-  	                  S=res.new$stat,
-  	                  P=res.new$pvalue,
-  	                  Q=p.adjust(res.new$pvalue,method="BH"))
-  	)
-	}
+	df=data.frame(
+    M=res.tot$baseMean,
+    S=res.tot$stat,
+    P=res.tot$pvalue,
+    Q=p.adjust(res.tot$pvalue,method="BH")
+  )
 
-
-	if (old) {
-  	if (verbose) cat("Testing old...\n")
-  	dds.old <- DESeq2::DESeq(DESeq2::DESeqDataSetFromMatrix(countData = cnt(countData*(1-ntrData)),colData=colData,design = target),test="LRT", reduced=background)
-  	res.old <- DESeq2::results(dds.old)
-  	data=AddDiffExp(data,name,"Old",
-  	                data.frame(
-  	                  M=res.old$baseMean,
-  	                  S=res.old$stat,
-  	                  P=res.old$pvalue,
-  	                  Q=p.adjust(res.old$pvalue,method="BH"))
-  	)
-	}
-
-	invisible(data)
+  AddAnalysis(data,description=MakeAnalysis(name = paste0(name),analysis = "DESeq2.LRT",mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)),table = df)
 }
 
 
-PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Design$dur.4sU,steady.state.columns,N=10000,seed=NULL) {
 
-  if(!is.null(seed)) set.seed(seed)
-
-  alpha=as.matrix(GetTable(data,type="alpha"))
-  beta=as.matrix(GetTable(data,type="beta"))
-
-  ss=as.matrix(GetTable(data,type="count",columns=colnames(data)[steady.state.columns]))
-  ss.norm=as.matrix(GetTable(data,type=slot,columns=colnames(data)[steady.state.columns]))
-
-  ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=slot,analysis="Regulation",FUN=function(mat,A,B) {
-    count.A=mat[,A,drop=FALSE]
-    count.B=mat[,B,drop=FALSE]
-
-    alpha.A=alpha[,A,drop=FALSE]
-    alpha.B=alpha[,B,drop=FALSE]
-    beta.A=beta[,A,drop=FALSE]
-    beta.B=beta[,B,drop=FALSE]
-
-    t=unique(c(Coldata(data)[[time]][A],Coldata(data)[[time]][B]))
-
-    if (ncol(ss)==1) {
-      #cannot estimate dispersion, set them to (quite high) 0.1
-      disp=rep(0.1,ncol(count.A))
-    } else {
-      disp=estimate.dispersion(ss)
-    }
-
-    re=plapply(1:nrow(count.A),function(i) {
-      # for each column: sample from the posterior of s and d:
-    #for (i in 1:nrow(count.A)) {
-      f0=rnbinom(N,size=1/disp[i],mu=mean(ss.norm[i,]))
-      sample.A=lapply(1:ncol(alpha.A), function(c){
-        if (count.A[i,c]==0) return(cbind(s=rep(1,N),d=rep(0,N)))
-        ntr.A=rbeta(N,alpha.A[i,c],beta.A[i,c])
-        F.A=count.A[i,c]*(1-ntr.A)/f0
-        d=-1/t*log(F.A)
-        s=-1/t*count.A[i,c]*ntr.A * ifelse(F.A>=1,-1,ifelse(is.infinite(F.A),0,log(F.A)/(1-F.A)))
-        cbind(s,d)
-      })
-      sample.B=lapply(1:ncol(alpha.B), function(c){
-        if (count.B[i,c]==0) return(cbind(s=rep(1,N),d=rep(0,N)))
-        ntr.B=rbeta(N,alpha.B[i,c],beta.B[i,c])
-        F.B=count.B[i,c]*(1-ntr.B)/f0
-        d=-1/t*log(F.B)
-        s=-1/t*count.B[i,c]*ntr.B * ifelse(F.B>=1,-1,ifelse(is.infinite(F.B),0,log(F.B)/(1-F.B)))
-        cbind(s,d)
-      })
-      s.A=do.call("c",lapply(sample.A,function(m) m[,'s']))
-      d.A=do.call("c",lapply(sample.A,function(m) m[,'d']))
-      s.B=do.call("c",lapply(sample.B,function(m) m[,'s']))
-      d.B=do.call("c",lapply(sample.B,function(m) m[,'d']))
-
-      mean.and.sig=function(a,b) {
-        use=a>0&b>0
-        all=log2(a[use]/b[use])
-        LFC=mean(c(all,rep(0,sum(!use))))
-        c(LFC,max(0,sum(sign(all)==sign(LFC))/length(a)*2-1))
-      }
-
-      setNames(c(mean.and.sig(s.A,s.B),mean.and.sig(d.B,d.A)),c("LFC.s","Prob.s","LFC.HL","Prob.HL"))  # that's right d.B/d.A is HL.A/HL.B
-    },seed=seed)
-
-    as.data.frame(t(simplify2array(re)))
-  })
-
-
-}
-
-
-ApplyContrasts=function(data,analysis,name,contrasts,mode.slot="count",FUN,...) {
+#' Helper function to apply apply analysis methods to pairs of conditions
+#'
+#' @param data
+#' @param analysis
+#' @param name
+#' @param contrasts
+#' @param mode.slot
+#' @param FUN
+#' @param ...
+#'
+#' @return
+#' @export
+#'
+#' @examples
+ApplyContrasts=function(data,analysis,name,contrasts,mode.slot="count",verbose=FALSE,FUN,...) {
   mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
   mode.slot=get.mode.slot(data,mode.slot)
   for (n in names(contrasts)) {
+    if (verbose) cat(sprintf("Computing %s for %s...\n",analysis,n))
     re.df=FUN(mat,contrasts[[n]]==1,contrasts[[n]]==-1,...)
     data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = analysis,mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
   }
   data
 }
 
-LFC=function(data,name,contrasts,LFC.fun=PsiLFC,mode.slot="count",...) {
-  ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=mode.slot,analysis="LFC",FUN=function(mat,A,B) {
+LFC=function(data,name,contrasts,LFC.fun=PsiLFC,mode="total",slot="count",verbose=FALSE,...) {
+  mode.slot=paste0(mode,".",slot)
+  if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
+  ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="LFC",FUN=function(mat,A,B) {
     lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),...)
     if (is.data.frame(lfcs)) lfcs else data.frame(LFC=lfcs)
   })
 }
 
-PairwiseDESeq2=function(data,name,contrasts,separate=FALSE) {
+PairwiseDESeq2=function(data,name,contrasts,separate=FALSE,mode="total",verbose=FALSE) {
+  mode.slot=paste0(mode,".count")
+  if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
 
   if (separate) {
-    ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot="count",analysis="DESeq2",FUN=function(mat,A,B) {
+    ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="DESeq2.Wald",FUN=function(mat,A,B) {
       A=mat[,A,drop=FALSE]
       B=mat[,B,drop=FALSE]
       coldata=data.frame(comparison=c(rep("A",ncol(A)),rep("B",ncol(B))))
-      dds <- DESeq2::DESeqDataSetFromMatrix(countData = cbind(A,B),
+      dds <- DESeq2::DESeqDataSetFromMatrix(countData = cnt(cbind(A,B)),
                                     colData = coldata,
                                     design= ~ comparison-1)
-      l=DESeq2::results(DESeq2::DESeq(dds,quiet=TRUE))
+      l=DESeq2::results(DESeq2::DESeq(dds,quiet=!verbose))
       data.frame(
         M=l$baseMean,
         S=l$stat,
@@ -195,27 +130,106 @@ PairwiseDESeq2=function(data,name,contrasts,separate=FALSE) {
     cond.vec=cond.vec[!is.na(cond.vec)]
     mode.slot=get.mode.slot(data,mode.slot)
 
-    dds <- DESeq2::DESeqDataSetFromMatrix(countData = mat,
+    dds <- DESeq2::DESeqDataSetFromMatrix(countData =cnt(mat),
                                   colData = coldata,
                                   design= ~ comparisons-1)
-    dds <- DESeq2::DESeq(dds,quiet=TRUE)
+    dds <- DESeq2::DESeq(dds,quiet=!verbose)
 
     for (i in 1:length(contrasts)) {
       n=names(contrasts)[i]
       l=DESeq2::results(dds,contrast=c("comparisons",dds.contrasts[[i]][1],dds.contrasts[[i]][2]))
       re.df=data.frame(
-        M=l[[n]]$baseMean,
-        S=l[[n]]$stat,
-        P=l[[n]]$pvalue,
-        Q=l[[n]]$padj
+        M=l$baseMean,
+        S=l$stat,
+        P=l$pvalue,
+        Q=l$padj
       )
-      data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = "DESeq2",mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
+      data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = "DESeq2.Wald",mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
     }
     return(data)
   }
 }
 
 
+PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Design$dur.4sU,steady.state.columns,N=10000,seed=NULL,verbose=FALSE) {
+
+  if(!is.null(seed)) set.seed(seed)
+
+  alpha=as.matrix(GetTable(data,type="alpha"))
+  beta=as.matrix(GetTable(data,type="beta"))
+
+  ss=as.matrix(GetTable(data,type="count",columns=colnames(data)[steady.state.columns]))
+  ss.norm=as.matrix(GetTable(data,type=slot,columns=colnames(data)[steady.state.columns]))
+
+  ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=slot,verbose=verbose,analysis="Regulation",FUN=function(mat,A,B) {
+    count.A=mat[,A,drop=FALSE]
+    count.B=mat[,B,drop=FALSE]
+
+    alpha.A=alpha[,A,drop=FALSE]
+    alpha.B=alpha[,B,drop=FALSE]
+    beta.A=beta[,A,drop=FALSE]
+    beta.B=beta[,B,drop=FALSE]
+
+    t=unique(c(Coldata(data)[[time]][A],Coldata(data)[[time]][B]))
+
+    if (ncol(ss)==1) {
+      #cannot estimate dispersion, set them to (quite high) 0.1
+      disp=rep(0.1,ncol(count.A))
+    } else {
+      disp=estimate.dispersion(ss)
+    }
+
+    re=plapply(1:nrow(count.A),function(i) {
+      # for each column: sample from the posterior of s and d:
+      #for (i in 1:nrow(count.A)) {
+      sample.A=lapply(1:ncol(alpha.A), function(c){
+        f0=rnbinom(N,size=1/disp[i],mu=mean(ss.norm[i,]))
+        if (count.A[i,c]==0) return(cbind(s=rep(1,N),d=rep(0,N)))
+        ntr.A=rbeta(N,alpha.A[i,c],beta.A[i,c])
+        F.A=count.A[i,c]*(1-ntr.A)/f0
+        d=-1/t*log(F.A)
+        s=-1/t*count.A[i,c]*ntr.A * ifelse(F.A>=1,-1,ifelse(is.infinite(F.A),0,log(F.A)/(1-F.A)))
+        cbind(s,d)
+      })
+      sample.B=lapply(1:ncol(alpha.B), function(c){
+        f0=rnbinom(N,size=1/disp[i],mu=mean(ss.norm[i,]))
+        if (count.B[i,c]==0) return(cbind(s=rep(1,N),d=rep(0,N)))
+        ntr.B=rbeta(N,alpha.B[i,c],beta.B[i,c])
+        F.B=count.B[i,c]*(1-ntr.B)/f0
+        d=-1/t*log(F.B)
+        s=-1/t*count.B[i,c]*ntr.B * ifelse(F.B>=1,-1,ifelse(is.infinite(F.B),0,log(F.B)/(1-F.B)))
+        cbind(s,d)
+      })
+      #s.A=do.call("cbind",lapply(sample.A,function(m) m[,'s']))
+      #d.A=do.call("cbind",lapply(sample.A,function(m) m[,'d']))
+      #s.B=do.call("cbind",lapply(sample.B,function(m) m[,'s']))
+      #d.B=do.call("cbind",lapply(sample.B,function(m) m[,'d']))
+
+      s.A=rowSums(do.call("cbind",lapply(sample.A,function(m) m[,'s'])))
+      d.A=rowSums(do.call("cbind",lapply(sample.A,function(m) m[,'d'])))
+      s.B=rowSums(do.call("cbind",lapply(sample.B,function(m) m[,'s'])))
+      d.B=rowSums(do.call("cbind",lapply(sample.B,function(m) m[,'d'])))
+
+      #s.A=do.call("c",lapply(sample.A,function(m) m[,'s']))
+      #d.A=do.call("c",lapply(sample.A,function(m) m[,'d']))
+      #s.B=do.call("c",lapply(sample.B,function(m) m[,'s']))
+      #d.B=do.call("c",lapply(sample.B,function(m) m[,'d']))
+
+      mean.and.sig=function(a,b) {
+        use=a>0&b>0
+        all=log2(a[use]/b[use])
+        LFC=mean(c(all,rep(0,sum(!use))))
+        c(LFC,max(0,sum(sign(all)==sign(LFC))/length(a)*2-1))
+      }
+
+      setNames(c(mean.and.sig(s.A,s.B),mean.and.sig(d.B,d.A)),c("LFC.s","Prob.s","LFC.HL","Prob.HL"))  # that's right d.B/d.A is HL.A/HL.B
+    },seed=seed)
+
+    as.data.frame(t(simplify2array(re)))
+  })
+
+
+}
 
 
 #' Create a summarize matrix
@@ -328,10 +342,14 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
+#' @rdname GetContrasts
+#' @export
 GetContrasts.grandR=function(data,contrast="Condition",no4sU=FALSE,columns=NULL,group=NULL,name.format="$A vs $B") {
   columns=if (is.null(columns)) no4sU | !Coldata(data)$no4sU else columns&(no4sU | !Coldata(data)$no4sU)
   GetContrasts.default(coldata=Coldata(data),contrast=contrast,group=group,columns=columns,name.format=name.format)
 }
+#' @rdname GetContrasts
+#' @export
 GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.format="$A vs $B") {
   if (!(length(contrast) %in% 1:3) || !contrast[1]%in%names(coldata) || (length(contrast)>1 && !all(contrast[2:length(contrast)] %in% coldata[,contrast[1]]))) stop("Illegal contrasts (either a name from design (all pairwise comparisons), a name and a reference level (all comparisons vs. the reference), or a name and two levels (exactly this comparison))")
 
@@ -386,40 +404,6 @@ GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.form
     re=re[,!remove]
   }
   re
-}
-
-VulcanoPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE) {
-  df=data$diffexp[[name]][[mode]]
-  aes=modifyList(aes(LFC,-log10(Q),color=density2d(LFC,-log10(Q))),aest)
-  g=ggplot(df,mapping=aes)+
-    geom_point(size=0.1)+
-    scale_color_viridis_c(guide='none')+
-    xlab(bquote(log[2]~FC))+
-    ylab(bquote("-"~log[10]~FDR))+
-    geom_hline(yintercept=-log10(p.cutoff),linetype=2)+
-    geom_vline(xintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
-    ggtitle(paste0(name," (",mode,")"))
-  if (label.numbers) {
-    n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),factor(df$Q>p.cutoff,levels=c("FALSE","TRUE")))
-    g=g+annotate("label",x=c(-Inf,0,Inf,-Inf,0,Inf),y=c(Inf,Inf,Inf,-Inf,-Inf,-Inf),label=paste0("n=",as.numeric(n)),hjust=c(-0.1,0.5,1.1,-0.1,0.5,1.1),vjust=c(1.1,1.1,1.1,-0.1,-0.1,-0.1))
-  }
-  g
-}
-
-
-
-MAPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1) {
-  df=data$diffexp[[name]][[mode]]
-  aes=modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
-  g=ggplot(df,mapping=aes)+
-    geom_point(size=0.5)+
-    scale_x_log10()+
-    scale_color_manual(values=c(Sig.="black",NS="grey30"),guide=FALSE)+
-    ylab(bquote(log[2]~FC))+
-    xlab("Total expression")+
-    geom_hline(yintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
-    ggtitle(paste0(name," (",mode,")"))
-  g
 }
 
 

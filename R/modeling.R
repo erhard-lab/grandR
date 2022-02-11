@@ -659,14 +659,14 @@ CalibrateTimes=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.nam
 #' or data must be properly normalized. The parameters are fit per \link{Condition}.
 #'
 #' @param data A grandR object
-#' @param gene The gene for which to fit the model
+#' @param name the user defined analysis name to store the results
+#' @param type Which method to use (either one of "full","ntr","lm")
 #' @param slot The data slot to take expression values from
 #' @param time The column in the column annotation table representing the labeling duration
 #' @param conf.int A number between 0 and 1 representing the size of the confidence interval
-#' @param unbiased Use the unbiased estimator instead of maximum likelihood on the transformed posterior
-#' @param exact.ci compute exact credible intervals (see details)
-#' @param total.fun use this function to summarize the expression values (only relevant for computing the synthesis rate s)
-#'
+#' @param return.fields which statistics to return (see details)
+#' @param return.extra additional statistics to return (see details)
+#' @param ... forwarded to \code{\link{FitKineticsGeneNtr}}, \code{\link{FitKineticsGeneLeastSquares}} or \code{\link{FitKineticsGeneLogSpaceLinear}}
 #' @return
 #' A new grandR object with the fitted parameters as an analysis table
 #'
@@ -683,6 +683,8 @@ CalibrateTimes=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.nam
 #'   \item{\link{FitKineticsGeneLogSpaceLinear}: linear model fit on the old RNA; depends on proper normalization; assumes steady state for estimating the synthesis rate; assumption of homoscedastic gaussian errors in log space is problematic and theoretically not justified}
 #'   \item{\link{FitKineticsGeneNtr}: maximum a posteriori fit on the NTR posterior transformed to the degradation rate; as it is based on the NTR only, it is independent on proper normalization; assumes steady state; theoretically well justified}
 #' }
+#'
+#' @details This function is flexible in what to put in the analysis table. You can specifiy the statistics using return.fields and return.extra (see \code{\link{kinetics2vector}})
 #'
 #' @seealso \link{FitKineticsGeneNtr}, \link{FitKineticsGeneLeastSquares}, \link{FitKineticsGeneLogSpaceLinear}
 #'
