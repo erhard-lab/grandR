@@ -2,17 +2,21 @@
 data=ReadGRAND("https://zenodo.org/record/5909576/files/zap_bac4.tsv.gz?download=1",design=c("Cell","hpi","Replicate"),Unknown = "HCMV")
 data=NormalizeTPM(data)
 
-cellular.genes=intersect(FilterGenes(data,type='tpm',minval=1,return.genes = TRUE),FilterGenes(filtered,use=filtered$gene.info$Type=="Cellular",return.genes = TRUE))
-viral.genes=intersect(FilterGenes(data,use=data$gene.info$Type=="HCMV",return.genes = TRUE),FilterGenes(viral,type='tpm',minval=10,mincol=2,return.genes = TRUE))
+# Reviewed by Lygeri: changed "filtered" to "data" in the second call of FilterGenes
+cellular.genes=intersect(FilterGenes(data,type='tpm',minval=1,return.genes = TRUE),FilterGenes(data,use=data$gene.info$Type=="Cellular",return.genes = TRUE))
+# Reviewed by Lygeri: changed "viral" to "data" in the second call of FilterGenes
+viral.genes=intersect(FilterGenes(data,use=data$gene.info$Type=="HCMV",return.genes = TRUE),FilterGenes(data,type='tpm',minval=10,mincol=2,return.genes = TRUE))
 
 data=FilterGenes(data,use=c(cellular.genes,viral.genes))
 
+# Reviewed by Lygeri: changed mode.slot = "total.tpm" to mode = "total", slot = "tpm"
+data=LFC(data,name = "total",GetContrasts(data,contrast=c("Cell","ko","wt"),group="hpi"),mode = "total", slot="tpm",prior=c(1,1))
+# Reviewed by Lygeri: changed mode.slot = "new.tpm" to mode = "new", slot = "tpm"
+data=LFC(data,name = "new",GetContrasts(data,contrast=c("Cell","ko","wt"),group="hpi"),mode = "new", slot="tpm",prior=c(1,1))
 
-data=LFC(data,name = "total",GetContrasts(data,contrast=c("Cell","ko","wt"),group="hpi"),mode.slot="total.tpm",prior=c(1,1))
-data=LFC(data,name = "new",GetContrasts(data,contrast=c("Cell","ko","wt"),group="hpi"),mode.slot="new.tpm",prior=c(1,1))
-
+# Reviewed by Lygeri: changed the column names to the correct values as they appear in GetAnalysisTable
 PlotScatter(GetAnalysisTable(data),
-            "total.18hpi.Cell (ko vs wt).LFC","new.18hpi.Cell (ko vs wt).LFC",
+            "total.ko vs wt.18hpi.LFC","new.ko vs wt.18hpi.LFC",
             ylim=c(-1.3,4),xlim=c(-1.3,4),
             highlight = GeneInfo(data)$Type=="HCMV" & rowMeans(GetTable(data,type="tpm",columns=c("wt.18hpi.A","wt.18hpi.B")))>10,
             label=c("UL4","UL5"))+
@@ -20,9 +24,9 @@ PlotScatter(GetAnalysisTable(data),
   geom_abline(intercept = c(-1,1),linetype=2)
 
 
-
+# Reviewed by Lygeri: changed the column names to the correct values as they appear in GetAnalysisTable
 PlotScatter(GetAnalysisTable(data),
-            "total.72hpi.Cell (ko vs wt).LFC","new.72hpi.Cell (ko vs wt).LFC",
+            "total.ko vs wt.72hpi.LFC","new.ko vs wt.72hpi.LFC"  ,
             ylim=c(-1.3,4),xlim=c(-1.3,4),
             highlight = GeneInfo(data)$Type=="HCMV" & rowMeans(GetTable(data,type="tpm",columns=c("wt.72hpi.A","wt.72hpi.B")))>10,
             label=c("UL4","UL5"))+
@@ -30,7 +34,7 @@ PlotScatter(GetAnalysisTable(data),
   geom_abline(intercept = c(-1,1),linetype=2)
 
 
-
+# Reviewed by Lygeri: this refers to a local file, not available to users
 data=ReadGRAND("~/mcmv.tsv.gz")
 data=FilterGenes(data,min.cond = 1)
 data=FilterGenes(data,use=GeneInfo(data)$Type=="Cellular")
