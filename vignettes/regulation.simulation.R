@@ -8,9 +8,9 @@ SetParallel()
 sars=FitKinetics(sars,type="ntr")
 seed=1337
 # Reviewed by Lygeri: in control, changed beta.approx from FALSE to TRUE; merge doesn't work otherwise
-control=SimulateTimeCourse("control",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,HL = GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=11000,seed=seed)
-perturbed.hl=SimulateTimeCourse("HL",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,HL = GetAnalysisTable(sars)$`Half-life` *2^rnorm(nrow(sars),0,1) ,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=11000,seed=seed)
-perturbed.s=SimulateTimeCourse("s",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis *2^rnorm(nrow(sars),0,1) ,HL = GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=11000,seed=seed)
+control=SimulateTimeCourse("control",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,HL = GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
+perturbed.hl=SimulateTimeCourse("HL",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,HL = GetAnalysisTable(sars)$`Half-life` *2^rnorm(nrow(sars),0,1) ,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
+perturbed.s=SimulateTimeCourse("s",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis *2^rnorm(nrow(sars),0,1) ,HL = GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
 
 m=merge(control,perturbed.hl,perturbed.s)
 saveRDS(m,file="perturbed.rds")
