@@ -151,6 +151,7 @@ PairwiseDESeq2=function(data,name,contrasts,separate=FALSE,mode="total",verbose=
 }
 
 
+
 PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Design$dur.4sU,steady.state.columns,N=10000,seed=NULL,verbose=FALSE) {
 
   if(!is.null(seed)) set.seed(seed)
@@ -183,7 +184,7 @@ PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Desi
       # for each column: sample from the posterior of s and d:
       #for (i in 1:nrow(count.A)) {
       sample.A=lapply(1:ncol(alpha.A), function(c){
-        f0=rnbinom(N,size=1/disp[i],mu=mean(ss.norm[i,]))
+        f0=mean(ss.norm[i,])#rnbinom(N,size=1/disp[i],mu=mean(ss.norm[i,]))
         if (count.A[i,c]==0) return(cbind(s=rep(1,N),d=rep(0,N)))
         ntr.A=rbeta(N,alpha.A[i,c],beta.A[i,c])
         F.A=count.A[i,c]*(1-ntr.A)/f0
@@ -192,7 +193,7 @@ PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Desi
         cbind(s,d)
       })
       sample.B=lapply(1:ncol(alpha.B), function(c){
-        f0=rnbinom(N,size=1/disp[i],mu=mean(ss.norm[i,]))
+        f0=mean(ss.norm[i,])#rnbinom(N,size=1/disp[i],mu=mean(ss.norm[i,]))
         if (count.B[i,c]==0) return(cbind(s=rep(1,N),d=rep(0,N)))
         ntr.B=rbeta(N,alpha.B[i,c],beta.B[i,c])
         F.B=count.B[i,c]*(1-ntr.B)/f0
@@ -200,10 +201,10 @@ PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Desi
         s=-1/t*count.B[i,c]*ntr.B * ifelse(F.B>=1,-1,ifelse(is.infinite(F.B),0,log(F.B)/(1-F.B)))
         cbind(s,d)
       })
-      #s.A=do.call("cbind",lapply(sample.A,function(m) m[,'s']))
-      #d.A=do.call("cbind",lapply(sample.A,function(m) m[,'d']))
-      #s.B=do.call("cbind",lapply(sample.B,function(m) m[,'s']))
-      #d.B=do.call("cbind",lapply(sample.B,function(m) m[,'d']))
+      s.A=do.call("cbind",lapply(sample.A,function(m) m[,'s']))
+      d.A=do.call("cbind",lapply(sample.A,function(m) m[,'d']))
+      s.B=do.call("cbind",lapply(sample.B,function(m) m[,'s']))
+      d.B=do.call("cbind",lapply(sample.B,function(m) m[,'d']))
 
       s.A=rowSums(do.call("cbind",lapply(sample.A,function(m) m[,'s'])))
       d.A=rowSums(do.call("cbind",lapply(sample.A,function(m) m[,'d'])))
@@ -223,6 +224,73 @@ PairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Desi
       }
 
       setNames(c(mean.and.sig(s.A,s.B),mean.and.sig(d.B,d.A)),c("LFC.s","Prob.s","LFC.HL","Prob.HL"))  # that's right d.B/d.A is HL.A/HL.B
+    },seed=seed)
+
+    as.data.frame(t(simplify2array(re)))
+  })
+
+
+}
+
+BayesianPairwiseRegulation=function(data,name,contrasts,slot=DefaultSlot(data),time=Design$dur.4sU,steady.state.columns,N=10000,seed=NULL,verbose=FALSE) {
+
+  if(!is.null(seed)) set.seed(seed)
+
+  alpha=as.matrix(GetTable(data,type="alpha"))
+  beta=as.matrix(GetTable(data,type="beta"))
+
+  ss=as.matrix(GetTable(data,type="count",columns=colnames(data)[steady.state.columns]))
+  ss.norm=as.matrix(GetTable(data,type=slot,columns=colnames(data)[steady.state.columns]))
+
+  ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=slot,verbose=verbose,analysis="Regulation",FUN=function(mat,A,B) {
+    count.A=mat[,A,drop=FALSE]
+    count.B=mat[,B,drop=FALSE]
+
+    alpha.A=alpha[,A,drop=FALSE]
+    alpha.B=alpha[,B,drop=FALSE]
+    beta.A=beta[,A,drop=FALSE]
+    beta.B=beta[,B,drop=FALSE]
+
+    t=unique(c(Coldata(data)[[time]][A],Coldata(data)[[time]][B]))
+
+    re=plapply(1:nrow(count.A),function(i) {
+# variable t, per condition f0, nbinom draw for f0, variational bayes, its own package, a separate function for a single gene (with plots etc), also: not only for differential!
+      stan.data=list(
+        N1=ncol(alpha.A),
+        N2=ncol(alpha.B),
+        f0=mean(ss.norm[i,]),
+        t=t,
+        co1=count.A[i,],
+        a1=alpha.A[i,],
+        b1=beta.A[i,],
+        co2=count.B[i,],
+        a2=alpha.B[i,],
+        b2=beta.B[i,],
+        SP=1
+      )
+
+      init.p=function() {
+        revf=function(p,co) log2(-1/t*log((1-p)*co/stan.data$f0))
+        list(log2d1=revf(rbeta(stan.data$N1,stan.data$a1,stan.data$b1),stan.data$co1),log2d1=revf(rbeta(stan.data$N2,stan.data$a2,stan.data$b2),stan.data$co2))
+      }
+      fit.both = rstan::stan(file=system.file("stan", "differential.model.both.stan", package = "grandR"), data=stan.data,pars=c("lfcs","lfcd"),chains = 1,verbose = FALSE,init=init.p, refresh=0,control = list(adapt_delta = 0.99))
+      fit.d = rstan::stan(file=system.file("stan", "differential.model.d.stan", package = "grandR"), data=stan.data,chains = 1,verbose = FALSE,init=init.p, refresh=0,control = list(adapt_delta = 0.99))
+      fit.s = rstan::stan(file=system.file("stan", "differential.model.s.stan", package = "grandR"), data=stan.data,chains = 1,verbose = FALSE,init=init.p, refresh=0,control = list(adapt_delta = 0.99))
+      fit.none = rstan::stan(file=system.file("stan", "differential.model.none.stan", package = "grandR"), data=stan.data,chains = 1,verbose = FALSE,init=init.p, refresh=0,control = list(adapt_delta = 0.99))
+
+      vbres=rstan::vb(rstan::stan_model(file=system.file("stan", "differential.model.both.stan", package = "grandR")),data=stan.data,pars=c("lfcs","lfcd"),refresh=0)
+
+      lml.both <- bridgesampling::bridge_sampler(fit.both, silent = TRUE)
+      lml.d <- bridgesampling::bridge_sampler(fit.d, silent = TRUE)
+      lml.s <- bridgesampling::bridge_sampler(fit.s, silent = TRUE)
+      lml.none <- bridgesampling::bridge_sampler(fit.none, silent = TRUE)
+
+      lml=c(lml.both$logml,lml.both$logml,lml.s$logml,lml.none$logml)
+      exp(max(lml)-lml)
+
+      df=as.data.frame(as.matrix(fit.both)[,c("lfcs","lfcd")])
+      PlotScatter(df,remove.outlier = FALSE)
+
     },seed=seed)
 
     as.data.frame(t(simplify2array(re)))

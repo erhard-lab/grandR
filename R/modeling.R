@@ -399,7 +399,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
         summ=summary(fit)
 
         par=setNames(c(exp(coef(fit)["(Intercept)"])*-coef(fit)["time"],-coef(fit)["time"]),c("s","d"))
-        if (sum(residuals(fit))>0) {
+        if (sum(abs(residuals(fit)))>0) {
             conf.p=confint(fit,level=conf.int)
             conf.p=apply(conf.p,2,function(v) setNames(pmax(0,c(exp(v["(Intercept)"])*par['d'],-v["time"])),c("s","d")))
         } else {
@@ -412,8 +412,8 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),  # FIXME
-             conf.lower=unname(c(conf.p[1,1],conf.p[2,2])),
-             conf.upper=unname(c(conf.p[1,2],conf.p[2,1])),
+             conf.lower=c(Synthesis=unname(conf.p[1,1]),Degradation=unname(conf.p[2,2]),`Half-life`=unname(log(2)/conf.p[2,1])),
+             conf.upper=c(Synthesis=unname(conf.p[1,2]),Degradation=unname(conf.p[2,1]),`Half-life`=unname(log(2)/conf.p[2,2])),
              f0=unname(par['s']/par['d']),
              logLik=logLik(fit),
              rmse=sqrt(mean(fit$residuals^2)),
@@ -496,21 +496,27 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
 #'
 FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,unbiased=TRUE,exact.ci=FALSE,total.fun=median) {
     if (!all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
+    steady.state=TRUE
 
     crit <- qchisq(1-conf.int, df = 2, lower.tail = FALSE) / 2
 
     bounds=c(log(2)/48,log(2)/0.01)
 
-    df=GetData(data,mode.slot=paste0("total.",slot),genes=gene)
-    if (is.null(df$Condition)) df$Condition=factor("Data")
-    total=dlply(df,"Condition",function(s) total.fun(s$Value))
+    total.df=GetData(data,mode.slot=paste0("total.",slot),genes=gene)
+    if (is.null(total.df$Condition)) total.df$Condition=factor("Data")
 
     a=GetData(data,mode.slot="alpha",genes=gene)
     b=GetData(data,mode.slot="beta",genes=gene)
     ntr=GetData(data,mode.slot="ntr",genes=gene)
-    if (is.null(a$Condition)) a$Condition=factor("Data")
-    if (is.null(b$Condition)) b$Condition=factor("Data")
-    if (is.null(ntr$Condition)) ntr$Condition=factor("Data")
+    total=GetData(data,mode.slot=paste0("total.",slot),genes=gene)
+    if (is.null(a$Condition)) {
+        a$Condition=factor("Data")
+        b$Condition=factor("Data")
+        ntr$Condition=factor("Data")
+        total$Condition=factor("Data")
+        if (length(steady.state)==1) names(steady.state)="Data"
+    }
+
 
     #sloglik=function(d,a,b,t) (a-1)*log(1-exp(-t*d))-t*d*b
     #loglik=function(d,a,b,t) sum((a-1)*log(1-exp(-t*d))-t*d*b)
@@ -522,42 +528,65 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
     c=droplevels(a$Condition[use])
     a=a$Value[use]
     b=b$Value[use]
+    total=total$Value[use]
     ntr=ntr$Value[use]
     t=t[use]
     uniroot.save=function(fun,lower,upper) if (fun(lower)*fun(upper)>=0) mean(lower,upper) else uniroot(fun,lower=lower,upper=upper)$root
     fits=lapply(levels(c),function(cc) {
+
+        equi=if (is.null(steady.state)) {
+            TRUE
+        } else if(length(steady.state)==1) {
+            steady.state;
+        } else is.na(unlist(steady.state)[cc]) || as.logical(unlist(steady.state)[cc])
+
+        # non-equi is super inaccurate: if one total count is off, the beta error model might just go crazy!
+        f0=if (equi) total.fun(total.df$Value[total.df$Condition==cc]) else total.fun(total.df$Value[total.df$Condition==cc & total.df[[time]]==0])
+
+
         ind=c==cc & !is.na(a) & !is.na(b)
         if(any(is.nan(c(a[ind],b[ind])))) return(NaN)
-        ploglik=function(x) loglik(x,a=a[ind],b=b[ind],t=t[ind])
-        d=optimize(ploglik,bounds,maximum=T)$maximum
+        ploglik=if (equi) function(x) loglik(x,a=a[ind],b=b[ind],t=t[ind]) else function(x) loglik(x-log(f0/total[ind])/t[ind],a=a[ind],b=b[ind],t=t[ind])
+        pbounds=if (equi) bounds else c(max(bounds[1],log(f0/total[ind])/t[ind]),bounds[2]) # ensure that: d> log(f0/total[ind])
+        d=optimize(ploglik,pbounds,maximum=T)$maximum
         max=ploglik(d)
         df=data.frame(alpha=a[ind],beta=b[ind],t=t[ind])
         if (exact.ci) {
             plik=function(x) pmax(0,sapply(x,function(xx) exp(loglik(xx,a=a[ind],b=b[ind],t=t[ind])-max)))
-            inte = function(u) integrate(plik,bounds[1],u)$value
-            lower1=uniroot.save(function(x) ploglik(x)-max+log(1E6),lower = bounds[1],upper=d)
-            upper1=uniroot.save(function(x) ploglik(x)-max+log(1E6),lower = d,upper=bounds[2])
+            inte = function(u) integrate(plik,pbounds[1],u)$value
+            lower1=uniroot.save(function(x) ploglik(x)-max+log(1E6),lower = pbounds[1],upper=d)
+            upper1=uniroot.save(function(x) ploglik(x)-max+log(1E6),lower = d,upper=pbounds[2])
 
             total.inte=inte(upper1)
             lower=uniroot.save(function(x) inte(x)/total.inte-(1-conf.int)/2,lower = lower1,upper=d)
             upper=uniroot.save(function(x) inte(x)/total.inte-(1+conf.int)/2,lower = d,upper=upper1)
         } else {
-            lower=uniroot.save(function(x) ploglik(x)-max+crit,lower = bounds[1],upper=d)
-            upper=uniroot.save(function(x) ploglik(x)-max+crit,lower = d,upper=bounds[2])
+            lower=uniroot.save(function(x) ploglik(x)-max+crit,lower = pbounds[1],upper=d)
+            upper=uniroot.save(function(x) ploglik(x)-max+crit,lower = d,upper=pbounds[2])
         }
 
         rmse=sum(sqrt(((1-exp(-t[ind]*d)-ntr[ind]))^2))/sum(ind)
+        if (!equi) {
+            s=median(ntr/(1-exp(-t*d))*d*total)
+            s.low=median(ntr/(1-exp(-t*lower))*lower*total)
+            s.up=median(ntr/(1-exp(-t*upper))*upper*total)
+        }
+        else {
+            s=f0*d
+            s.low=f0*lower
+            s.up=f0*upper
+        }
 
         list(data=df,
-             Synthesis=total[[cc]]*d,
+             Synthesis=s,
              Degradation=d,
              `Half-life`=log(2)/d,
-             conf.lower=c(Synthesis=total[[cc]]*lower,Degradation=lower,`Half-life`=log(2)/upper),
-             conf.upper=c(Synthesis=total[[cc]]*upper,Degradation=upper,`Half-life`=log(2)/lower),
-             f0=unname(total[[cc]]),
+             conf.lower=c(Synthesis=s.low,Degradation=lower,`Half-life`=log(2)/upper),
+             conf.upper=c(Synthesis=s.up,Degradation=upper,`Half-life`=log(2)/lower),
+             f0=unname(f0),
              logLik=max,
              rmse=rmse,
-             total=total[[cc]],
+             total=f0,
              type="ntr")
     })
     if (!is.null(Condition(data))) names(fits)=levels(c) else fits=fits[[1]]
@@ -936,12 +965,19 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
         cbind(GetData(data,mode.slot=paste0("new.",slot),genes=gene,ntr.na = FALSE),Type="New"),
         cbind(GetData(data,mode.slot=paste0("old.",slot),genes=gene,ntr.na = FALSE),Type="Old")
     )
+    df$time=df[[time]]
+
+
     if (substr(tolower(type[1]),1,1)=="n") {
-        fac=unlist(lapply(as.character(df$Condition),function(n) fit[[n]]$total))/df$Value[df$Type=="Total"]
+        #fac=unlist(lapply(as.character(df$Condition),function(n) fit[[n]]$f0))/df$Value[df$Type=="Total"]
+        fac=unlist(lapply(1:nrow(df),function(i) {
+            n=as.character(df$Condition)[i]
+            tt=df$time[i]
+            f.old.nonequi(tt,fit[[n]]$f0,fit[[n]]$Synthesis,fit[[n]]$Degradation)+f.new(tt,fit[[n]]$Synthesis,fit[[n]]$Degradation)
+        }))/df$Value[df$Type=="Total"]
         df$Value=df$Value*fac
     }
 
-    df$time=df[[time]]
     if (is.data.frame(fit[[1]]$modifier)) {
         df$time=sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Time"])
         df$Value=df$Value*sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Norm.factor"])

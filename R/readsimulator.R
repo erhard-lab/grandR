@@ -93,9 +93,11 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @param condition A user-defined condition name (which is placed into the \link{\code{Coldata}} of the final grandR object)
 #' @param gene.info either a data frame containing gene annotation or a vector of gene names
 #' @param s a vector of synthesis rates
-#' @param HL a vector of RNA half-lives
-#' @param dispersion a vector of dispersion parameters (estimate from data using DESeq2, e.g. by the estimate.dispersion utility function)
+#' @param d a vector of degradation rates (to get a specific half-life HL, use d=log(2)/HL)
 #' @param f0 the abundance at time t=0
+#' @param dispersion a vector of dispersion parameters (estimate from data using DESeq2, e.g. by the estimate.dispersion utility function)
+#' @param s.variation "biological" variation for s (see details)
+#' @param d.variation "biological" variation for d (see details)
 #' @param num.reads a vector representing the number of reads for each sample
 #' @param timepoints a vector representing the labeling duration (in h) for each sample
 #' @param beta.approx should the beta approximation of the NTR posterior be computed?
@@ -103,10 +105,14 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @param seed seed value for the random number generator (set to make it deterministic!)
 #' @param ... provided to \link{\code{SimulateReadsForSample}}
 #'
+#' @details If \emph{s.variation} or \emph{d.variation} are > 1, then for each gene a random gaussian is added to s (or d)
+#' such that 90% of all s (or d) are \emph{s.variation}-fold away from s (below or above; i.e. s is multiplied with 2^rnorm(n,mean=0,sd=x), with x chosen such that the 95% quantile
+#' of the gaussian is log2(s.variation).
+#'
 #' @return a grandR object containing the simulated data in its data slots and the true parameters in the gene annotation table
 #' @export
 #'
-SimulateTimeCourse=function(condition,gene.info,s,HL,dispersion,f0=s/log(2)*HL,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
+SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,dispersion,s.variation=1,d.variation=1,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
 
   if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))
 
@@ -117,7 +123,8 @@ SimulateTimeCourse=function(condition,gene.info,s,HL,dispersion,f0=s/log(2)*HL,n
   coldata=MakeColdata(names,design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
   coldata$no4sU=timepoints==0
 
-  d=log(2)/HL
+  sd.log2s = if (s.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(s.variation),lower=0,upper=9999)$root else 0
+  sd.log2d = if (d.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(d.variation),lower=0,upper=9999)$root else 0
 
 
   data=list(
@@ -137,8 +144,11 @@ SimulateTimeCourse=function(condition,gene.info,s,HL,dispersion,f0=s/log(2)*HL,n
 
   for (i in seq_along(timepoints)) {
     if (verbose) cat(sprintf("Simulating %s (%d/%d)...\n",names[i],i,length(timepoints)))
-    total=(f.new(timepoints[i],s,d)+f.old.nonequi(timepoints[i],f0,s,d))
-    ntr=if (timepoints[i]==0) rep(NA,length(s)) else f.new(timepoints[i],s,d)/total
+    si=if (sd.log2s>0) s*2^rnorm(length(s),mean=0,sd=sd.log2s) else s
+    di=if (sd.log2d>0) d*2^rnorm(length(d),mean=0,sd=sd.log2d) else d
+
+    total=(f.new(timepoints[i],si,di)+f.old.nonequi(timepoints[i],f0,si,di))
+    ntr=if (timepoints[i]==0) rep(NA,length(si)) else f.new(timepoints[i],si,di)/total
     sim=SimulateReadsForSample(num.reads=num.reads[i],rel.abundance=total,ntr=ntr,dispersion=dispersion,beta.approx = beta.approx,seed=if (is.null(seed)) NULL else runif(1,min=0,max=.Machine$integer.max),...)
 
     data$count[,i]=sim[,"count"]
@@ -152,7 +162,7 @@ SimulateTimeCourse=function(condition,gene.info,s,HL,dispersion,f0=s/log(2)*HL,n
   }
 
   gene.info$true_f0=f0
-  gene.info$true_HL=HL
+  gene.info$true_d=d
   gene.info$true_s=s
 
   re=grandR(prefix="Simulated",gene.info=gene.info,slots=data,coldata=coldata,metadata=list(Description="Simulated data"))
