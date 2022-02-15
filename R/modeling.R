@@ -47,8 +47,6 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 
 
 
-
-
 #' Fit a kinetic model according to non-linear least squares.
 #'
 #' Fit the standard mass action kinetics model of gene expression using least squares (i.e. assuming gaussian homoscedastic errors) for the given gene.

@@ -96,8 +96,6 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @param d a vector of degradation rates (to get a specific half-life HL, use d=log(2)/HL)
 #' @param f0 the abundance at time t=0
 #' @param dispersion a vector of dispersion parameters (estimate from data using DESeq2, e.g. by the estimate.dispersion utility function)
-#' @param s.variation "biological" variation for s (see details)
-#' @param d.variation "biological" variation for d (see details)
 #' @param num.reads a vector representing the number of reads for each sample
 #' @param timepoints a vector representing the labeling duration (in h) for each sample
 #' @param beta.approx should the beta approximation of the NTR posterior be computed?
@@ -112,7 +110,7 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @return a grandR object containing the simulated data in its data slots and the true parameters in the gene annotation table
 #' @export
 #'
-SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,dispersion,s.variation=1,d.variation=1,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
+SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,dispersion,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
 
   if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))
 
@@ -123,8 +121,8 @@ SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,dispersion,s.variatio
   coldata=MakeColdata(names,design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
   coldata$no4sU=timepoints==0
 
-  sd.log2s = if (s.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(s.variation),lower=0,upper=9999)$root else 0
-  sd.log2d = if (d.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(d.variation),lower=0,upper=9999)$root else 0
+  #sd.log2s = if (s.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(s.variation),lower=0,upper=9999)$root else 0
+  #sd.log2d = if (d.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(d.variation),lower=0,upper=9999)$root else 0
 
 
   data=list(
@@ -144,8 +142,8 @@ SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,dispersion,s.variatio
 
   for (i in seq_along(timepoints)) {
     if (verbose) cat(sprintf("Simulating %s (%d/%d)...\n",names[i],i,length(timepoints)))
-    si=if (sd.log2s>0) s*2^rnorm(length(s),mean=0,sd=sd.log2s) else s
-    di=if (sd.log2d>0) d*2^rnorm(length(d),mean=0,sd=sd.log2d) else d
+    si=s#if (sd.log2s>0) s*2^rnorm(length(s),mean=0,sd=sd.log2s) else s
+    di=d#if (sd.log2d>0) d*2^rnorm(length(d),mean=0,sd=sd.log2d) else d
 
     total=(f.new(timepoints[i],si,di)+f.old.nonequi(timepoints[i],f0,si,di))
     ntr=if (timepoints[i]==0) rep(NA,length(si)) else f.new(timepoints[i],si,di)/total

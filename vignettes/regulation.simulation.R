@@ -7,14 +7,14 @@ sars=Normalize(sars)
 SetParallel()
 sars=FitKinetics(sars,type="ntr")
 seed=1337
-control=SimulateTimeCourse("control",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,d = log(2)/GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,s.variation=1.05,d.variation=1.05,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
-perturbed.hl=SimulateTimeCourse("HL",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,d = log(2)/GetAnalysisTable(sars)$`Half-life` *2^rnorm(nrow(sars),0,1) ,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,s.variation=1.05,d.variation=1.05,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
-perturbed.s=SimulateTimeCourse("s",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis *2^rnorm(nrow(sars),0,1) ,d = log(2)/GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,s.variation=1.05,d.variation=1.05,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
+control=SimulateTimeCourse("control",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,d = log(2)/GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
+perturbed.d=SimulateTimeCourse("HL",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis,d = log(2)/GetAnalysisTable(sars)$`Half-life` *2^rnorm(nrow(sars),0,1) ,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
+perturbed.s=SimulateTimeCourse("s",GeneInfo(sars),s = GetAnalysisTable(sars)$Synthesis *2^rnorm(nrow(sars),0,1) ,d = log(2)/GetAnalysisTable(sars)$`Half-life`,dispersion=estimate.dispersion(GetTable(sars,type="count")),f0 = GetTable(sars,type="norm")$Mock.no4sU.A,timepoints = c(2,2,2,2,2),beta.approx = TRUE,num.reads=5E7,seed=seed)
 
-m=merge(control,perturbed.hl,perturbed.s)
+m=merge(control,perturbed.d,perturbed.s)
 saveRDS(m,file="perturbed.rds")
-
 m=readRDS("perturbed.rds")
+
 
 m=PairwiseDESeq2(m,"total",GetContrasts(m,contrast = c("Condition","control")),mode="total",verbose=T)
 m=LFC(m,"total",GetContrasts(m,contrast = c("Condition","control")),mode="total")

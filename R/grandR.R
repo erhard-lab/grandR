@@ -356,6 +356,7 @@ Condition <- function(data,value=NULL) {
 #' @param data A grandR object
 #' @param use.symbols obtain the gene symbols instead of gene names
 #' @param genes which genes to use
+#' @param columns which columns to return (as numeric or logical vector)
 #' @param analysis The name of an analysis table
 #'
 #' @details \code{Genes(data,use.symbols=FALSE)} it the same as \code{rownames(data)}, and \code{Columns(data)} is the same as \code{colnames(data)}
@@ -379,8 +380,10 @@ Condition <- function(data,value=NULL) {
 Genes=function(data, use.symbols=TRUE, genes=NULL) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]][ToIndex(data,genes)]
 #' @rdname Genes
 #' @export
-Columns=function(data,analysis=NULL) {
-  if (is.null(analysis)) Coldata(data)$Name else names(data$analysis[[analysis]])
+Columns=function(data,columns=NULL,analysis=NULL) {
+  if (is.null(analysis)) {
+    if (is.null(columns)) rownames(Coldata(data)) else rownames(Coldata(data))[columns]
+  } else names(data$analysis[[analysis]])
 }
 
 #' Get the gene annotation table or add additional columns to it
@@ -541,8 +544,6 @@ ToIndex=function(data,gene) {
   if (all(gene %in% data$gene.info$Symbol)) return(setNames(1:nrow(data),data$gene.info$Symbol)[gene])
   stop("Could not find all genes!")
 }
-
-
 
 #' Obtain a genes x values table
 #'
