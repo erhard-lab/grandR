@@ -157,7 +157,7 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
 
-  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,type.convert(sapply(spl,function(v) v[i]),as.is=FALSE))
+  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,type.convert(sapply(spl,function(v) v[i]),as.is=FALSE,na.strings=c("DKSALDJLKSADLKSJDLKSJDLJDA"))) # stupid function!
   names(coldata)[-1]=design[!is.na(design)]
   if (rownames) rownames(coldata)=coldata$Name
 
@@ -360,6 +360,106 @@ ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.
 	re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 2.0 data"))
 	DefaultSlot(re)="count"
 	re
+}
+
+
+
+ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType,Unknown=NA,verbose=FALSE,sep="\t") {
+
+  tomat=function(m,names,cnames){
+    m=as.matrix(m)
+    m[is.na(m)]=0
+    colnames(m)=gsub(" .*","",cnames)
+    rownames(m)=names
+    m
+  }
+
+  checknames=function(a,b){
+    if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
+    if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
+  }
+  do.callback=function() {}
+
+  prefix=file
+  url=NULL
+  if (has.package("RCurl")) {
+    if (RCurl::url.exists(prefix)) {
+      url=prefix
+    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
+      url=paste0(prefix,".tsv")
+    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
+      url=paste0(prefix,".tsv.gz")
+    } else {
+      url=NULL
+    }
+    if (!is.null(url)) {
+      file <- tempfile()
+      if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
+      download.file(url, file, quiet=!verbose)
+      prefix=gsub(".tsv(.gz)?$","",url)
+      do.callback=function() {
+        if (verbose) cat("Deleting temporary file...\n")
+        unlink(file)
+      }
+    }
+  }
+
+  if (is.null(url)) {
+    file=if (file.exists(prefix)) prefix else paste0(prefix,".tsv")
+    if (!file.exists(file) && file.exists(paste0(file,".gz"))) file = paste0(file,".gz")
+    prefix=gsub(".tsv(.gz)?$","",file)
+  }
+
+  if (!file.exists(file)) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
+
+
+  if (verbose) cat("Checking file...\n")
+  con <- file(file,"r")
+  header <- strsplit(readLines(con,n=1),sep)[[1]]
+  close(con)
+
+  terms=strsplit(header[length(header)],".",fixed=TRUE)[[1]]
+
+  if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
+
+
+  if (verbose) cat("Reading file...\n")
+  data=read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
+  clss=sapply(data,class)
+  firstnumeric=min(which(clss=="numeric"))
+  if (!all(clss[firstnumeric:length(clss)]=="numeric") || firstnumeric==1) stop("Columns (except for the first n) must be numeric!")
+  anno.names=colnames(data)[1:(firstnumeric-1)]
+
+  if (anyDuplicated(data[[1]])) {
+    dupp=table(data[[1]])
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    data[[1]]=make.unique(data[[1]])
+  }
+  if (verbose) cat("Processing...\n")
+
+  coldata=MakeColdata(colnames(data)[firstnumeric:ncol(data)],design)
+
+  classify.genes=c(classify.genes,Unknown=function(gene.info) rep(T,dim(gene.info)[1]))
+  if (!is.na(Unknown)) names(classify.genes)[names(classify.genes)=="Unknown"]=Unknown
+  gene.info = data.frame(Gene=as.character(data[[1]]),Symbol=as.character(data[[1]]),stringsAsFactors=FALSE)
+  for (i in 1:(firstnumeric-1)) gene.info[[anno.names[i]]]=data[[i]]
+  gene.info$Type=NA
+  for (i in length(classify.genes):1) gene.info$Type[classify.genes[[i]](gene.info)]=names(classify.genes)[i]
+  gene.info$Type=factor(gene.info$Type,levels=names(classify.genes))
+
+  re=list()
+  re$count=tomat(data[,firstnumeric:ncol(data)],data$Gene,names(data)[firstnumeric:ncol(data)])
+  re$ntr=re$count
+  re$ntr[,]=NA
+
+  coldata$no4sU=TRUE
+  do.callback()
+
+  # insert name no rep and set this as default condition, if there is no condition field!
+  re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="Count data"))
+  DefaultSlot(re)="count"
+  re
 }
 
 

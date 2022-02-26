@@ -2,7 +2,7 @@
 
 
 Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
-  pairs=FindReferences(data,reference=no4sU,group = if(paired.replicates) c(Design$Replicate,Design$Condition) else Design$Condition)
+  pairs=FindReferences(data,reference=no4sU,group = if(paired.replicates) c(Design$Replicate,Design$Condition) else Design$Condition, as.list=TRUE)
   #stopifnot(is.grandR(data))
   #df=data$coldata
   #df$group=if (paired.replicates) interaction(df[[Design$Condition]],df[[Design$Replicate]]) else df[[Design$Condition]]

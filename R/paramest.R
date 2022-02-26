@@ -52,7 +52,7 @@ logLik.grandR.model=function(par, k, size) {
 
 ibeta=function(x,a,b) pbeta(x,a,b)*beta(a,b)
 #libeta=function(x,a,b) pbeta(x,a,b,log.p=TRUE)+lbeta(a,b)
-libeta=function(x,a,b) log(hyperg_2F1(a+b,1,a+1,x)) + a*log(x)+b*log(1-x)-log(a)
+libeta=function(x,a,b) log(gsl::hyperg_2F1(a+b,1,a+1,x)) + a*log(x)+b*log(1-x)-log(a)
 
 lsse=function(x){
    xmax <- which.max(x)
@@ -355,12 +355,14 @@ logLik.MixMat=function(m,fun,...) {
 	re
 }
 
-fit.ntr=function(mixmat,par,beta.approx=FALSE,plot=FALSE) {
+fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE) {
   start=0
   optfun=function(p) logLik.MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
   start=optfun(par$ntr)
   opt=optimize(optfun,maximum=TRUE,lower=0,upper=1)
-  if (!beta.approx) return(opt$maximum)
+  if (!beta.approx) {
+    return(if (conversion.reads) c(ntr=opt$maximum,conversion.reads=sum(mixmat)-sum(mixmat[0,])) else opt$maximum)
+  }
 
   start=opt$objective+start
 
@@ -387,7 +389,8 @@ fit.ntr=function(mixmat,par,beta.approx=FALSE,plot=FALSE) {
     lines(x,pbeta(x,shapes[1],shapes[2]),col='red')
     legend("topleft",legend=c("Actual distribution","Beta approximation"),fill=c("black","red"))
   }
-  c(ntr=opt$maximum,shapes)
+
+  if (conversion.reads) c(ntr=opt$maximum,shapes,conversion.reads=sum(mixmat)-sum(mixmat[0,])) else c(ntr=opt$maximum,shapes)
 }
 
 binom.optim=function(mixmat,par,fix=c(F,F,F)) {

@@ -54,7 +54,6 @@ PlotPCA=function(data,type="count",ntop=500,aest=aes(color=Condition),x=1,y=2,co
 	d <- as.data.frame(pca$x)
 	names(d)=paste0("PC",1:dim(d)[2])
 	d=cbind(d, cd)
-
 	ggplot(d,modifyList(aes_string(paste0("PC",x),paste0("PC",y)),aest))+ geom_point(size=3)+xlab(paste0("PC",x,": ",round(percentVar[x] * 100),"% variance"))+ylab(paste0("PC",y,": ",round(percentVar[y] * 100),"% variance"))+coord_fixed()
 }
 
@@ -117,7 +116,7 @@ PlotHeatmap=function(data,
   name=attr(mat,"label")
   if (quantile(mat,0.25)<0) {
     nq=(length(colors)-1)/2
-    if (is.null(breaks) || (length(breaks)%%2==1 && length(breaks)==nq)) {
+    if (is.null(breaks) || (length(colors)%%2==1 && length(breaks)==nq)) {
       quant=if (is.null(breaks)) c(seq(0,1,length.out=nq+1)[c(-1,-nq-1)]*100,95) else breaks
       upper=quantile(mat[mat>0],quant/100)
       lower=quantile(-mat[mat<0],quant/100)
@@ -153,7 +152,7 @@ PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
 }
 
 
-PlotScatter=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=log,remove.outlier=1.5,size=0.3,xlim=NULL,ylim=NULL, highlight=NULL, label=NULL, columns=NULL) {
+PlotScatter=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=log,color=NA,remove.outlier=1.5,size=0.3,xlim=NULL,ylim=NULL, highlight=NULL, label=NULL, columns=NULL) {
   df=as.data.frame(df)
   if (!is.data.frame(df)) stop("df must be a data frame (or at least coercable into a data frame)")
   adaptInf=function(df,rx,ry) {
@@ -175,6 +174,7 @@ PlotScatter=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=lo
 
   x=substitute(x)
   y=substitute(y)
+
   dfnames=c(xcol,ycol)
   rn=rownames(df)
 
@@ -185,8 +185,8 @@ PlotScatter=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=lo
     eval(y,df,parent.frame())
   }
 
-  if (is.null(x)) dfnames[1]=names(df[,xcol,drop=F])
-  if (is.null(y)) dfnames[2]=names(df[,ycol,drop=F])
+  dfnames[1]=if (is.null(x)) names(df[,xcol,drop=F]) else deparse(x)
+  dfnames[2]=if (is.null(y)) names(df[,ycol,drop=F]) else deparse(y)
 
   df=data.frame(A=A,B=B)
   rownames(df)=rn
@@ -217,10 +217,22 @@ PlotScatter=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=lo
     xlim=range(df$A[!is.infinite(df$A)])
     ylim=range(df$B[!is.infinite(df$B)])
   }
-
-  g=ggplot(df,aes(A,B,color=density2d(A.trans, B.trans, n = 100)))+
+  if (is.na(color)) {
+    if (nrow(df)>1000) {
+      df$color=density2d(df$A.trans, df$B.trans, n = 100)
+      colorscale=scale_color_viridis_c(name = "Density",guide="none")
+    } else {
+      df$color=rep(1,nrow(df))
+      colorscale=scale_color_manual(values="black",guide="none")
+    }
+  } else {
+    df$color=color
+    cmap=setNames(unique(color),unique(color))
+    colorscale=scale_color_manual(name = NULL,values=cmap)
+  }
+  g=ggplot(df,aes(A,B,color=color))+
     geom_point(size=size)+
-    scale_color_viridis_c(name = "Density",guide="none")+
+    colorscale+
     xlab(dfnames[1])+ylab(dfnames[2])
   if (!is.null(highlight)) {
     if (is.list(highlight)){
@@ -286,9 +298,16 @@ PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quant
 			coord_cartesian(ylim=ylim)
 }
 
+PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
+  lapply(analyses,function(analysis) {
+    re=plot.fun(data,analysis=analysis,...)
+    if (!is.null(add)) for (e in if (is.list(add)) add else list(add)) re=re+e
+    re
+  })
+}
 
-VulcanoPlot=function(data,name=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,highlight=NULL,label=NULL) {
-  df=GetAnalysisTable(data,patterns=name,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
+VulcanoPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,highlight=NULL,label=NULL) {
+  df=GetAnalysisTable(data,patterns=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
   aes=modifyList(aes(LFC,-log10(Q),color=density2d(LFC,-log10(Q))),aest)
 
   g=ggplot(df,mapping=aes)+
@@ -298,7 +317,7 @@ VulcanoPlot=function(data,name=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cu
     ylab(bquote("-"~log[10]~FDR))+
     geom_hline(yintercept=-log10(p.cutoff),linetype=2)+
     geom_vline(xintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
-    ggtitle(name)
+    ggtitle(analysis)
 
 
   if (!is.null(highlight)) {
@@ -326,17 +345,26 @@ VulcanoPlot=function(data,name=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cu
 
 
 
-MAPlot=function(data,name=names(data$diffexp)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1) {
-  df=data$diffexp[[name]][[mode]]
+MAPlot=function(data,analysis=Analyses(data)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label=NULL,repel=1) {
+  df=GetAnalysisTable(data,patterns=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
   aes=modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
   g=ggplot(df,mapping=aes)+
-    geom_point(size=0.5)+
+    geom_point(size=1)+
     scale_x_log10()+
-    scale_color_manual(values=c(Sig.="black",NS="grey30"),guide=FALSE)+
+    scale_color_manual(values=c(Sig.="black",NS="grey50"),guide=FALSE)+
     ylab(bquote(log[2]~FC))+
     xlab("Total expression")+
     geom_hline(yintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
-    ggtitle(paste0(name," (",mode,")"))
+    ggtitle(analysis)
+
+  if (!is.null(label)) {
+    if (label=="auto") label=abs(df$LFC)>lfc.cutoff & df$Q<p.cutoff & !is.na(df$LFC) & !is.na(df$Q)
+    df2=df
+    df2$label=""
+    df2[label,"label"]=rownames(df2)[label]
+    g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE,force=repel)
+  }
+
   g
 }
 
@@ -383,14 +411,19 @@ PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=
   g
 }
 
-PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data),type="total",show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
+PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data),type="total",log=TRUE,show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
   df=GetData(data,genes=gene,mode.slot=c(slot,"ntr"),melt=F,coldata=T,ntr.na = FALSE)
   df$value=switch(type[1],total=df[[slot]],new=df[[slot]]*df[["ntr"]],old=df[[slot]]*(1-df[["ntr"]]),stop(paste0(type," unknown!")))
   g=ggplot(df,modifyList(aes_string(group,"value"),aest))+
     geom_point(size=2,position=if(show.CI) position_dodge(width=0.4) else "identity")+
     xlab(NULL)+
-    scale_y_log10(paste0(toupper(substr(type,1,1)),substr(type,2,nchar(type))," RNA (",slot,")"))+
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  if (log) {
+    g=g+scale_y_log10(paste0(toupper(substr(type,1,1)),substr(type,2,nchar(type))," RNA (",slot,")"))
+  } else {
+    g=g+scale_y_continuous(paste0(toupper(substr(type,1,1)),substr(type,2,nchar(type))," RNA (",slot,")"))
+  }
+
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
     df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper"),melt=F,coldata=T,ntr.na = FALSE)[,c("lower","upper")])

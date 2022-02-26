@@ -109,10 +109,24 @@ NormalizeTPM=function(data,genes=Genes(data),tlen=data$gene.info$Length,name="tp
   data
 }
 
-NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition==levels(Condition)[1]),name="baseline",slot=DefaultSlot(data),set.to.default=TRUE,LFC.fun=PsiLFC,...) {
+NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition==levels(Condition)[1],as.list=TRUE),name="baseline",slot=DefaultSlot(data),set.to.default=FALSE,LFC.fun=PsiLFC,...) {
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
   mat=sapply(names(baseline),function(n) LFC.fun(mat[,n],rowMeans(mat[,baseline[[n]]]),...))
+  data=AddSlot(data,name,mat,set.to.default=set.to.default)
+  data
+}
+
+
+Scale=function(data,name="scaled",slot=DefaultSlot(data),set.to.default=FALSE,group=NULL,...) {
+  stopifnot(is.grandR(data))
+  mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
+  if (is.null(group)) {
+    mat=t(scale(t(mat)))
+  } else {
+    gr=Coldata(data)[[group]]
+    for (c in unique(gr)) mat[,gr==c]=t(scale(t(mat[,gr==c])))
+  }
   data=AddSlot(data,name,mat,set.to.default=set.to.default)
   data
 }

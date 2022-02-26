@@ -1,5 +1,129 @@
 
 
+#' Fit kinetics using pulseR
+#'
+#' @param data A grandR object
+#' @param name the user defined analysis name to store the results
+#' @param time The column in the column annotation table representing the labeling duration
+#'
+#' @details This is adapted code from https://github.com/dieterich-lab/ComparisonOfMetabolicLabeling
+#'
+#' @return
+#' @export
+#'
+FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
+
+
+    conditions=rbind(
+        cbind(Coldata(data),data.frame(fraction="labelled")),
+        cbind(Coldata(data),data.frame(fraction="unlabelled"))
+    )
+    conditions$time=conditions[[time]]
+    use=conditions$time>0 | conditions$fraction=="unlabelled"
+    conditions=conditions[use,]
+    if (is.null(conditions$Condition)) conditions$Condition=factor("Data")
+
+    totals=GetTable(data,type="count")
+    l=GetTable(data,type="conversion_reads")
+    u=totals-l
+    counts=cbind(l,u)[,use]
+    colnames(counts)=conditions$Name
+
+    norms <- pulseR:::findDeseqFactorsSingle(totals)
+    norms=norms[colnames(counts)]
+
+    re=lapply(levels(conditions$Condition),function(n) {
+
+        counts=counts[,conditions$Condition==n]
+        conditions=conditions[conditions$Condition==n,]
+
+        ## fitting options: tolerance and upper/lower bounds for parameters
+        tolerance <- list(params = 0.01,
+                          logLik = 0.01)
+        # assume 20:1 labelling efficiency, neglecting substitution, ratio is approx. the same
+        boundaries <- list(mu1  = c(log(1e-2*20), log(1e6*20)), # substituted variable
+                           mu2  = c(log(1e-2), log(1e6)),
+                           mu3  = c(log(1e-2), log(1e6)),
+                           d    = c(1e-3, 2),
+                           size = c(1, 1e3))
+
+        ## set initial values here
+        init <- function(counts) {
+            fit <- list(
+                mu1  = log(1e-1 + counts[,1]),
+                mu2  = log(1e-1 + counts[,1]),
+                mu3  = log(1e-1 + counts[,1]),
+                d    = rep(5e-1, length(counts[,1])),
+                size = 1e2)
+            ## use prior fit
+            fit
+        }
+
+
+        formulas=list(
+            formulas = pulseR::MeanFormulas(
+                unlabelled = exp(mu1) + exp(mu2) + exp(mu3) * (1 + exp(-d * time)),
+                labelled = exp(mu2) + exp(mu3) * (1 - exp(-d * time))),
+            formulaIndexes = list(
+                unlabelled = "unlabelled",
+                labelled = "labelled"))
+
+        pd <- pulseR::PulseData(
+            counts,
+            conditions[c("fraction", "time")], #  data.frame; the first column corresponds to the conditions given in formulas
+            formulas$formulas,
+            formulas$formulaIndexes,
+            groups=~fraction+time
+        )
+        pd$depthNormalisation <- norms
+
+        setOpts <- function(bounds, tolerance, cores = parallel::detectCores()-2, replicates = 5, normFactors = NULL) {
+            opts <- pulseR::setFittingOptions(verbose = "verbose")
+            opts$cores <- cores
+            opts$replicates <- replicates
+            ## if rt-conversion data, we do not fit normalisation coefficients, because they
+            ## are derived from the DESeq-like normalisation
+            if (is.null(normFactors)) { opts$fixedNorms <- TRUE }
+            opts <- pulseR::setBoundaries(bounds, normFactors = normFactors, options = opts)
+            opts <- pulseR::setTolerance(
+                params = tolerance$params,
+                normFactors = tolerance$normFactors,
+                logLik = tolerance$logLik,
+                options = opts
+            )
+            if (is.null(tolerance$normFactors)) {
+                opts$tolerance$normFactors <- NULL
+            }
+            opts
+        }
+
+        opts <- setOpts(boundaries, tolerance)
+        initf <- match.fun(init)
+        initPars <- initf(pd$counts) # use pulseData here
+        fit <- pulseR::fitModel(pd, initPars, opts)
+        fit$d
+
+ #       cis <- pulseR::ciGene("d",
+ #                     par = re$fit,
+ #                     geneIndexes = seq_along(re$fit$d),
+ #                     pd = re$pd,
+ #                     options = re$opts, confidence = conf.int)
+ #       tp <- unique(re$pd$conditions$time)
+    })
+
+    adder=function(cond) {
+        tab=data.frame(`Half-life`=log(2)/re[[cond]])
+        columns=if(is.null(cond)) colnames(data) else colnames(data)[Condition(data)==cond]
+        name=if(is.null(cond)) name else paste0(name,".",cond)
+        AddAnalysis(data,MakeAnalysis(name=name,analysis="PulseR",columns = columns),tab)
+    }
+
+    for (cond in levels(Condition(data))) data=adder(cond)
+    data
+}
+
+
+
 #' Functions to compute the abundance of new or old RNA at time t.
 #'
 #' The standard mass action kinetics model of gene expression arises from the differential equation
@@ -728,13 +852,14 @@ CalibrateTimes=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.nam
 #'
 #' @export
 #'
-FitKinetics=function(data,name="kinetics",type=c("full","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,return.fields=c("Synthesis","Half-life","rmse"),return.extra=NULL,...) {
+FitKinetics=function(data,name="kinetics",type=c("nlls","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,return.fields=c("Synthesis","Half-life","rmse"),return.extra=NULL,...) {
 
     if (substr(tolower(type[1]),1,1)=="n" && !all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
 
-
-    result=opt$lapply(Genes(data),
-                      switch(substr(tolower(type[1]),1,1),n=FitKineticsGeneNtr,f=FitKineticsGeneLeastSquares,l=FitKineticsGeneLogSpaceLinear),
+    fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nnls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
+    if (is.null(fun)) stop(sprintf("Type %s unknown!",type))
+    result=plapply(Genes(data),
+                      fun,
                       data=data,
                       slot=slot,time=time,conf.int=conf.int,
                       ...)
@@ -949,13 +1074,13 @@ PlotSimpleKinetics=function(total1,total2,ntr1,ntr2,f0.above.ss.factor=1,t=2,N=1
 #'   PlotGeneKinetics(sars,"SRSF6",type = "ntr",bare.plot=T))  /
 #'    (PlotGeneKinetics(sars,"SRSF6",use.old=Coldata(sars)$Name!="SARS.no4sU.A",bare.plot=T) |
 #'         PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
-PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=Genes(data,genes=gene), type=c("full","ntr","lm"), bare.plot=FALSE,exact.tics=TRUE,return.tables=FALSE,...) {
+PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=Genes(data,genes=gene), type=c("nnls","ntr","lm"), bare.plot=FALSE,exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
     if (length(ToIndex(data,gene))==0) return(NULL)
 
-    fit=switch(substr(tolower(type[1]),1,1),
-               n=FitKineticsGeneNtr(data,gene,slot=slot,time=time,...),
-               f=FitKineticsGeneLeastSquares(data,gene,slot=slot,time=time,...),
-               l=FitKineticsGeneLogSpaceLinear(data,gene,slot=slot,time=time,...)
+    fit=switch(tolower(type[1]),
+               ntr=FitKineticsGeneNtr(data,gene,slot=slot,time=time,...),
+               nnls=FitKineticsGeneLeastSquares(data,gene,slot=slot,time=time,...),
+               lm=FitKineticsGeneLogSpaceLinear(data,gene,slot=slot,time=time,...)
     )
     if (is.null(Coldata(data)$Condition)) fit=setNames(list(fit),gene)
     df=rbind(
@@ -963,10 +1088,26 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
         cbind(GetData(data,mode.slot=paste0("new.",slot),genes=gene,ntr.na = FALSE),Type="New"),
         cbind(GetData(data,mode.slot=paste0("old.",slot),genes=gene,ntr.na = FALSE),Type="Old")
     )
+    if (show.CI) {
+        if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
+        df=cbind(df,rbind(
+            setNames(cbind(GetData(data,mode.slot=paste0("total.",slot),genes=gene,coldata=FALSE),
+                     GetData(data,mode.slot=paste0("total.",slot),genes=gene,coldata=FALSE)),
+                     c("lower","upper")),
+            setNames(cbind(
+                GetData(data,mode.slot=paste0("total.",slot),genes=gene,coldata=FALSE)*GetData(data,mode.slot="lower",genes=gene,coldata=FALSE),
+                GetData(data,mode.slot=paste0("total.",slot),genes=gene,coldata=FALSE)*GetData(data,mode.slot="upper",genes=gene,coldata=FALSE)),
+                c("lower","upper")),
+            setNames(cbind(
+                GetData(data,mode.slot=paste0("total.",slot),genes=gene,coldata=FALSE)*(1-GetData(data,mode.slot="upper",genes=gene,coldata=FALSE)),
+                GetData(data,mode.slot=paste0("total.",slot),genes=gene,coldata=FALSE)*(1-GetData(data,mode.slot="lower",genes=gene,coldata=FALSE))),
+                c("lower","upper"))
+        ))
+    }
     df$time=df[[time]]
 
 
-    if (substr(tolower(type[1]),1,1)=="n") {
+    if (tolower(type[1])=="ntr") {
         #fac=unlist(lapply(as.character(df$Condition),function(n) fit[[n]]$f0))/df$Value[df$Type=="Total"]
         fac=unlist(lapply(1:nrow(df),function(i) {
             n=as.character(df$Condition)[i]
@@ -974,11 +1115,19 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
             f.old.nonequi(tt,fit[[n]]$f0,fit[[n]]$Synthesis,fit[[n]]$Degradation)+f.new(tt,fit[[n]]$Synthesis,fit[[n]]$Degradation)
         }))/df$Value[df$Type=="Total"]
         df$Value=df$Value*fac
+        if (show.CI) {
+            df$lower=df$lower*fac
+            df$upper=df$upper*fac
+        }
     }
 
     if (is.data.frame(fit[[1]]$modifier)) {
         df$time=sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Time"])
         df$Value=df$Value*sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Norm.factor"])
+        if (show.CI) {
+            df$lower=df$lower*sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Norm.factor"])
+            df$upper=df$upper*sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Norm.factor"])
+        }
     }
     df$Condition=if ("Condition" %in% names(df)) df$Condition else gene
     tt=seq(0,max(df$time),length.out=100)
@@ -986,8 +1135,9 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
     fitted=ldply(fit,function(f) data.frame(time=c(tt,tt),Value=c(f.old.nonequi(tt,f$f0,f$Synthesis,f$Degradation),f.new(tt,f$Synthesis,f$Degradation)),Type=rep(c("Old","New"),each=length(tt))),.id="Condition")
     breaks=if (exact.tics) sort(unique(df[[time]])) else scales::breaks_extended(5)(df[[time]])
 
-    g=ggplot(df,aes(time,Value,color=Type))+
-        geom_point()+
+    g=ggplot(df,aes(time,Value,color=Type))
+    if (show.CI) g=g+geom_errorbar(mapping=aes(ymin=lower,ymax=upper),width=0.1)
+    g=g+geom_point()+
         geom_line(data=df.median[df.median$Type=="Total",])+
         scale_x_continuous(if (bare.plot) NULL else "4sU labeling",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks)),suffix="h"),breaks=breaks)+
         scale_color_manual("RNA",values=c(Total="gray",New="red",Old="blue"),guide=if (bare.plot) "none" else "legend")+

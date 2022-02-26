@@ -11,6 +11,7 @@
 #' @param ntr vector of true NTRs
 #' @param dispersion vector of dispersion parameters (should best be estimated by DESeq2)
 #' @param beta.approx should the beta approximation of the NTR posterior be computed?
+#' @param conversion.reads also output the number of reads with conversion
 #' @param u.content the relative frequency of uridines in the reads
 #' @param u.content.sd the standard deviation of the u content
 #' @param read.length the read length for simulation
@@ -46,7 +47,7 @@
 #' abline(0,1)
 #' # this should roughly be a uniform distibution, which means that the posterior distributions are properly approximated!
 #'
-SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),dispersion=0.05,beta.approx=FALSE,u.content=0.25,u.content.sd=0.05,read.length=75,p.old=1E-4,p.new=0.04, seed=NULL) {
+SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),dispersion=0.05,beta.approx=FALSE,conversion.reads=FALSE,u.content=0.25,u.content.sd=0.05,read.length=75,p.old=1E-4,p.new=0.04, seed=NULL) {
 
   if(!is.null(seed)) set.seed(seed)
 
@@ -62,11 +63,11 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
     reads=unname(mat[i,3])
     ntr=unname(mat[i,2])
     if (beta.approx) {
-      if (is.na(ntr)) return(c(ntr=NA,alpha=NA,beta=NA))
-      if(reads==0) return(c(ntr=0,alpha=1,beta=1))
+      if (is.na(ntr)) {if(conversion.reads) return(c(ntr=NA,alpha=NA,beta=NA,conversion.reads=0)) else return(c(ntr=NA,alpha=NA,beta=NA))}
+      if(reads==0) {if(conversion.reads) return(c(ntr=0,alpha=1,beta=1,conversion.reads=0)) else return(c(ntr=0,alpha=1,beta=1))}
     } else {
-      if (is.na(ntr)) return(NA)
-      if(reads==0) return(0)
+      if (is.na(ntr)) {if(conversion.reads) return(c(ntr=NA,conversion.reads=0)) else return(NA)}
+      if(reads==0) {if(conversion.reads) return(c(ntr=0,conversion.reads=0)) else return(0)}
     }
 
     us = table(rbinom(reads,size=read.length,prob=rbeta(reads,shape1,shape2)))
@@ -76,9 +77,9 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 
     para=model.par(ntr=ntr,p.err=p.old,p.conv=p.new)
     mixmat=CreateMixMatrix(n.vector = u.histo,par=para)
-    fit.ntr(mixmat,para,plot=FALSE,beta.approx=beta.approx)
+    fit.ntr(mixmat,para,plot=FALSE,beta.approx=beta.approx,conversion.reads=conversion.reads)
   },seed=seed))
-  if (!beta.approx) {sim.ntr=t(sim.ntr); colnames(sim.ntr)="ntr"}
+  if (!beta.approx & !conversion.reads) {sim.ntr=t(sim.ntr); colnames(sim.ntr)="ntr"}
 
   cbind(count=mat[,3],sim.ntr,true_freq=mat[,1],true_ntr=mat[,2])
 }
@@ -95,10 +96,13 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @param s a vector of synthesis rates
 #' @param d a vector of degradation rates (to get a specific half-life HL, use d=log(2)/HL)
 #' @param f0 the abundance at time t=0
+#' @param s.variation biological variability of s among all samples (see details)
+#' @param d.variation biological variability of d among all samples (see details)
 #' @param dispersion a vector of dispersion parameters (estimate from data using DESeq2, e.g. by the estimate.dispersion utility function)
 #' @param num.reads a vector representing the number of reads for each sample
 #' @param timepoints a vector representing the labeling duration (in h) for each sample
 #' @param beta.approx should the beta approximation of the NTR posterior be computed?
+#' @param conversion.reads also output the number of reads with conversion
 #' @param verbose Print status updates
 #' @param seed seed value for the random number generator (set to make it deterministic!)
 #' @param ... provided to \link{\code{SimulateReadsForSample}}
@@ -110,19 +114,19 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @return a grandR object containing the simulated data in its data slots and the true parameters in the gene annotation table
 #' @export
 #'
-SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,dispersion,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,verbose=TRUE,seed=NULL,...) {
+SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,s.variation=1, d.variation=1, dispersion,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,conversion.reads=FALSE,verbose=TRUE,seed=NULL,...) {
 
   if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))
 
   num.reads=rep(num.reads,length(timepoints))
 
   tt=gsub("0h","no4sU",paste0(timepoints,"h"))
-  names=as.character(ddply(data.frame(Name=factor(tt,levels=unique(tt))),.(Name),function(s) data.frame(Name=paste(condition,s$Name,LETTERS[1:length(s$Name)],sep=".")))$Name)
+  names=as.character(plyr::ddply(data.frame(Name=factor(tt,levels=unique(tt))),.(Name),function(s) data.frame(Name=paste(condition,s$Name,LETTERS[1:length(s$Name)],sep=".")))$Name)
   coldata=MakeColdata(names,design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
   coldata$no4sU=timepoints==0
 
-  #sd.log2s = if (s.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(s.variation),lower=0,upper=9999)$root else 0
-  #sd.log2d = if (d.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(d.variation),lower=0,upper=9999)$root else 0
+  sd.log2s = if (s.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(s.variation),lower=0,upper=9999)$root else 0
+  sd.log2d = if (d.variation>1) uniroot(function(x) qnorm(0.95,sd=x)-log2(d.variation),lower=0,upper=9999)$root else 0
 
 
   data=list(
@@ -136,18 +140,22 @@ SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,dispersion,num.reads=
       alpha=matrix(nrow = length(s),ncol=length(timepoints)),
       beta=matrix(nrow = length(s),ncol=length(timepoints))
     ))
+  if (conversion.reads)
+    data=c(data,list(
+      conversion_reads=matrix(nrow = length(s),ncol=length(timepoints))
+    ))
   data=lapply(data,function(m) {rownames(m)=gene.info$Gene; colnames(m)=names; m})
 
   if (!is.null(seed)) set.seed(seed)
 
   for (i in seq_along(timepoints)) {
     if (verbose) cat(sprintf("Simulating %s (%d/%d)...\n",names[i],i,length(timepoints)))
-    si=s#if (sd.log2s>0) s*2^rnorm(length(s),mean=0,sd=sd.log2s) else s
-    di=d#if (sd.log2d>0) d*2^rnorm(length(d),mean=0,sd=sd.log2d) else d
+    si=if (sd.log2s>0) s*2^rnorm(length(s),mean=0,sd=sd.log2s) else s
+    di=if (sd.log2d>0) d*2^rnorm(length(d),mean=0,sd=sd.log2d) else d
 
     total=(f.new(timepoints[i],si,di)+f.old.nonequi(timepoints[i],f0,si,di))
     ntr=if (timepoints[i]==0) rep(NA,length(si)) else f.new(timepoints[i],si,di)/total
-    sim=SimulateReadsForSample(num.reads=num.reads[i],rel.abundance=total,ntr=ntr,dispersion=dispersion,beta.approx = beta.approx,seed=if (is.null(seed)) NULL else runif(1,min=0,max=.Machine$integer.max),...)
+    sim=SimulateReadsForSample(num.reads=num.reads[i],rel.abundance=total,ntr=ntr,dispersion=dispersion,beta.approx = beta.approx,conversion.reads=conversion.reads,seed=if (is.null(seed)) NULL else runif(1,min=0,max=.Machine$integer.max),...)
 
     data$count[,i]=sim[,"count"]
     data$ntr[,i]=sim[,"ntr"]
@@ -156,6 +164,9 @@ SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,dispersion,num.reads=
     if (beta.approx){
       data$alpha[,i]=sim[,"alpha"]
       data$beta[,i]=sim[,"beta"]
+    }
+    if (conversion.reads){
+      data$conversion_reads[,i]=sim[,"conversion.reads"]
     }
   }
 

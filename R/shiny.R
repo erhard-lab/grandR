@@ -19,19 +19,20 @@ ServeData=function(data,
 
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
 	server=function(input, output,session) {
-	  output$tab <- DT::renderDataTable(DT::datatable(df,
-	                                                  callback = JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
-	                                                  selection = 'single',
-	                                                  rownames = FALSE,
-	                                                  escape=-1,
-	                                                  filter = "top",
-	                                                  options = list(
-	                                                    pageLength = 10,
-	                                                    dom = '<"#buttons">lfrtip'
-                                                  	  ))
-	                                    %>%formatRound(names(df)[grepl("\\.LFC$",names(df))], 2)
-	                                    %>%formatSignif(names(df)[grepl("\\.Q$",names(df))], 2)
-	                                    )
+	  dttab=DT::datatable(df,
+	                      callback = DT::JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
+	                      selection = 'single',
+	                      rownames = FALSE,
+	                      escape=-1,
+	                      filter = "top",
+	                      options = list(
+	                        pageLength = 10,
+	                        dom = '<"#buttons">lfrtip'
+	                      ))
+	  dttab=DT::formatRound(dttab,names(df)[grepl("\\.LFC$",names(df))], 2)
+	  dttab=DT::formatSignif(dttab,names(df)[grepl("\\.Q$",names(df))], 2)
+	  dttab=DT::formatSignif(dttab,names(df)[grepl("\\.P$",names(df))], 2)
+	  output$tab <- DT::renderDataTable(dttab)
 	  output$download1 <- downloadHandler(
 	    filename = function() {
 	      paste0(title,"-", Sys.Date(), ".tsv")
@@ -42,7 +43,7 @@ ServeData=function(data,
 	  )
 	  output$clip <- renderUI({
 	    nn=if(.row_names_info(df)<0) df[input$tab_rows_all,1] else rownames(df)[input$tab_rows_all]
-	    rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), icon("clipboard"))
+	    rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), icon("clipboard"))
 	  })
 	  observeEvent(input$clipbtn, {showNotification(
 	    sprintf("Copied %d names",length(input$tab_rows_all)),
@@ -119,7 +120,7 @@ ServeData=function(data,
 	plot.static.ui=NULL
 	if (length(plot.static)>0) {
 
-	  plist=c(lapply(names(plot.static),function(n) tabPanel(n,
+	  plist=c(lapply(names(plot.static),function(n) shiny::tabPanel(n,
 	                                                         selectInput(paste0(n,"list"),n,names(plot.static[[n]]),selectize=FALSE,size=10),
 	                                                         plotOutput(paste0(n,"plot"))
 	  )),list(title="Plots"))
@@ -130,7 +131,7 @@ ServeData=function(data,
 	plot.set.ui=NULL
 	if (length(plot.set)>0) {
 
-	  plist=c(lapply(names(plot.set),function(n) tabPanel(n,
+	  plist=c(lapply(names(plot.set),function(n) shiny::tabPanel(n,
 	                                                      fluidRow(
 	                                                        column(8,plotOutput(make.names(paste0(n,"plotset")),brush = brushOpts(id = make.names(paste0(n,"plotsetbrush"))))),
 	                                                        column(4,textAreaInput(make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40))
@@ -143,52 +144,52 @@ ServeData=function(data,
 	more=NULL
 	if (show.sessionInfo)
 	  more=navbarMenu("More",
-	                  tabPanel("Info",verbatimTextOutput("sessionInfo"))
+	                  shiny::tabPanel("Info",verbatimTextOutput("sessionInfo"))
 	  )
 
 
 	ui=list(
-        	  tabPanel("Gene level",
-        	  fluidPage(
-        	  fluidRow(
-        	    rclipboardSetup(),
-        	    uiOutput("clip"),
-        	    downloadButton("download1","Download"),
-        	    column(12, DT::dataTableOutput('tab'))
+	  shiny::tabPanel("Gene level",
+	                  shiny::fluidPage(
+	                    shiny::fluidRow(
+        	    rclipboard::rclipboardSetup(),
+        	    shiny::uiOutput("clip"),
+        	    shiny::downloadButton("download1","Download"),
+        	    shiny::column(12, DT::dataTableOutput('tab'))
         	  ),
-        	  conditionalPanel(
+        	  shiny::conditionalPanel(
         	    condition = "helpText",
-        	    fluidRow(column(10, htmlOutput("helpText")))
+        	    shiny::fluidRow(shiny::column(10, shiny::htmlOutput("helpText")))
         	  ),
-        	  fluidRow(
-        	    column(sizes[1], plotOutput("plot1",height = height)),
-        	    conditionalPanel(
+        	  shiny::fluidRow(
+        	    shiny::column(sizes[1], shiny::plotOutput("plot1",height = height)),
+        	    shiny::conditionalPanel(
         	      condition = "plot2",
-        	      column(sizes[2], plotOutput("plot2",height = height))
+        	      shiny::column(sizes[2], shiny::plotOutput("plot2",height = height))
         	    ),
-        	    conditionalPanel(
+        	    shiny::conditionalPanel(
         	      condition = "plot3",
-        	      column(sizes[3], plotOutput("plot3",height = height))
+        	      shiny::column(sizes[3], shiny::plotOutput("plot3",height = height))
         	    ),
-        	    conditionalPanel(
+        	    shiny::conditionalPanel(
         	      condition = "plot4",
-        	      column(sizes[4], plotOutput("plot4",height = height))
+        	      shiny::column(sizes[4], shiny::plotOutput("plot4",height = height))
         	    ),
-        	    conditionalPanel(
+        	    shiny::conditionalPanel(
         	      condition = "plot5",
-        	      column(sizes[5], plotOutput("plot5",height = height))
+        	      shiny::column(sizes[5], shiny::plotOutput("plot5",height = height))
         	    ),
-        	    conditionalPanel(
+        	    shiny::conditionalPanel(
         	      condition = "plot6",
-        	      column(sizes[6], plotOutput("plot6",height = height))
+        	      shiny::column(sizes[6], shiny::plotOutput("plot6",height = height))
         	    ),
-        	    conditionalPanel(
+        	    shiny::conditionalPanel(
         	      condition = "plot7",
-        	      column(sizes[7], plotOutput("plot7",height = height))
+        	      shiny::column(sizes[7], shiny::plotOutput("plot7",height = height))
         	    ),
-        	    conditionalPanel(
+        	    shiny::conditionalPanel(
         	      condition = "plot8",
-        	      column(sizes[8], plotOutput("plot8",height = height))
+        	      shiny::column(sizes[8], shiny::plotOutput("plot8",height = height))
         	    )
         	  )
         	  #do.call("fluidRow",lapply(1:length(plot.funs),function(i) column(sizes[i],plotOutput(paste0("plot.funs",i),height=height))))
@@ -199,9 +200,9 @@ ServeData=function(data,
 
         	more,
 
-        	tags$head(
-        	  tags$style(
-        	    HTML("#shiny-notification-panel {
+        	htmltools::tags$head(
+        	  htmltools::tags$style(
+        	    htmltools::HTML("#shiny-notification-panel {
                               top: 0;
                               bottom: unset;
                               left: 0;
@@ -215,7 +216,7 @@ ServeData=function(data,
         	  )
         	),
 
-        	tags$script(HTML(sprintf("
+	  htmltools::tags$script(htmltools::HTML(sprintf("
         	var header = $('.navbar> .container-fluid');
           header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">%s</span></div>')",
         	                         VersionString(data)
@@ -223,10 +224,10 @@ ServeData=function(data,
 	)
 
 	ui=ui[!sapply(ui,is.null)]
-	myui=function(...) navbarPage(title,...)
+	myui=function(...) shiny::navbarPage(title,...)
 	ui=do.call("myui",ui)
 
-	shinyApp(ui = ui, server = server)
+	shiny::shinyApp(ui = ui, server = server)
 }
 
 

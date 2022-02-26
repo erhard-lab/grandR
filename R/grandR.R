@@ -77,6 +77,14 @@ grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$dat
   info
 }
 
+
+#' @rdname grandR
+#' @export
+VersionString=function(data) {
+  "grandR v0.1.0"
+}
+
+
 #' @rdname grandR
 #' @export
 Title=function(data) {
@@ -356,6 +364,7 @@ Condition <- function(data,value=NULL) {
 #' @param data A grandR object
 #' @param use.symbols obtain the gene symbols instead of gene names
 #' @param genes which genes to use
+#' @param regex treat genes as a regex, and return all that match
 #' @param columns which columns to return (as numeric or logical vector)
 #' @param analysis The name of an analysis table
 #'
@@ -377,12 +386,12 @@ Condition <- function(data,value=NULL) {
 #'
 #' @export
 #'
-Genes=function(data, use.symbols=TRUE, genes=NULL) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]][ToIndex(data,genes)]
+Genes=function(data, genes=NULL, use.symbols=TRUE,regex=FALSE) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]][ToIndex(data,genes,regex=regex)]
 #' @rdname Genes
 #' @export
 Columns=function(data,columns=NULL,analysis=NULL) {
   if (is.null(analysis)) {
-    if (is.null(columns)) rownames(Coldata(data)) else rownames(Coldata(data))[columns]
+    if (is.null(columns)) rownames(Coldata(data)) else unname(setNames(rownames(Coldata(data)),rownames(Coldata(data)))[columns])
   } else names(data$analysis[[analysis]])
 }
 
@@ -523,6 +532,7 @@ get.mode.slot=function(data,mode.slot) {
 #'
 #' @param data The grandR object
 #' @param gene A vector of genes. Can be either numeric indices, gene names, gene symbols or a logical vector
+#' @param regex Treat gene as a regex and return all that match
 #'
 #' @return Numeric indices corresponding to the given genes
 #'
@@ -536,7 +546,8 @@ get.mode.slot=function(data,mode.slot) {
 #'
 #' @export
 #'
-ToIndex=function(data,gene) {
+ToIndex=function(data,gene,regex=FALSE) {
+  if (regex) gene=grepl(gene,data$gene.info$Gene)|grepl(gene,data$gene.info$Symbol)
   if (is.null(gene)) return(1:nrow(data))
   if (is.numeric(gene)) return(gene)
   if (is.logical(gene) && length(gene)==nrow(data)) return(which(gene))
@@ -609,6 +620,7 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
   r1=NULL
   if (any(mode.slot)) {
     cols=if (is.null(columns)) colnames(data) else columns
+    cols=Columns(data,cols)
 
     for (tt in type[mode.slot]) {
       rtt=as.data.frame(t(GetData(data,tt,columns=cols,genes,ntr.na = ntr.na,coldata=FALSE, melt=FALSE, name.by = name.by)))
@@ -680,7 +692,7 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
 #' @export
 #'
 GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),melt=FALSE,coldata=TRUE,ntr.na=TRUE,name.by="Symbol") {
-  if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(mode.slot)],collapse=",")))
+  if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(data,mode.slot)],collapse=",")))
 
 
   if (is.null(columns)) columns=colnames(data)
@@ -720,8 +732,9 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' @param data A grandR object
 #' @param reference Expression evaluating to a logical vector to indicate which columns are reference columns; evaluated in an environment having the columns of \link{Coldata}(data)
 #' @param group a vector of colnames in \link{Coldata}(data)
+#' @param as.list return it as a list (names correspond to each sample, elements are the reference samples)
 #'
-#' @return A named list for each sample or cell containing all corresponding reference columns
+#' @return A 0-1 matrix that contains for each sample or cell (in columns) a 1 for the corresponding corresponding reference samples or cells in rows
 #'
 #' @details Without any group, the list simply contains all references for each sample/cell. With groups defined, each list entry consists of all references from the same group.
 #'
@@ -736,7 +749,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #'
 #' @export
 #'
-FindReferences=function(data,reference, group="Condition") {
+FindReferences=function(data,reference, group="Condition", as.list=FALSE) {
   if (!is.grandR(data)) stop("Data is not a grandR object!")
 
   df=Coldata(data)
@@ -744,7 +757,10 @@ FindReferences=function(data,reference, group="Condition") {
   e=substitute(reference)
   map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
   pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
-  pairs
+  if (as.list) return(pairs)
+  mat = sapply(pairs,function(names) colnames(data) %in% names)
+  rownames(mat)=colnames(data)
+  mat
 }
 
 
@@ -874,8 +890,10 @@ GetAnalysisTable=function(data,patterns=NULL,regex=TRUE,columns=NULL,genes=Genes
      for (r in columns) use = use&grepl(r,names(t))
      t=t[,use,drop=FALSE]
     }
-    if (length(Analyses(data)[analyses])>1) names(t)=paste0(name,".",names(t))
-    re=cbind(re,t)
+    if (ncol(t)>0) {
+      if (length(Analyses(data)[analyses])>1) names(t)=paste0(name,".",names(t))
+      re=cbind(re,t)
+    }
   }
 
   if (is.logical(gene.info) && !gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re),drop=FALSE]
