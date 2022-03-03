@@ -856,7 +856,7 @@ FitKinetics=function(data,name="kinetics",type=c("nlls","ntr","lm"),slot=Default
 
     if (substr(tolower(type[1]),1,1)=="n" && !all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
 
-    fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nnls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
+    fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nlls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
     if (is.null(fun)) stop(sprintf("Type %s unknown!",type))
     result=plapply(Genes(data),
                       fun,
