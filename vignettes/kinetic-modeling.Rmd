@@ -87,7 +87,9 @@ The curves represent the fitted model for this gene. As pointed out above, there
 SetParallel()
 sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
 df <- cbind(GetTable(sars,c("kinetics.Mock"),columns="Half-life"),GetTable(sars,c("kinetics.SARS"),columns="Half-life"))
-PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()
+# REVIEWED BY Lygeri: added distinct colnames for Mock and SARS
+colnames(df) <- c("Mock.Half-life", "SARS.Half-life")
+PlotScatter(df,xcol=1,ycol=2, log=T)+geom_abline()
 #PlotScatter(sars,type="kinetics","Mock.Half-life","SARS.Half-life",log=T)+geom_abline()
 ```
 
