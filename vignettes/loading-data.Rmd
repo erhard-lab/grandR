@@ -1,0 +1,240 @@
+---
+title: "Loading data"
+author: "Lygeri Sakellaridi"
+date: "3/26/2022"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Loading data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+GRAND-R is an R package for the analysis of RNA-seq experiments that utilize
+metabolic labeling, such as SLAM-seq experiments [[1]] (https://doi.org/10.1038/nmeth.4435). In such experiments, cells are subjected to metabolic labeling with nucleoside analogs such as 4SU. After sequencing, reads where 4SU was successfully incorporated have cytosine instead of thymine. Thus, newly transcribed RNA (i.e. RNA transcribed after the start of labeling) can be distinguished from pre-existing RNA on the basis of observed T to C conversions on mapped reads. 
+
+GRAND-R utilizes the GRAND-SLAM statistical
+framework [[2]](https://doi.org/10.1093/bioinformatics/bty256) to estimate parameters such as new-to-total (NTR) RNA ratios and half-lives, and quantify the uncertainty associated with the estimates.
+
+# Reading in the data
+
+Throughout this vignette, we will be using the processed SLAM-seq data set
+from Finkel et al. 2021 [[3]](https://www.nature.com/articles/s41586-021-03610-3). The data set contains time series samples from the human epithelial cell line (Calu3 cells); half of the samples were infected with SARS-CoV-2 for different periods of time. The input is a tsv file where rows are genes and columns are read counts for all different samples. The data set is available on zenodo
+("https://zenodo.org/record/5834034/files/sars.tsv.gz")
+
+The data set is read with the aptly named readGRAND command:
+
+```{r}
+suppressPackageStartupMessages({library(grandR)})
+sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
+                  design=c("Condition",Design$dur.4sU,Design$Replicate))
+```
+The design vector describes the experimental design. This assumes that sample
+names are composed of three parts separated by dots. Each part in the sample
+name represents an aspect of the design. For example, the sample named Mock.2h.A is a sample from the mock condition (i.e. not infected by SARS-CoV-2), subjected to metabolic labeling for 2 hours, and is the first replicate (i.e. replicate "A"). This sample name is consistent with the design vector used above. It is possible to specify other design elements (of course the samples would have to be named accordingly). A list of reasonable options is predefined in the list `Design`. Some names have additional semantics. For example, for the name \emph{duration.4sU} the values are interpreted: e.g. 4h is converted into the number 4, 30min into 0.5, and no4sU into 0.
+
+The design vector is mandatory. Attempting to read in the data without it
+results in an error:
+
+```{r}
+sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz")
+```
+
+# Exploring the GRAND-R object
+
+The grandr object contains five slots: prefix, gene.info, data coldata and
+metadata.
+
+```{r}
+class(sars)
+summary(sars)
+```
+
+Slots can be accessed with the "$" operator. The "prefix" slot describes the
+source of the data set:
+
+```{r}
+sars$prefix
+```
+
+The "gene.info" slot contains, intuitively enough, information on the genes.
+The type is deduced by GRAND-R based on nomenclature, but can also be assigned
+by the user (see "Custom gene annotation").
+
+```{r}
+head(sars$gene.info, 3)
+```
+
+The data slot is a list of data frames. The data frames are named "count",
+"ntr", "alpha" and "beta". They contain, respectively, the values for 
+read counts, new-to-total (NTR) RNA ratios, and (for our statistically 
+inclined users) the alpha and beta parameters of the NTR posterior distribution 
+(for more on what this means, see [[2]]).
+
+```{r}
+names(sars$data)
+```
+In each data frame, rows represent genes and columns represent samples. 
+For example:
+
+```{r}
+head(sars$data$count, 3)
+```
+
+If we normalize the sars data set, the data slot will gain an additional data 
+frame named "norm" that stores the normalized counts:
+
+```{r}
+sars.normalized <- Normalize(sars)
+head(sars.normalized$data$norm, 3)
+```
+
+The coldata slot is a table that describes the experimental design we specified
+in grandR. We can also see that the duration of 4SU has been interpreted 
+(compare "duration.4SU" with "duration.4SU.original"). The table can also be
+accessed via Coldata(sars) (see "The data annotation table" below).
+
+```{r}
+sars$coldata
+```
+
+Finally, the metadata slot is a list that contains metadata about the grandr
+object. By default, the type of data and the default slot are described:
+
+```{r}
+sars$metadata
+```
+Note that the default slot is "count" by default, but changes to "norm" after
+we normalize the grandr object:
+```{r}
+sars.normalized$metadata
+```
+To add more metadata, we can use regular list methods:
+
+```{r}
+sars.add.metadata <- sars
+sars.add.metadata$metadata <- append(sars.add.metadata$metadata, list(third = "some value"))
+sars.add.metadata$metadata
+```
+# The data annotation table
+
+Every grandr object contains an annotation table that describes the experimental
+setup. This table can be accessed via the coldata slot as shown above.
+It is also accessible with Coldata:
+
+```{r}
+Coldata(sars)
+```
+
+Often, we might want to add more columns to the table. As an example, here we
+will add a column that stores information on how many hours have passed since
+infection started. In this particular experiment, 4SU was added to the samples
+at thee hours post infection. Therefore, to get the hours-post-infection (hpi)
+value per sample, we can add 3 to the labeling duration:
+```{r}
+Coldata(sars,"hpi")<-paste0(Coldata(sars)$duration.4sU+3,"hpi")
+Coldata(sars)
+```
+
+GRAND-R allows users to specify their own semantics. Thus, it is also possible to directly add the hpi information to the design vector when we first read in 
+the data:
+
+```{r}
+sema <- list(duration.4sU=
+      function(s,name) {
+         r<-Semantics.time(s,name)
+         cbind(r,data.frame(hpi=paste0(r$duration.4sU+3,"h")))
+      })
+sars.sema <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
+                   design=function(names)
+                   MakeColdata(names,c("Condition",Design$dur.4sU,Design$Replicate),
+                   semantics=sema),
+                   verbose=FALSE)
+Coldata(sars.sema)
+
+```
+
+# Filtering genes
+
+By default, GRAND-R reads every gene that has at least one mapped read. We can 
+use the FilterGenes command to only keep genes that have a minimum number of
+reads over a minimum number of samples. For example, the following command
+retains genes that have at least 100 reads in at least 6 samples:
+
+```{r}
+sars <- FilterGenes(sars,minval = 100, mincol = 6) 
+```
+
+The parameter minval represents the minimum number of reads, while mincol
+is the minimum number of samples. The default thresholds for these
+parameters are, respectively, 100 reads and half the number of samples. 
+Consequently, the above command is identical to FilterGenes(sars).
+
+Now that we have added hpi information and filtered the genes, let's
+visualize the experimental setup with a PCA plot:
+
+```{r, fig.width=7}
+PlotPCA(sars,aest=aes(color=hpi,shape=Condition))
+```
+
+# Custom gene annotation
+
+By default, readGRAND annotates genes based on their nomenclature: the type of the gene is assigned as "mito" if the gene name starts with "MT-", "ERCC" if it starts with "ERCC", "Cellular" if it starts with "ENS", and "Unknown"
+otherwise.
+
+```{r}
+levels(sars$gene.info$Type)
+```
+For some analyses, it might be useful to specify custom gene types. This
+can be done using the "classify.genes" parameter.
+
+```{r}
+# Load gene sets from msigdb []
+library(msigdbr)
+library(plyr)
+gl <- msigdbr(category = "H")
+gl <- dlply(gl,.(gs_name),function(s) s$human_gene_symbol)
+
+# Specify gene sets for only interferon alpha, only interferon gamma,
+# genes that participate in both.
+interferon.alpha <- gl$HALLMARK_INTERFERON_ALPHA_RESPONSE
+interferon.gamma <- gl$HALLMARK_INTERFERON_GAMMA_RESPONSE
+interferon.both <- intersect(interferon.alpha, interferon.gamma)
+interferon.alpha <- setdiff(interferon.alpha, interferon.both)
+interferon.gamma <- setdiff(interferon.gamma, interferon.both)
+
+classi <- c(GeneType,
+           `interferon-gamma`=function(gene.info) gene.info$Symbol %in%
+                   interferon.gamma,
+           `interferon-alpha`=function(gene.info) gene.info$Symbol %in%
+                   interferon.alpha,
+           `interferon-both`=function(gene.info) gene.info$Symbol %in%
+                   interferon.both)
+sars.custom.gene.anno <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
+                 design=c("Condition",Design$dur.4sU,Design$Replicate),
+                 classify.genes=classi,
+                 verbose=FALSE)
+table(GeneInfo(sars.custom.gene.anno)$Type)
+# The custom gene types are made, but no genes are assigned to them.
+# I checked that genes from the custom sets do exist in the sars data set
+# in Gene$Symbol. Either I'm doing something wrong, or classify.genes
+# does not work as intended.
+```
+
+# Compatibility with Seurat 
+
+Converting a grandR object to a Seurat object is achieved with a straightforward
+command:
+
+```{r}
+sars.seurat <- as.Seurat.grandR(sars)
+```
+
+In the resulting Seurat object, new and total RNA are stored in separate assays, with total RNA as the default assay:
+
+```{r}
+sars.seurat@assays
+```
+The metadata table contains the design information that was specified in grandR, as well as any additional semantics. Furthermore, total and new RNA have separate metadata columns for the number of features and counts.
+
+```{r}
+head(sars.seurat@meta.data, 2)
+```
