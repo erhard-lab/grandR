@@ -1,3 +1,3 @@
 .onLoad <- function(libname, pkgname){
-  theme_set(theme_cowplot())
+  ggplot2::theme_set(cowplot::theme_cowplot())
 }

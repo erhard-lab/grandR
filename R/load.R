@@ -221,7 +221,7 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #'
 #' @export
 #'
-ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType,Unknown=NA,read.percent.conv=FALSE, verbose=FALSE, rename.sample=NULL) {
+ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType,Unknown=NA,read.percent.conv=FALSE, rename.sample=NULL, verbose=FALSE) {
   annotations=c("Gene","Symbol","Length")
   slots=c(`Readcount`="count",MAP="ntr",alpha="alpha",beta="beta")
   if (read.percent.conv) slots=c(slots,`Conversions`="conv",Coverage="cove")
@@ -415,13 +415,13 @@ ReadGRAND3_sparse=function(prefix, design=c(Design$Library,Design$Sample,Design$
   re
 }
 
-ReadGRAND3_dense=function(prefix, design=c(Design$Condition,Design$Replicate), label="4sU",estimator="Binom",classify.genes=GeneType,Unknown=NA, verbose=FALSE) {
+ReadGRAND3_dense=function(prefix, design=c(Design$Condition,Design$Replicate), label="4sU",estimator="Binom",classify.genes=GeneType,Unknown=NA, rename.sample=NULL, verbose=FALSE) {
   annotations=c("Gene","Symbol","Category","Length")
   slots=c("count","ntr","alpha","beta")
   names(slots)=c("Read count",sprintf("%s %s %s",label,estimator,c("NTR MAP","alpha","beta")))
   if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr")
 
-  re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,Unknown = Unknown,verbose = verbose,rename.sample = rename.sample)
+  re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,Unknown = Unknown,rename.sample = rename.sample,verbose = verbose)
   re
 }
 
@@ -476,7 +476,7 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
 }
 
 
-read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),slots, annotations,classify.genes=GeneType,Unknown=NA, verbose=FALSE, rename.sample=NULL) {
+read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),slots, annotations,classify.genes=GeneType,Unknown=NA, rename.sample=NULL, verbose=FALSE) {
 
   if (!all(c("count","ntr") %in% slots) || !all(c("Gene","Symbol") %in% annotations)) stop("Invalid call to read.grand.internal!")
 

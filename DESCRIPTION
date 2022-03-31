@@ -6,16 +6,15 @@ Description: Downstream analysis for (sc-) SLAM/TimeLapse/TUC-seq experiments
 Author: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
 Maintainer: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
 License: Apache License (>= 2.0)
-Imports: 
+Depends:
+    Matrix,
+    stats,
     ggplot2,
     cowplot,
     patchwork,
     reshape2,
     plyr,
     lfc
-Depends:
-    Matrix,
-    stats
 Suggests: knitr,
     rmarkdown,
     DESeq2,
