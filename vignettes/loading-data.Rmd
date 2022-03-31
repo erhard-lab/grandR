@@ -40,7 +40,7 @@ sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz")
 
 # Exploring the GRAND-R object
 
-The grandr object contains five slots: prefix, gene.info, data coldata and
+The grandr object contains five slots: prefix, gene.info, data, coldata and
 metadata.
 
 ```{r}
@@ -48,8 +48,7 @@ class(sars)
 summary(sars)
 ```
 
-Slots can be accessed with the "$" operator. The "prefix" slot describes the
-source of the data set:
+The "prefix" slot describes the source of the data set:
 
 ```{r}
 sars$prefix
@@ -60,40 +59,43 @@ The type is deduced by GRAND-R based on nomenclature, but can also be assigned
 by the user (see "Custom gene annotation").
 
 ```{r}
-head(sars$gene.info, 3)
+head(GeneInfo(sars), 3)
 ```
 
 The data slot is a list of data frames. The data frames are named "count",
 "ntr", "alpha" and "beta". They contain, respectively, the values for 
 read counts, new-to-total (NTR) RNA ratios, and (for our statistically 
 inclined users) the alpha and beta parameters of the NTR posterior distribution 
-(for more on what this means, see [[2]]).
+(for more on what this means, see [[2]]). In each data frame, rows 
+represent genes and columns represent samples. 
+
+We can retrieve data with the GetData command. It is possible to specify data
+from a particular slot and/or gene (for more on this, please refer to the 
+"Getting data" vignette). As a brief demonstration, we will extract the first
+three rows from the "count" data frame:
 
 ```{r}
-names(sars$data)
-```
-In each data frame, rows represent genes and columns represent samples. 
-For example:
-
-```{r}
-head(sars$data$count, 3)
+head(GetData(sars, mode.slot = "count"), 3)
 ```
 
 If we normalize the sars data set, the data slot will gain an additional data 
-frame named "norm" that stores the normalized counts:
+frame named "norm" that stores the normalized counts. This will also become the
+default slot.
 
 ```{r}
+DefaultSlot(sars)
 sars.normalized <- Normalize(sars)
-head(sars.normalized$data$norm, 3)
+DefaultSlot(sars.normalized) # norm
+head(GetData(sars.normalized, mode.slot = "norm"), 3)
 ```
 
 The coldata slot is a table that describes the experimental design we specified
-in grandR. We can also see that the duration of 4SU has been interpreted 
-(compare "duration.4SU" with "duration.4SU.original"). The table can also be
-accessed via Coldata(sars) (see "The data annotation table" below).
+in grandR. It can be accessed via Coldata(sars) (see also 
+"The data annotation table" below). We can also see that the duration of 4SU 
+has been interpreted (compare "duration.4SU" with "duration.4SU.original"). 
 
 ```{r}
-sars$coldata
+Coldata(sars)
 ```
 
 Finally, the metadata slot is a list that contains metadata about the grandr
@@ -102,8 +104,9 @@ object. By default, the type of data and the default slot are described:
 ```{r}
 sars$metadata
 ```
-Note that the default slot is "count" by default, but changes to "norm" after
-we normalize the grandr object:
+As we also saw above, the default slot is "count" by to begin with, but changes 
+to "norm" after we normalize the grandR object:
+
 ```{r}
 sars.normalized$metadata
 ```
@@ -116,9 +119,8 @@ sars.add.metadata$metadata
 ```
 # The data annotation table
 
-Every grandr object contains an annotation table that describes the experimental
-setup. This table can be accessed via the coldata slot as shown above.
-It is also accessible with Coldata:
+Every GRAND-R object contains an annotation table that describes the experimental
+setup. As we saw above, this table can be accessed using Coldata:
 
 ```{r}
 Coldata(sars)
@@ -130,7 +132,7 @@ infection started. In this particular experiment, 4SU was added to the samples
 at thee hours post infection. Therefore, to get the hours-post-infection (hpi)
 value per sample, we can add 3 to the labeling duration:
 ```{r}
-Coldata(sars,"hpi")<-paste0(Coldata(sars)$duration.4sU+3,"hpi")
+Coldata(sars, "hpi") <- paste0(Coldata(sars)$duration.4sU+3,"hpi")
 Coldata(sars)
 ```
 
@@ -151,6 +153,39 @@ sars.sema <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
 Coldata(sars.sema)
 
 ```
+Additionally, we can rename existing columns. There are two ways to do this.
+First, the user can provide a look-up table and define the correspondences
+between current names and desired names. For example, the code below renames
+"Mock.2h.A" to "mock.2h.A" and "Mock.1h.A" to "mock.1h.A".
+
+```{r}
+lookup.table <- c(Mock.2h.A = "mock.2h.A", Mock.1h.A = "mock.1h.A")
+sars.renamed.columns <- RenameColumns(sars, map = lookup.table)
+sars.renamed.columns2 <- RenameColumns(sars, fun = function(name) 
+  {gsub("Mock", "mock", name)})
+Coldata(sars.renamed.columns2)
+```
+
+Alternatively, the user can provide a function that specifies a renaming scheme.
+This is the more convenient way if we want to rename multiple columns in a 
+systematic way. For example, the code below decapitalizes the name of every
+mock sample.
+
+```{r}
+sars.renamed.columns2 <- RenameColumns(sars, fun = function(name) 
+  {gsub("Mock", "mock", name)})
+Coldata(sars.renamed.columns2)
+```
+
+Finally, we can change the order of columns in the data set with SwapColumns.
+While we can do the same thing with reorder, SwapColumns is simpler to use
+for situations where you just want to swap a pair of columns, as it sidesteps
+the need to define the exact order of all samples.
+
+```{r}
+sars.swapped <- SwapColumns(sars, "Mock.2h.A", "Mock.2h.B")
+colnames(sars.swapped)
+```
 
 # Filtering genes
 
@@ -160,7 +195,7 @@ reads over a minimum number of samples. For example, the following command
 retains genes that have at least 100 reads in at least 6 samples:
 
 ```{r}
-sars <- FilterGenes(sars,minval = 100, mincol = 6) 
+sars <- FilterGenes(sars, minval = 100, mincol = 6) 
 ```
 
 The parameter minval represents the minimum number of reads, while mincol
@@ -184,7 +219,8 @@ otherwise.
 levels(sars$gene.info$Type)
 ```
 For some analyses, it might be useful to specify custom gene types. This
-can be done using the "classify.genes" parameter.
+can be done using the "classify.genes" parameter (to-do: classify.genes
+creates the user-defined gene types but doesn't assign anything to them).
 
 ```{r}
 # Load gene sets from msigdb []
@@ -217,24 +253,124 @@ table(GeneInfo(sars.custom.gene.anno)$Type)
 # I checked that genes from the custom sets do exist in the sars data set
 # in Gene$Symbol. Either I'm doing something wrong, or classify.genes
 # does not work as intended.
+# Open issue
 ```
 
-# Compatibility with Seurat 
+# Object-related operations: subset, reorder, split, merge
 
-Converting a grandR object to a Seurat object is achieved with a straightforward
-command:
+GRAND-R provides several convenience functions to manipulate an object. 
+
+In many cases, it might be desirable to isolate a specific subset of the data.
+For example, let's say we want to focus on only the mock samples of our sars
+data set. To extract our subset of interest, we can use GRAND-R's subset
+function and specify the set of columns we want. 
+
+There are three different ways to specify the columns. First, we can provide
+a vector that explicitly stores the desired column names:
 
 ```{r}
-sars.seurat <- as.Seurat.grandR(sars)
+sars.mock <- subset(sars, columns = c("Mock.no4sU.A", "Mock.1h.A", 
+                                      "Mock.2h.A", "Mock.2h.B", 
+                                      "Mock.3h.A", "Mock.4h.A"))
+Coldata(sars.mock)
+```
+Alternatively, we can use a logical vector whose length equals the totalnumber 
+of columns in the object. In that vector, TRUE means "keep the column" and 
+FALSE "don't keep the column". For this to work, the order of the logical values 
+in the vector must correspond to the order of the columns as they appear in the
+data set.
+
+For example, in our sars object, the first six columns correspond to the mock
+samples. Thus, to keep them exclusively, we set the first six values of the
+vector to TRUE and the rest to FALSE:
+```{r}
+sars.mock2 <- subset(sars, columns = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, 
+                                      FALSE, FALSE, FALSE, FALSE, FALSE, FALSE))
+
+
+Coldata(sars.mock2)
 ```
 
-In the resulting Seurat object, new and total RNA are stored in separate assays, with total RNA as the default assay:
+Finally, we can specify columns to subset based on the column names of the data 
+annotation table. Before showing this, it is useful to prevent any potential 
+confusion arising from the different sets of columns we just referred to. 
+
+The columns we specify in the parameter vector are taken from the columns of our 
+GRAND-R object. In this case, these are the samples.
 
 ```{r}
-sars.seurat@assays
+colnames(sars)
 ```
-The metadata table contains the design information that was specified in grandR, as well as any additional semantics. Furthermore, total and new RNA have separate metadata columns for the number of features and counts.
+
+In the data annotation table, the samples are the rows. The columns are the 
+different aspects of experimental design that we specified when originally
+reading in the data, or added later. Examples include: condition, replicate,
+and information about duration of labeling.
 
 ```{r}
-head(sars.seurat@meta.data, 2)
+all(colnames(sars) == rownames(Coldata(sars))) # TRUE
+colnames(Coldata(sars))
 ```
+We can specify columns from our object that we want to subset (i.e. samples)
+based on columns from the data annotation table (eg condition). To retrieve all
+the mock samples in this way, we can simply set the Condition to "Mock":
+
+```{r}
+sars.mock3 <- subset(sars, columns = Condition == "Mock")
+Coldata(sars.mock3)
+```
+
+As an addendum: the three ways we just described to specify columns were 
+demonstrated on the subset function, but also work for any GRAND-R function
+that takes "columns" as a parameter.
+
+To-do: subsetting objects with the first method loses the colnames. 
+I think the source code attempts to keep them, so I'm flagging this as 
+unintended behavior.
+
+```{r}
+colnames(sars.mock) # NULL
+colnames(sars.mock2) # expected stuff
+colnames(sars.mock3) # expected stuff Open issue
+```
+
+If we want to change the order columns appear in our object, we can do so
+by providing the new order as a numeric vector whose length equals the total
+number of columns. For example, the code below switches the second column
+with the first and the eigth column with the seventh:
+
+```{r}
+rownames(Coldata(sars))
+sars.reordered <- reorder(sars, order = c(2, 1, 3, 4, 5, 6, 8, 7, 9, 10, 11, 12))
+rownames(Coldata(sars.reordered))
+```
+
+It is also possible to split a GRAND-R object into multiple objects based on
+a column of the annotation table. This is different from subsetting in that the
+output is a list that stores all objects created from the splitting. For example,
+if we split based on condition, we get a list containing two grandR objects:
+one with the mock samples and one with the SARS-CoV-2 infected samples. 
+
+```{r}
+sars.split <- split(sars, column.name = "Condition")
+class(sars.split) # list
+names(sars.split) # Mock SARS
+class(sars.split[[1]]) # grandR
+```
+After splitting, the original object is retained:
+
+```{r}
+sars
+```
+
+Merging grandR objects (to-do):
+
+```{r}
+#sars.merged <- merge(sars.split$Mock, sars.split$SARS)
+#sars.merged <- merge(list = sars.split)
+#Error in as.data.frame(x) : argument "x" is missing, with no default
+# Open issue
+```
+
+
+
