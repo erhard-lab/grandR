@@ -135,22 +135,27 @@ data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
 #' @rdname grandR
 #' @export
 reorder.grandR=function(data,order) {
-  r=subset.grandR(data,columns)
+  # REVIEWED BY Lygeri: changed "columns" to "order"
+  r=subset.grandR(data,order)
   r$coldata=type.convert(r$coldata)
   r
 }
 #' @rdname grandR
 #' @export
 subset.grandR=function(data,columns) {
+  columns = substitute(columns)
+  columns = eval(columns, Coldata(data), parent.frame())
   keep=rownames(data$coldata)[columns]
-  data.apply(data,function(m) m[,intersect(keep,colnames(m))],fun.coldata = function(t) droplevels(t[columns,]))
+  data.apply(data,function(m) m[,intersect(keep,colnames(m))],fun.coldata = function(t)
+    droplevels(t[columns,]))
 }
 
 #' @rdname grandR
 #' @export
 split.grandR=function(data,column.name=Design$Condition) {
   col=as.factor(data$coldata[[column.name]])
-  setNames(lapply(levels(col),function(c) {re=subset(data,col==c); re$coldata[[Design$Origin]]=c; re }),levels(col))
+  setNames(lapply(levels(col),function(c) {re=subset(data,col==c);
+  re$coldata[[Design$Origin]]=c; re }),levels(col))
 }
 
 #' @rdname grandR
@@ -215,12 +220,14 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
 
 #' Get or set the default slot for a grandR object.
 #'
-#' The default slot is used by default by many functions including \code{\link{GetData}},\code{\link{GetTable}} or \code{\link{FitKinetics}}
+#' The default slot is used by default by many functions including
+#' \code{\link{GetData}},\code{\link{GetTable}} or \code{\link{FitKinetics}}
 #'
 #' @param data A grandR object
 #' @param value the name of the new default slot
 #'
-#' @return Either the name of the default slot for DefaultSlot(data) or the grandR data object having the new default slot
+#' @return Either the name of the default slot for DefaultSlot(data)
+#' or the grandR data object having the new default slot
 #'
 #' @details The default slot can be set either by \code{data<-DefaultSlot(data,"norm")} or by \code{DefaultSlot(data)<-"norm"}.
 #'
@@ -737,8 +744,10 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
 
 #' Obtain a tidy table of values for a gene or a small set of genes
 #'
-#' This is the main function to access slot data data from a particular gene (or a small set of genes) as a tidy table. If data for all genes
-#' must be retrieved (as a large matrix), use the \code{\link{GetTable}} function. For analysis results, use the \code{\link{GetAnalysisTable}} function.
+#' This is the main function to access slot data data from a particular gene
+#' (or a small set of genes) as a tidy table. If data for all genes
+#' must be retrieved (as a large matrix), use the \code{\link{GetTable}}
+#' function. For analysis results, use the \code{\link{GetAnalysisTable}} function.
 #'
 #' @param data A grandR object
 #' @param mode.slot Which kind of data to access (see details)

@@ -1124,12 +1124,13 @@ PlotSimpleKinetics=function(total1,total2,ntr1,ntr2,f0.above.ss.factor=1,t=2,N=1
 #'   PlotGeneKinetics(sars,"SRSF6",type = "ntr",bare.plot=T))  /
 #'    (PlotGeneKinetics(sars,"SRSF6",use.old=Coldata(sars)$Name!="SARS.no4sU.A",bare.plot=T) |
 #'         PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
-PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=Genes(data,genes=gene), type=c("nnls","ntr","lm"), bare.plot=FALSE,exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
+#'         REVIEWED BY Lygeri: changed nnls to nlls
+PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=Genes(data,genes=gene), type=c("nlls","ntr","lm"), bare.plot=FALSE,exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
     if (length(ToIndex(data,gene))==0) return(NULL)
 
     fit=switch(tolower(type[1]),
                ntr=FitKineticsGeneNtr(data,gene,slot=slot,time=time,...),
-               nnls=FitKineticsGeneLeastSquares(data,gene,slot=slot,time=time,...),
+               nlls=FitKineticsGeneLeastSquares(data,gene,slot=slot,time=time,...),
                lm=FitKineticsGeneLogSpaceLinear(data,gene,slot=slot,time=time,...)
     )
     if (is.null(Coldata(data)$Condition)) fit=setNames(list(fit),gene)

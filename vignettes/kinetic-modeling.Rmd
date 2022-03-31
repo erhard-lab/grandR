@@ -96,4 +96,27 @@ PlotScatter(df,"kinetics.Mock.Half-life","kinetics.SARS.Half-life",log=T)+geom_a
 SetParallel()
 sars<-CalibrateTimes(sars,steady.state = c(Mock=T,SARS=F))
 PlotGeneKinetics(sars,"MYC",steady.state = c(Mock=T,SARS=F)) | PlotGeneKinetics(sars,"MYC",time = "norm_time",steady.state = c(Mock=T,SARS=F))
+
+sars<-FitKinetics(sars,name="norm_kinetics",slot="norm",time="norm_time",steady.state = c(Mock=T,SARS=F))
+sars<-FitKinetics(sars,name="ntr_kinetics",type="ntr")
+sars<-FitKinetics(sars,name="normntr_kinetics",type="ntr",time="norm_time")
+sars<-FitKinetics(sars,name="lm_kinetics",type="lm")
+
+df<-cbind(GetTable(sars,c("kinetics.Mock"),columns="rmse"),GetTable(sars,c("norm_kinetics.Mock"),columns="rmse"))
+PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()
+```
+
+```{r}
+df<-cbind(
+  GetTable(sars,c("kinetics.Mock"),columns="Half-life"),
+  GetTable(sars,c("norm_kinetics.Mock"),columns="Half-life"),
+  GetTable(sars,c("ntr_kinetics.Mock"),columns="Half-life"),
+  GetTable(sars,c("normntr_kinetics.Mock"),columns="Half-life"),
+  GetTable(sars,c("lm_kinetics.Mock"),columns="Half-life")
+  )
+PlotScatter(df,xcol=1,ycol=5,log=T)+geom_abline()
+(PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()|
+PlotScatter(df,xcol=3,ycol=2,log=T)+geom_abline())/
+(PlotScatter(df,xcol=1,ycol=3,log=T)+geom_abline()|
+   PlotScatter(df,xcol=2,ycol=4,log=T)+geom_abline())
 ```
