@@ -97,9 +97,9 @@ PlotHeatmap=function(data,
                      col.names=colnames(data),
                      title=NULL,return.matrix=FALSE,...) {
 
-  if (length(genes)==1 && genes %in% names(Analyses(data)) && "Q" %in% names(GetAnalysisTable(data,genes=genes))) {
+  if (length(genes)==1 && genes %in% Analyses(data) && "Q" %in% names(GetAnalysisTable(data,analyses=genes,regex=FALSE))) {
     n=genes
-    genes=GetAnalysisTable(data,genes=genes,columns="Q")$Q<0.05
+    genes=GetAnalysisTable(data,analyses=genes,columns="Q")$Q<0.05
     if (verbose) cat(sprintf("Selected %d genes significant in %s\n",sum(genes),n))
     if (is.null(cluster.genes)) cluster.genes=TRUE
   }
@@ -188,7 +188,9 @@ PlotScatter=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=lo
   dfnames[1]=if (is.null(x)) names(df[,xcol,drop=F]) else deparse(x)
   dfnames[2]=if (is.null(y)) names(df[,ycol,drop=F]) else deparse(y)
 
-  df=data.frame(A=A,B=B)
+  df$A=A
+  df$B=B
+  #df=data.frame(A=A,B=B)
   rownames(df)=rn
   if (!is.null(columns)) df=df[columns,]
 
@@ -307,7 +309,7 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
 }
 
 VulcanoPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,highlight=NULL,label=NULL) {
-  df=GetAnalysisTable(data,patterns=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
+  df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
   aes=modifyList(aes(LFC,-log10(Q),color=density2d(LFC,-log10(Q))),aest)
 
   g=ggplot(df,mapping=aes)+
@@ -346,7 +348,7 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lf
 
 
 MAPlot=function(data,analysis=Analyses(data)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label=NULL,repel=1) {
-  df=GetAnalysisTable(data,patterns=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
+  df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
   aes=modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
   g=ggplot(df,mapping=aes)+
     geom_point(size=1)+
@@ -487,13 +489,13 @@ DPlot=function(FUN,...,height=7,width=7,add=NULL) {
     pp=list(...)
     if (length(pp)>0) {
       re=do.call(FUN,c(list(data),param,pp))
-      if (!is.null(add)) for (e in if (is.list(add)) add else list(add)) re=re+e
+      if (!is.null(add)) for (e in if (class(add)=="list") add else list(add)) re=re+e
       return(re)
     }
 
     if (is.null(value)) {
       value<<-do.call(FUN,c(list(data),param))
-      if (!is.null(add)) for (e in if (is.list(add)) add else list(add)) value<<-value+e
+      if (!is.null(add)) for (e in if (class(add)=="list") add else list(add)) value<<-value+e
     }
     value
   }

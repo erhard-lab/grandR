@@ -2,7 +2,7 @@
 ServeData=function(data,
                    df=GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q"),
                    df.set=df,
-                   sizes=12,height=400,
+                   sizes=NA,height=400,
                    plot.single=list(), plot.set=list(), plot.static=list(),
                    df.identifier="Symbol",
                    title=Title(data),
@@ -11,7 +11,7 @@ ServeData=function(data,
 
 
   if (length(plot.single)==0) plot.single=list(PlotGeneOldVsNew)
-  if (length(sizes)==1) sizes=rep(floor(12/min(4,length(plot.single))),min(4,length(plot.single)))
+  if (length(sizes)==1 & is.na(sizes)) sizes=rep(floor(12/min(4,length(plot.single))),length(plot.single))
   if (length(sizes)!=length(plot.single)) stop("sizes need to be length 1 or same length as plots!")
   sizes=c(sizes,rep(1,8))
 
@@ -29,6 +29,7 @@ ServeData=function(data,
 	                        pageLength = 10,
 	                        dom = '<"#buttons">lfrtip'
 	                      ))
+	  dttab=DT::formatRound(dttab,names(df)[sapply(df,class)=="numeric"], 2)
 	  dttab=DT::formatRound(dttab,names(df)[grepl("\\.LFC$",names(df))], 2)
 	  dttab=DT::formatSignif(dttab,names(df)[grepl("\\.Q$",names(df))], 2)
 	  dttab=DT::formatSignif(dttab,names(df)[grepl("\\.P$",names(df))], 2)
@@ -121,30 +122,30 @@ ServeData=function(data,
 	if (length(plot.static)>0) {
 
 	  plist=c(lapply(names(plot.static),function(n) shiny::tabPanel(n,
-	                                                         selectInput(paste0(n,"list"),n,names(plot.static[[n]]),selectize=FALSE,size=10),
-	                                                         plotOutput(paste0(n,"plot"))
+	                                                                shiny::selectInput(paste0(n,"list"),n,names(plot.static[[n]]),selectize=FALSE,size=10),
+	                                                                shiny::plotOutput(paste0(n,"plot"))
 	  )),list(title="Plots"))
 
-	  plot.static.ui=do.call("navbarMenu",plist)
+	  plot.static.ui=do.call(shiny::"navbarMenu",plist)
 	}
 
 	plot.set.ui=NULL
 	if (length(plot.set)>0) {
 
 	  plist=c(lapply(names(plot.set),function(n) shiny::tabPanel(n,
-	                                                      fluidRow(
-	                                                        column(8,plotOutput(make.names(paste0(n,"plotset")),brush = brushOpts(id = make.names(paste0(n,"plotsetbrush"))))),
-	                                                        column(4,textAreaInput(make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40))
+	                                                       shiny::fluidRow(
+	                                                         shiny::column(8,shiny::plotOutput(make.names(paste0(n,"plotset")),brush = shiny::brushOpts(id = make.names(paste0(n,"plotsetbrush"))))),
+	                                                         shiny::column(4,shiny::textAreaInput(make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40))
 	                                                      )
 	  )),list(title="Global level"))
 
-	  plot.set.ui=do.call("navbarMenu",plist)
+	  plot.set.ui=do.call(shiny::"navbarMenu",plist)
 	}
 
 	more=NULL
 	if (show.sessionInfo)
-	  more=navbarMenu("More",
-	                  shiny::tabPanel("Info",verbatimTextOutput("sessionInfo"))
+	  more=shiny::navbarMenu("More",
+	                  shiny::tabPanel("Info",shiny::verbatimTextOutput("sessionInfo"))
 	  )
 
 

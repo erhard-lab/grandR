@@ -212,15 +212,18 @@ PlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
   setNames(lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)+ggtitle(n)),names(pairs))
 }
 
-DPlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
+DPlotToxicityTestAll=function(data,pairs=NULL,...) {
+  if (is.null(pairs)) pairs=Findno4sUPairs(data)
   rm(data)
   setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTest,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),height=4,...)),names(pairs))
 }
-DPlotToxicityTestRankAll=function(data,pairs=Findno4sUPairs(data),...) {
+DPlotToxicityTestRankAll=function(data,pairs=NULL,...) {
+  if (is.null(pairs)) pairs=Findno4sUPairs(data)
   rm(data)
   setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),height=4,...)),names(pairs))
 }
-DPlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.len",...) {
+DPlotToxicityTestLengthAll=function(data,pairs=NULL,TU.len="TU.len",...) {
+  if (is.null(pairs)) pairs=Findno4sUPairs(data)
   rm(data)
   setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],TU.len = TU.len,add=ggtitle(n),height=4,...)),names(pairs))
 }

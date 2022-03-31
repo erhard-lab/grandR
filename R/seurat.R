@@ -4,11 +4,11 @@ as.Seurat.grandR=function(d,modalities=c(RNA="total",newRNA="new"),hls=NULL,mode
 
   if (length(modalities)==0) stop("No modality specified!")
 
-  mats=list(total=d$data$count)
-  rows=rowSums(mats$total)>0
-  cols=colSums(mats$total)>0
+  mats=list(total=GetSparseMatrix(d,mode.slot='count'))
+  rows=Matrix::rowSums(mats$total)>0
+  cols=Matrix::colSums(mats$total)>0
   mats$total=mats$total[rows,cols]
-  mats$ntr=d$data$ntr[rows,cols]
+  mats$ntr=GetSparseMatrix(d,mode.slot='ntr')[rows,cols]
   if (any(c("old","new","prev") %in% modalities)) {
     mats$new=round(mats$total*mats$ntr)
     if (any(c("old","prev") %in% modalities)) mats$old=mats$total-mats$new
@@ -17,17 +17,17 @@ as.Seurat.grandR=function(d,modalities=c(RNA="total",newRNA="new"),hls=NULL,mode
       mats$prev=mats$old*exp(2*log(2)/pmin(pmax(hls,0.25),24))
     }
   }
-  if (any(c("old.lower","new.upper") %in% modalities)) {
-    if(is.null(d$data$upper)) stop("You need to load Grand3 data including CIs! set read.CI=TRUE when calling ReadGrand3!")
-    mats$new.upper=round(mats$total*d$data$upper[rows,cols])
-    if ("old.lower" %in% modalities) mats$old.lower=mats$total-mats$new.upper
-  }
-  if (any(c("new.lower","old.upper") %in% modalities)) {
-    if(is.null(d$data$lower)) stop("You need to load Grand3 data including CIs! set read.CI=TRUE when calling ReadGrand3!")
-    mats$new.lower=round(mats$total*d$data$lower[rows,cols])
-    if ("old.upper" %in% modalities) mats$old.upper=mats$total-mats$new.lower
-  }
-  if (!all(modalities %in% names(mats))) stop("Modalities unknown! Can be any of total,new,old,ntr,prev,new.lower,new.upper,old.lower,old.upper!")
+#  if (any(c("old.lower","new.upper") %in% modalities)) {
+#    if(is.null(d$data$upper)) stop("You need to load Grand3 data including CIs! set read.CI=TRUE when calling ReadGrand3!")
+#    mats$new.upper=round(mats$total*d$data$upper[rows,cols])
+#    if ("old.lower" %in% modalities) mats$old.lower=mats$total-mats$new.upper
+#  }
+#  if (any(c("new.lower","old.upper") %in% modalities)) {
+#    if(is.null(d$data$lower)) stop("You need to load Grand3 data including CIs! set read.CI=TRUE when calling ReadGrand3!")
+#    mats$new.lower=round(mats$total*d$data$lower[rows,cols])
+#    if ("old.upper" %in% modalities) mats$old.upper=mats$total-mats$new.lower
+#  }
+  if (!all(modalities %in% names(mats))) stop("Modalities unknown! Can be any of total,new,old,ntr,prev!")
 
   mats=mats[modalities]
   if (!is.null(names(modalities))) names(mats)=names(modalities)

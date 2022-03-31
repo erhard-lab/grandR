@@ -15,3 +15,6 @@ PairwiseRegulation: How to combine replicates? Generate lfc_s vs lfc_HL plot (Pl
 
 1h labeling: effective labeling starts later, thus, any changes happening early are also visible in old RNA (example: TWNK in MYC data), i.e. a gene with lower s appears to have lower HL as well (which is not the case); in other words: old RNA is to some degree contaminated with new RNA (and the extent of contamination is gene specific, as it depends on the gene NTR). This can in principle be corrected for: under steady-state: ntr'=1-(1-ntr)^(t'/t), ntr is the uncorrected ntr for effective labeling time t, ntr' is the corrected ntr for actual labeling time t' (i.e., if 1h labeling, but effectively only 1/2h, then 1-(1-ntr)^2) t'/t can be found by assumptions (e.g. median HL=5h, genes that are transcriptionally regulated by not by HL, etc.).
 Spoiler: The tbbinom model takes care of this
+
+
+All functions that take a columns parameter should use the substitute -> eval mechanism on Coldata(data)!

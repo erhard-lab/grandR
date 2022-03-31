@@ -97,7 +97,7 @@ Semantics.noop=function(s,name) setNames(data.frame(s),name)
 Semantics.time=function(s,name) {
   time=rep(NA,length(s))
 
-  no4sU=c("no4sU","-")
+  no4sU=c("nos4U","no4sU","-")
   time[s %in% no4sU]=0
 
   h=grepl("[0-9.]+h(p.)?",s)
@@ -188,8 +188,9 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' or a function that is called with the condition name vector and is supposed to return this data.frame.
 #' @param classify.genes A list of functions that is used to add the \emph{type} column to the gene annotation table
 #' @param Unknown If no function from \emph{classify.genes} to a row in the gene annotation table, this is used as the \emph{type}
-#' @param read.percent.conv Should the percentage of convertions also be read?
+#' @param read.percent.conv Should the percentage of conversions also be read?
 #' @param verbose Print status updates
+#' @param rename.sample function that is applied to each sample name before parsing (or NULL)
 #'
 #' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta)
 #' and potentially additional information of all genes detected by GRAND-SLAM
@@ -210,6 +211,9 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' In most cases it is easier to manipulate the \code{\link{Coldata}} table after loading data instead of using this mechanism;
 #' the build-in semantics simply provide a convenient way to reduce this kind of manipulation in most cases.
 #'
+#' @details Sometimes you might have forgotten to name all sampes consistently (or you simply messed something up).
+#' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
+#'
 #' @seealso \link{GeneType},\link{MakeColdata},\link{Design.Semantics}
 #'
 #' @examples
@@ -217,149 +221,16 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #'
 #' @export
 #'
-ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType,Unknown=NA,read.percent.conv=FALSE, verbose=FALSE) {
-
-  tomat=function(m,names,cnames){
-    m=as.matrix(m)
-    m[is.na(m)]=0
-    colnames(m)=gsub(" .*","",cnames)
-    rownames(m)=names
-    m
+ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType,Unknown=NA,read.percent.conv=FALSE, verbose=FALSE, rename.sample=NULL) {
+  annotations=c("Gene","Symbol","Length")
+  slots=c(`Readcount`="count",MAP="ntr",alpha="alpha",beta="beta")
+  if (read.percent.conv) slots=c(slots,`Conversions`="conv",Coverage="cove")
+  re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,Unknown = Unknown,verbose = verbose,rename.sample = rename.sample)
+  if (read.percent.conv) {
+    re=AddSlot(re,"percent_conv",re$data$conv/re$data$cove)
+    re=DropSlot(re,"conv|cove")
   }
-
-  checknames=function(a,b){
-  	if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
-  	if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
-  }
-  do.callback=function() {}
-
-  url=NULL
-  if (has.package("RCurl")) {
-    if (RCurl::url.exists(prefix)) {
-      url=prefix
-    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
-      url=paste0(prefix,".tsv")
-    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
-      url=paste0(prefix,".tsv.gz")
-    } else {
-      url=NULL
-    }
-    if (!is.null(url)) {
-      file <- tempfile()
-      if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
-      download.file(url, file, quiet=!verbose)
-      prefix=gsub(".tsv(.gz)?$","",url)
-      do.callback=function() {
-        if (verbose) cat("Deleting temporary file...\n")
-        unlink(file)
-      }
-    }
-  }
-
-  if (is.null(url)) {
-  	file=if (file.exists(prefix)) prefix else paste0(prefix,".tsv")
-  	if (!file.exists(file) && file.exists(paste0(file,".gz"))) file = paste0(file,".gz")
-  	prefix=gsub(".tsv(.gz)?$","",file)
-  }
-
-  if (!file.exists(file)) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
-
-
-	if (verbose) cat("Checking file...\n")
-	con <- file(file,"r")
-	header <- strsplit(readLines(con,n=1),"\t")[[1]]
-	close(con)
-
-	if (header[1]!="Gene" || header[2]!="Symbol" || !grepl("Readcount$",header[3])) stop("File is not a GRAND-SLAM output file!")
-	conds=gsub(" Readcount","",header[grepl(" Readcount",header)])
-	terms=strsplit(conds[1],".",fixed=TRUE)[[1]]
-
-	if (is.data.frame(design)) {
-	  if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(terms,collapse=".")))
-	  coldata=design
-	} else if (is.function(design)) {
-	  coldata=design(conds)
-	  if (length(conds)!=nrow(coldata)) stop(paste0("Design parameter (function) is incompatible with input data: ",paste(terms,collapse=".")))
-	} else {
-  	if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
-  	coldata=MakeColdata(conds,design)
-	}
-
-
-	if (verbose) cat("Reading files...\n")
-	data=read.delim(file,stringsAsFactors=FALSE,check.names=FALSE)
-	if (anyDuplicated(data$Gene)) {
-	  dupp=table(data$Gene)
-	  dupp=names(dupp)[which(dupp>1)]
-	  warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-		data$Gene=make.unique(data$Gene)
-	}
-	if (anyDuplicated(data$Symbol)) {
-	  dupp=table(data$Symbol)
-	  dupp=names(dupp)[which(dupp>1)]
-	  warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-		data$Symbol=make.unique(data$Symbol)
-	}
-	if (verbose) cat("Processing...\n")
-
-	ntr.mean = grepl("Mean",names(data))
-	ntr = grepl("MAP",names(data))
-	alpha = grepl("alpha",names(data))
-	beta = grepl("beta",names(data))
-	count = grepl("Readcount",names(data))
-	conv = grepl("Conversions",names(data))
-	cove = grepl("Coverage",names(data)) & !grepl("Double-Hit Coverage",names(data))
-
-
-	classify.genes=c(classify.genes,Unknown=function(gene.info) rep(T,dim(gene.info)[1]))
-	if (!is.na(Unknown)) names(classify.genes)[names(classify.genes)=="Unknown"]=Unknown
-	gene.info = data.frame(Gene=as.character(data$Gene),Symbol=as.character(data$Symbol),Length=data$Length,stringsAsFactors=FALSE)
-	gene.info$Type=NA
-	for (i in length(classify.genes):1) gene.info$Type[classify.genes[[i]](gene.info)]=names(classify.genes)[i]
-	gene.info$Type=factor(gene.info$Type,levels=names(classify.genes))
-
-	re=list()
-	re$count=tomat(data[,count],data$Gene,names(data)[count])
-#	re$tpm=comp.tpm(re$count,gene.info$Length)
-#	checknames(re$count,re$tpm)
-	#re$ntr.mean=tomat(data[,alpha]/(data[,alpha]+data[,beta]),data$Gene,names(data)[ntr.mean])
-	re$ntr=tomat(data[,ntr],data$Gene,names(data)[ntr])
-	re$alpha=tomat(data[,alpha],data$Gene,names(data)[alpha])
-	re$beta=tomat(data[,beta],data$Gene,names(data)[beta])
-
-	if (read.percent.conv) {
-	  re$percent_conv=tomat(data[,conv]/data[,cove],data$Gene,names(data)[conv])
-	}
-
-	no4sU.cols=!(colnames(re$count) %in% colnames(re$ntr))
-	# remove no4sU conditions from ntr relevant matrices
-	if (sum(no4sU.cols)>0) {
-		correctmat=function(m) {
-			r=matrix(NA,ncol=dim(re$count)[2],nrow=dim(re$count)[1])
-			rownames(r)=rownames(re$count)
-			colnames(r)=colnames(re$count)
-			r[,colnames(r)[!no4sU.cols]]=m[,colnames(r)[!no4sU.cols]]
-			r
-		}
-		#re$ntr.mean=correctmat(re$ntr.mean)
-		re$ntr=correctmat(re$ntr)
-		re$alpha=correctmat(re$alpha)
-		re$beta=correctmat(re$beta)
-	}
-
-	checknames(re$count,re$ntr)
-	checknames(re$count,re$ntr.mean)
-	checknames(re$count,re$alpha)
-	checknames(re$count,re$beta)
-
-	coldata$no4sU=no4sU.cols
-
-	do.callback()
-
-	# insert name no rep and set this as default condition, if there is no condition field!
-	re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 2.0 data"))
-	DefaultSlot(re)="count"
-	re
+  re
 }
 
 
@@ -467,11 +338,11 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 
 
 # TODO: do not use read.delim or .csv, nor file.exists (to allow using urls!)
-isSparse=function(prefix) !file.exists(paste0(prefix,".targets/data.tsv.gz"))
+isSparse=function(prefix) !file.exists(paste0(prefix,".targets/data.tsv.gz")) & !file.exists(prefix)
 
 ReadGRAND3=function(prefix,...) if (isSparse(prefix)) ReadGRAND3_sparse(prefix,...) else ReadGRAND3_dense(prefix,...)
 
-ReadGRAND3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design$Sample,Design$Barcode), label="4sU",estimator="Binom", read.CI=FALSE) {
+ReadGRAND3_sparse=function(prefix, design=c(Design$Library,Design$Sample,Design$Barcode), label="4sU",estimator="Binom", read.posterior=FALSE, verbose=FALSE) {
 
   cols=readLines(paste0(prefix, ".targets/barcodes.tsv.gz"))
   conds=strsplit(cols,".",fixed=TRUE)[[1]]
@@ -479,7 +350,7 @@ ReadGRAND3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design
 
 
   if (verbose) cat("Reading count matrix...\n")
-  count=as(readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "dgCMatrix")
+  count=as(Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "dgCMatrix")
   gene.info=read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
   if (ncol(gene.info)==4) gene.info$Length=1
   gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
@@ -497,34 +368,34 @@ ReadGRAND3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design
     gene.info$Symbol=make.unique(gene.info$Symbol)
   }
 
-  if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
-    ill=gene.info$Symbol[which(make.names(gene.info$Symbol)!=gene.info$Symbol)]
-    warning(sprintf("Illegal identifiers among the gene symbols (e.g. %s), making legal!",paste(head(ill),collapse=",")),call. = FALSE,immediate. = TRUE)
-    gene.info$Symbol=make.names(gene.info$Symbol)
-  }
+#  if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
+#    ill=gene.info$Symbol[which(make.names(gene.info$Symbol)!=gene.info$Symbol)]
+#    warning(sprintf("Illegal identifiers among the gene symbols (e.g. %s), making legal!",paste(head(ill),collapse=",")),call. = FALSE,immediate. = TRUE)
+#    gene.info$Symbol=make.names(gene.info$Symbol)
+#  }
 
   colnames(count)=cols
-  rownames(count)=gene.info$Symbol
+  rownames(count)=gene.info$Gene
   re=list()
   re$count=count
 
   if (verbose) cat("Reading NTRs...\n")
-  ntr=as(readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+  ntr=as(Matrix::readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
   colnames(ntr)=cols
-  rownames(ntr)=gene.info$Symbol
+  rownames(ntr)=gene.info$Gene
   re$ntr=ntr
 
-  if (read.CI && file.exists(sprintf("%s.targets/%s.%s.lower.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.upper.mtx.gz",prefix,label,estimator))) {
-    if (verbose) cat("Reading CIs...\n")
-    lower=as(readMM(sprintf("%s.targets/%s.%s.lower.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
-    colnames(lower)=cols
-    rownames(lower)=gene.info$Symbol
-    re$lower=lower
+  if (read.posterior && file.exists(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
+    if (verbose) cat("Reading posterior beta parameters...\n")
+    alpha=as(Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    colnames(alpha)=cols
+    rownames(alpha)=gene.info$Gene
+    re$alpha=alpha
 
-    upper=as(readMM(sprintf("%s.targets/%s.%s.upper.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
-    colnames(upper)=cols
-    rownames(upper)=gene.info$Symbol
-    re$upper=upper
+    beta=as(Matrix::readMM(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    colnames(beta)=cols
+    rownames(beta)=gene.info$Gene
+    re$beta=beta
   }
   gene.info$Type=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
   gene.info$Type=factor(gene.info$Type,levels=unique(gene.info$Type))
@@ -537,13 +408,22 @@ ReadGRAND3_sparse=function(prefix, verbose=FALSE, design=c(Design$Library,Design
   names(coldata)[-1]=design
   rownames(coldata)=coldata$Name
 
-  grandR(prefix,gene.info,slots=re,coldata)
+  coldata$no4sU=Matrix::colSums(ntr)==0
+
+  re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 3.0 sparse data"))
+  DefaultSlot(re)="count"
+  re
 }
 
-ReadGRAND3_dense=function(prefix, verbose=FALSE, design=c(design$Condition,Design$Replicate)) {
+ReadGRAND3_dense=function(prefix, design=c(Design$Condition,Design$Replicate), label="4sU",estimator="Binom",classify.genes=GeneType,Unknown=NA, verbose=FALSE) {
+  annotations=c("Gene","Symbol","Category","Length")
+  slots=c("count","ntr","alpha","beta")
+  names(slots)=c("Read count",sprintf("%s %s %s",label,estimator,c("NTR MAP","alpha","beta")))
+  if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr")
 
+  re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,Unknown = Unknown,verbose = verbose,rename.sample = rename.sample)
+  re
 }
-
 
 ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,verbose=FALSE) {
 
@@ -551,7 +431,7 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
   gene.info=setNames(read.csv(genes,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
 
   if (verbose) cat("Reading total count matrix...\n")
-  count=as(readMM(total.matrix),Class = "dgCMatrix")
+  count=as(Matrix::readMM(total.matrix),Class = "dgCMatrix")
 
   if (anyDuplicated(gene.info$Gene)) {
     dupp=table(gene.info$Gene)
@@ -576,7 +456,7 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
   rownames(count)=gene.info$Symbol
 
   if (verbose) cat("Reading new count matrix...\n")
-  new=as(readMM(new.matrix),Class = "dgCMatrix")
+  new=as(Matrix::readMM(new.matrix),Class = "dgCMatrix")
 
   if (verbose) cat("Computing NTRs...\n")
   new=new/detection.rate
@@ -596,3 +476,163 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
 }
 
 
+read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),slots, annotations,classify.genes=GeneType,Unknown=NA, verbose=FALSE, rename.sample=NULL) {
+
+  if (!all(c("count","ntr") %in% slots) || !all(c("Gene","Symbol") %in% annotations)) stop("Invalid call to read.grand.internal!")
+
+  tomat=function(m,names,cnames){
+    m=as.matrix(m)
+    m[is.na(m)]=0
+    colnames(m)=gsub(" .*","",cnames)
+    if (!is.null(rename.sample)) colnames(m)=sapply(colnames(m),rename.sample)
+    rownames(m)=names
+    m
+  }
+
+  checknames=function(a,b){
+    if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
+    if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
+  }
+  do.callback=function() {}
+
+  url=NULL
+  if (has.package("RCurl")) {
+    if (RCurl::url.exists(prefix)) {
+      url=prefix
+    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
+      url=paste0(prefix,".tsv")
+    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
+      url=paste0(prefix,".tsv.gz")
+    } else {
+      url=NULL
+    }
+    if (!is.null(url)) {
+      file <- tempfile()
+      if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
+      download.file(url, file, quiet=!verbose)
+      prefix=gsub(".tsv(.gz)?$","",url)
+      do.callback=function() {
+        if (verbose) cat("Deleting temporary file...\n")
+        unlink(file)
+      }
+    }
+  }
+
+  if (is.null(url)) {
+    if (file.exists(paste0(prefix,".targets/data.tsv.gz"))) {
+      file=paste0(prefix,".targets/data.tsv.gz")
+    } else {
+      file=if (file.exists(prefix)) prefix else paste0(prefix,".tsv")
+      if (!file.exists(file) && file.exists(paste0(file,".gz"))) file = paste0(file,".gz")
+      prefix=gsub(".tsv(.gz)?$","",file)
+    }
+  }
+
+  if (!file.exists(file)) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
+
+
+  if (verbose) cat("Checking file...\n")
+  con <- file(file,"r")
+  header <- strsplit(readLines(con,n=1),"\t")[[1]]
+  close(con)
+
+  count.name=names(slots)[slots=="count"]
+  if (length(count.name)!=1) stop("Invalid call to read.grand.internal!")
+
+  if (header[1]!="Gene" || header[2]!="Symbol" || !grepl(paste0(count.name,"$"),header[!header %in% annotations][1])) stop("File is not a GRAND-SLAM output file!")
+  conds=gsub(paste0(" ",count.name),"",header[grepl(paste0(" ",count.name),header)])
+
+  if (!is.null(rename.sample)) conds=sapply(conds,rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
+
+  terms=strsplit(conds[1],".",fixed=TRUE)[[1]]
+
+  if (is.data.frame(design)) {
+    if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(terms,collapse=".")))
+    coldata=design
+  } else if (is.function(design)) {
+    coldata=design(conds)
+    if (length(conds)!=nrow(coldata)) stop(paste0("Design parameter (function) is incompatible with input data: ",paste(terms,collapse=".")))
+  } else {
+    if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
+    coldata=MakeColdata(conds,design)
+  }
+
+
+  if (verbose) cat("Reading files...\n")
+  data=read.delim(file,stringsAsFactors=FALSE,check.names=FALSE)
+  if (anyDuplicated(data$Gene)) {
+    dupp=table(data$Gene)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    data$Gene=make.unique(data$Gene)
+  }
+  if (any(is.na(data$Symbol) | data$Symbol=="")) {
+    warning(sprintf("No gene symbols (e.g. %s) present, replacing by gene ids!",paste(head(data$Gene[is.na(data$Symbol) | data$Symbol==""]),collapse=",")),call. = FALSE,immediate. = TRUE)
+    data$Symbol[is.na(data$Symbol) | data$Symbol==""]=data$Gene[is.na(data$Symbol) | data$Symbol==""]
+  }
+  if (anyDuplicated(data$Symbol)) {
+    dupp=table(data$Symbol)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+    data$Symbol=make.unique(data$Symbol)
+  }
+  if (verbose) cat("Processing...\n")
+
+  #ntr.mean = grepl("Mean",names(data))
+  #ntr = grepl("MAP",names(data))
+  #alpha = grepl("alpha",names(data))
+  #beta = grepl("beta",names(data))
+  #count = grepl("Readcount",names(data))
+  #conv = grepl("Conversions",names(data))
+  #cove = grepl("Coverage",names(data)) & !grepl("Double-Hit Coverage",names(data))
+
+
+  classify.genes=c(classify.genes,Unknown=function(gene.info) rep(T,dim(gene.info)[1]))
+  if (!is.na(Unknown)) names(classify.genes)[names(classify.genes)=="Unknown"]=Unknown
+  gene.info = data.frame(Gene=as.character(data$Gene),Symbol=as.character(data$Symbol),stringsAsFactors=FALSE)
+  for (a in setdiff(annotations,c("Gene","Symbol"))) gene.info[[a]]=data[[a]]
+  gene.info$Type=NA
+  for (i in length(classify.genes):1) gene.info$Type[classify.genes[[i]](gene.info)]=names(classify.genes)[i]
+  gene.info$Type=factor(gene.info$Type,levels=names(classify.genes))
+
+  re=list()
+  for (n in names(slots)) {
+    cols=intersect(paste0(conds," ",n),names(data))
+    re[[slots[n]]]=tomat(data[,cols],data$Gene,cols)
+  }
+  #re$count=tomat(data[,count],data$Gene,names(data)[count])
+  ##	re$tpm=comp.tpm(re$count,gene.info$Length)
+  ##	checknames(re$count,re$tpm)
+  ##re$ntr.mean=tomat(data[,alpha]/(data[,alpha]+data[,beta]),data$Gene,names(data)[ntr.mean])
+  #re$ntr=tomat(data[,ntr],data$Gene,names(data)[ntr])
+  #re$alpha=tomat(data[,alpha],data$Gene,names(data)[alpha])
+  #re$beta=tomat(data[,beta],data$Gene,names(data)[beta])
+
+
+  no4sU.cols=!(colnames(re$count) %in% colnames(re$ntr))
+  # remove no4sU conditions from ntr relevant matrices
+  if (sum(no4sU.cols)>0) {
+    correctmat=function(m) {
+      r=matrix(NA,ncol=dim(re$count)[2],nrow=dim(re$count)[1])
+      rownames(r)=rownames(re$count)
+      colnames(r)=colnames(re$count)
+      r[,colnames(r)[!no4sU.cols]]=m[,colnames(r)[!no4sU.cols]]
+      r
+    }
+    #re$ntr.mean=correctmat(re$ntr.mean)
+    re$ntr=correctmat(re$ntr)
+    re$alpha=correctmat(re$alpha)
+    re$beta=correctmat(re$beta)
+  }
+
+  for (slot in slots) checknames(re$count,re[[slot]])
+
+  coldata$no4sU=no4sU.cols
+
+  do.callback()
+
+  # insert name no rep and set this as default condition, if there is no condition field!
+  re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 2.0 data"))
+  DefaultSlot(re)="count"
+  re
+}

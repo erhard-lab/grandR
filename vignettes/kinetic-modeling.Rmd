@@ -86,34 +86,14 @@ The curves represent the fitted model for this gene. As pointed out above, there
 ```{r}
 SetParallel()
 sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
-PlotScatter(sars,type="kinetics","Mock.Half-life","SARS.Half-life",log=T)+geom_abline()
+df<-GetAnalysisTable(sars)
+PlotScatter(df,"kinetics.Mock.Half-life","kinetics.SARS.Half-life",log=T)+geom_abline()
 ```
 
 
 
-```{r}
+```{r,fig.height=3.5,fig.width=8}
 SetParallel()
 sars<-CalibrateTimes(sars,steady.state = c(Mock=T,SARS=F))
-sars<-FitKinetics(sars,name="norm_kinetics",slot="norm",time="norm_time",steady.state = c(Mock=T,SARS=F))
-sars<-FitKinetics(sars,name="ntr_kinetics",type="ntr")
-sars<-FitKinetics(sars,name="normntr_kinetics",type="ntr",time="norm_time")
-sars<-FitKinetics(sars,name="lm_kinetics",type="lm")
-
-df<-cbind(GetTable(sars,c("kinetics"),columns="Mock.rmse"),GetTable(sars,c("norm_kinetics"),columns="Mock.rmse"))
-PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()
-```
-
-```{r}
-df<-cbind(
-  GetTable(sars,c("kinetics"),columns="Mock.Half-life"),
-  GetTable(sars,c("norm_kinetics"),columns="Mock.Half-life"),
-  GetTable(sars,c("ntr_kinetics"),columns="Mock.Half-life"),
-  GetTable(sars,c("normntr_kinetics"),columns="Mock.Half-life"),
-  GetTable(sars,c("lm_kinetics"),columns="Mock.Half-life")
-  )
-PlotScatter(df,xcol=1,ycol=5,log=T)+geom_abline()
-(PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()|
-PlotScatter(df,xcol=3,ycol=2,log=T)+geom_abline())/
-(PlotScatter(df,xcol=1,ycol=3,log=T)+geom_abline()|
-   PlotScatter(df,xcol=2,ycol=4,log=T)+geom_abline())
+PlotGeneKinetics(sars,"MYC",steady.state = c(Mock=T,SARS=F)) | PlotGeneKinetics(sars,"MYC",time = "norm_time",steady.state = c(Mock=T,SARS=F))
 ```

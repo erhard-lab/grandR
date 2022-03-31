@@ -483,7 +483,7 @@ Coldata=function(data,column=NULL,value=NULL) {
 #' Internal functions to check for a valid analysis or slot names.
 #'
 #' @param data a grandR object
-#' @param patterns a regex to be matched to analysis names
+#' @param analyses a regex to be matched to analysis names
 #' @param slot a slot name
 #' @param mode.slot a mode.slot
 #'
@@ -491,7 +491,7 @@ Coldata=function(data,column=NULL,value=NULL) {
 #'
 #' @return Whether or not the given name is valid and unique for the grandR object
 #'
-check.analysis=function(data,patterns,regex) sapply(patterns,function(pattern) any(grepl(pattern,Analyses(data),fixed=!regex)))
+check.analysis=function(data,analyses,regex) sapply(analyses,function(pattern) any(grepl(pattern,Analyses(data),fixed=!regex)))
 #' @rdname check.analysis
 check.slot=function(data,slot) slot %in% names(data$data)
 #' @rdname check.analysis
@@ -603,24 +603,23 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
   analysis=check.analysis(data,type,TRUE) & !mode.slot
   if (!all(analysis|mode.slot)) stop(sprintf("Type %s is neither a mode.slot nor an analysis name!",paste(type[!analysis&!mode.slot],collapse=",")))
 
-  # check that columns is only used if type is either completely analysis or mode.slot
-  if (!is.null(columns) && sum(mode.slot)>0 && sum(analysis)>0) stop("Columns can only be specified if type either refers to mode.slots or analyses")
-
-  if (!is.null(summarize)) {
-    if (is.logical(summarize) && length(summarize)==1 && !summarize) {
-      summarize=NULL
-    } else {
-      if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
-      if (!is.null(columns)) summarize=summarize[columns,]
-      summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
-    }
-  }
-
   # obtain mode.slot data
   r1=NULL
   if (any(mode.slot)) {
-    cols=if (is.null(columns)) colnames(data) else columns
+
+    columns=substitute(columns)
+    cols=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
     cols=Columns(data,cols)
+
+    if (!is.null(summarize)) {
+      if (is.logical(summarize) && length(summarize)==1 && !summarize) {
+        summarize=NULL
+      } else {
+        if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
+        summarize=summarize[cols,]
+        summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
+      }
+    }
 
     for (tt in type[mode.slot]) {
       rtt=as.data.frame(t(GetData(data,tt,columns=cols,genes,ntr.na = ntr.na,coldata=FALSE, melt=FALSE, name.by = name.by)))
@@ -632,6 +631,9 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
       r1=if(is.null(r1)) rtt else cbind(r1,rtt)
     }
   }
+
+  # check that columns is only used if type is either completely analysis or mode.slot
+  if (!is.null(columns) && sum(mode.slot)>0 && sum(analysis)>0) stop("Columns can only be specified if type either refers to mode.slots or analyses")
 
   # obtain analysis data
   r2=NULL
@@ -659,6 +661,79 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
   r
 }
 
+#' Obtain a genes x values table as a sparse matrix
+#'
+#' This is the main function to access slot data for all genes as a sparse matrix.
+#'
+#' @param data A grandR object
+#' @param mode.slot Which kind of data to access (see details)
+#' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
+#' @param genes Restrict the output table to the given genes
+#' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
+#'
+#' @return A sparse matrix containing the desired values
+#'
+#' @details To refer to data slots, the mode.slot syntax can be used: It is either a data slot, or one of (new,old,total) followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to obtain the \emph{new counts}.
+#'
+#' @seealso \link{GetData},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes},\link{GetSummarizeMatrix}
+#'
+#' @export
+#'
+GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),name.by="Symbol") {
+
+  if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(data,mode.slot)],collapse=",")))
+  if (length(mode.slot)!=1) stop("Specify exactly one mode.slot!")
+
+  if (is.null(columns)) columns=colnames(data)
+  genes=ToIndex(data,genes)
+
+  tno="t"
+  spl=strsplit(mode.slot,".",fixed=TRUE)[[1]]
+  if (length(spl)>1) {tno=spl[1]; mode.slot=spl[2];}
+
+  re=data$data[[mode.slot]][genes,columns,drop=FALSE]
+  rownames(re)=Genes(data,genes)
+
+  conv=function(v) { mode(v)="integer"; v}
+
+  if (is.matrix(re)) {
+    mf = switch(tolower(substr(tno,1,1)),t=1,n=as.matrix(data$data$ntr[genes,columns,drop=FALSE]),o=1-as.matrix(data$data$ntr[genes,columns,drop=FALSE]),stop(paste0(mode.slot," unknown!")))
+    if (!ntr.na) {
+      mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
+    }
+    re=re*mf
+    if (mode.slot=="count") {
+      mode(re) <- "integer"
+    } else if (mode.slot=="ntr") {
+      re[is.na(re)]=0
+    }
+    return(as(re,Class = Matrix::"dgCMatrix"))
+  } else {
+    if (tolower(substr(tno,1,1))=="t") return(re)
+    if (tolower(substr(tno,1,1))=="n") {
+      # all that have zero in ntr matrix will be zero, so this is fine
+      sX <- Matrix::summary(re)
+      sY <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
+      sRes <- merge(sX, sY, by=c("i", "j"))
+      print(dimnames(re))
+      return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
+                                  dimnames=dimnames(re)))
+    }
+    if (tolower(substr(tno,1,1))=="o") {
+      sX <- Matrix::summary(re)
+      sY <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
+      sRes <- merge(sX, sY, by=c("i", "j"),all.x=TRUE)
+      sRes[is.na(sRes[,4]),4]=0
+      sRes[,4]=1-sRes[,4]
+      sRes=sRes[sRes[,4]>0,]
+      return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
+                                  dimnames=dimnames(re)))
+    }
+    stop(paste0(mode.slot," unknown!"))
+  }
+
+
+}
 
 #' Obtain a tidy table of values for a gene or a small set of genes
 #'
@@ -702,14 +777,14 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
     tno="t"
     spl=strsplit(mode.slot,".",fixed=TRUE)[[1]]
     if (length(spl)>1) {tno=spl[1]; mode.slot=spl[2];}
-    mf = switch(tolower(substr(tno,1,1)),t=1,n=data$data$ntr[genes,columns],o=1-data$data$ntr[genes,columns],stop(paste0(mode.slot," unknown!")))
+    mf = switch(tolower(substr(tno,1,1)),t=1,n=as.matrix(data$data$ntr[genes,columns]),o=1-as.matrix(data$data$ntr[genes,columns]),stop(paste0(mode.slot," unknown!")))
     if (!ntr.na) {
       mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
     }
     conv=if (mode.slot=="count") function(m) {mode(m) <- "integer";m} else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
-    if (!(mode.slot %in% names(data$data))) stop(paste0(mode.slot," unknown!"))
-    if (length(genes)==1) data.frame(conv(data$data[[mode.slot]][genes,columns]*mf)) else as.data.frame(conv(t(data$data[[mode.slot]][genes,columns]*mf)))
+  if (!(mode.slot %in% names(data$data))) stop(paste0(mode.slot," unknown!"))
+    if (length(genes)==1) data.frame(conv(as.matrix(data$data[[mode.slot]][genes,columns])*mf)) else as.data.frame(conv(t(as.matrix(data$data[[mode.slot]][genes,columns])*mf)))
   }
   re=as.data.frame(lapply(mode.slot,uno))
   if(length(mode.slot)==1 && length(genes)==1) names(re)="Value" else if (length(mode.slot)==1) names(re)=og else if (length(genes)==1) names(re)=mode.slot else names(re)=paste0(rep(og,length(mode.slot)),".",rep(mode.slot,each=length(og)))
@@ -733,6 +808,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' @param reference Expression evaluating to a logical vector to indicate which columns are reference columns; evaluated in an environment having the columns of \link{Coldata}(data)
 #' @param group a vector of colnames in \link{Coldata}(data)
 #' @param as.list return it as a list (names correspond to each sample, elements are the reference samples)
+#' @param columns find references only for a subset of the columns (samples or cells; can be NULL)
 #'
 #' @return A 0-1 matrix that contains for each sample or cell (in columns) a 1 for the corresponding corresponding reference samples or cells in rows
 #'
@@ -749,10 +825,12 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #'
 #' @export
 #'
-FindReferences=function(data,reference, group="Condition", as.list=FALSE) {
+FindReferences=function(data,reference, group="Condition", as.list=FALSE,columns=NULL) {
   if (!is.grandR(data)) stop("Data is not a grandR object!")
+  if (!is.null(group) && !group %in% names(Coldata(data))) stop(sprintf("No %s in Coldata!",group))
 
   df=Coldata(data)
+  if (!is.null(columns)) df=df[columns,]
   df$group=as.character(if(is.null(group)) 1 else interaction(df[group],drop=FALSE,sep="."))
   e=substitute(reference)
   map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
@@ -808,6 +886,7 @@ Analyses=function(data) names(data$analysis)
 #' @describeIn Analyses Add an analysis table
 #' @export
 AddAnalysis=function(data,description,table,warn.present=TRUE) {
+  if (!is.data.frame(table)) stop("Cannot add; analysis table must be a data frame!")
   stopifnot(!is.null(description$name))
   description$results=names(table)
   if (is.null(data$analysis)) data$analysis=list()
@@ -847,8 +926,8 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
 #' or \code{\link{GetData}} (as tidy table).
 #'
 #' @param data A grandR object
-#' @param patterns One or several regex to be matched against analysis names (\link{Analyses}); all analysis tables if NULL
-#' @param regex Use regex for patterns (TRUE) or don't (FALSE, i.e. must specify the exact name)
+#' @param analyses One or several regex to be matched against analysis names (\link{Analyses}); all analysis tables if NULL
+#' @param regex Use regex for analyses (TRUE) or don't (FALSE, i.e. must specify the exact name)
 #' @param columns Regular expressions to select columns from the analysis table (all have to match!); all columns if NULL
 #' @param genes Restrict the output table to the given genes
 #' @param gene.info Should the table contain the \link{GeneInfo} values as well (at the beginning)?
@@ -869,8 +948,8 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
 #'
 #' @export
 #'
-GetAnalysisTable=function(data,patterns=NULL,regex=TRUE,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol") {
-  if (!all(check.analysis(data,patterns,regex))) stop(sprintf("No analysis found for pattern %s!",paste(patterns[!check.analysis(data,patterns,regex)],collapse=",")))
+GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol") {
+  if (!all(check.analysis(data,analyses,regex))) stop(sprintf("No analysis found for pattern %s!",paste(analyses[!check.analysis(data,analyses,regex)],collapse=",")))
 
   genes=ToIndex(data,genes)
 
@@ -882,7 +961,7 @@ GetAnalysisTable=function(data,patterns=NULL,regex=TRUE,columns=NULL,genes=Genes
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
-  analyses=if (is.null(patterns)) 1:length(Analyses(data)) else unlist(lapply(patterns,function(pat) grep(pat,Analyses(data),fixed=!regex)))
+  analyses=if (is.null(analyses)) 1:length(Analyses(data)) else unlist(lapply(analyses,function(pat) grep(pat,Analyses(data),fixed=!regex)))
   for (name in Analyses(data)[analyses]) {
     t=data$analysis[[name]][genes,,drop=FALSE]
     if (!is.null(columns)) {
@@ -891,7 +970,7 @@ GetAnalysisTable=function(data,patterns=NULL,regex=TRUE,columns=NULL,genes=Genes
      t=t[,use,drop=FALSE]
     }
     if (ncol(t)>0) {
-      if (length(Analyses(data)[analyses])>1) names(t)=paste0(name,".",names(t))
+      names(t)=paste0(name,".",names(t))
       re=cbind(re,t)
     }
   }

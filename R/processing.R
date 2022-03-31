@@ -43,16 +43,35 @@ ComputeNtrPosteriorQuantile=function(data,quantile,name) {
   AddSlot(data,name,v)
 }
 
-ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name) {
+ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name, max.HL=48, CI.size=0.95, compute.CI=FALSE, as.analysis=FALSE) {
   if (is.character(time) && length(time)==1) time=data$coldata[[time]]
+
   ntrs=as.matrix(GetTable(data,type="ntr",name.by = "Gene"))
   if (length(time)==1) time=rep(time,ncol(ntrs))
   stopifnot(ncol(ntrs)==length(time))
 
-  hls = sapply(1:length(time),function(i) comp.hl(p = ntrs[,i],time = time[i]))
-  colnames(hls)=colnames(ntrs)
+  if (compute.CI) {
+    as.analysis=TRUE
+    data=ComputeNtrCI(data,CI.size = CI.size)
+    lower=as.matrix(GetTable(data,type="lower",name.by = "Gene"))
+    upper=as.matrix(GetTable(data,type="upper",name.by = "Gene"))
+    hls = do.call(cbind,lapply(1:length(time),function(i) cbind(
+                                              pmin(comp.hl(p = upper[,i],time = time[i]),max.HL),
+                                              pmin(comp.hl(p = ntrs[,i],time = time[i]),max.HL),
+                                              pmin(comp.hl(p = lower[,i],time = time[i]),max.HL)
+                                              )))
+    colnames(hls)=paste0(rep(c("lower.","tMAP.","upper."),ncol(ntrs)),rep(colnames(ntrs),each=3))
+  }
+  else {
+    hls = sapply(1:length(time),function(i) comp.hl(p = ntrs[,i],time = time[i]))
+    colnames(hls)=colnames(ntrs)
+  }
 
-  AddSlot(data,name,hls)
+  if (as.analysis) {
+    AddAnalysis(data,MakeAnalysis(name = name,analysis = "SteadyStateHalfLives",columns = colnames(data)),table = as.data.frame(hls))
+  } else {
+    AddSlot(data,name,hls)
+  }
 }
 
 
@@ -152,4 +171,14 @@ FilterGenes=function(data,type='count',minval=100,mincol=ncol(data)/2,min.cond=N
 
   if (return.genes) return(data$gene.info$Gene[use])
   return(data.apply(data,function(t) t[use,],fun.gene.info = function(t) t[use,]))
+}
+
+
+ComputeExpressionPercentage=function(data,name,genes,mode.slot=DefaultSlot(data),multiply.by.100=TRUE) {
+  gof=colSums(GetTable(data,type=mode.slot,ntr.na = FALSE,genes = genes))
+  total=colSums(GetTable(data,type=mode.slot,ntr.na = FALSE))
+  percentage=gof/total
+  if (multiply.by.100) percentage=percentage*100
+  Coldata(data,name)=percentage
+  data
 }

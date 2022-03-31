@@ -91,7 +91,7 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' data for multiple time points and replicates. Both synthesis rate and RNA half-lives are assumed to be constant,
 #' but the system might not be in steady-state.
 #'
-#' @param condition A user-defined condition name (which is placed into the \link{\code{Coldata}} of the final grandR object)
+#' @param condition A user-defined condition name (which is placed into the \code{\link{Coldata}} of the final grandR object)
 #' @param gene.info either a data frame containing gene annotation or a vector of gene names
 #' @param s a vector of synthesis rates
 #' @param d a vector of degradation rates (to get a specific half-life HL, use d=log(2)/HL)
@@ -105,7 +105,7 @@ SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,
 #' @param conversion.reads also output the number of reads with conversion
 #' @param verbose Print status updates
 #' @param seed seed value for the random number generator (set to make it deterministic!)
-#' @param ... provided to \link{\code{SimulateReadsForSample}}
+#' @param ... provided to \code{\link{SimulateReadsForSample}}
 #'
 #' @details If \emph{s.variation} or \emph{d.variation} are > 1, then for each gene a random gaussian is added to s (or d)
 #' such that 90% of all s (or d) are \emph{s.variation}-fold away from s (below or above; i.e. s is multiplied with 2^rnorm(n,mean=0,sd=x), with x chosen such that the 95% quantile

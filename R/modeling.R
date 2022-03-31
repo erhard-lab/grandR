@@ -856,7 +856,7 @@ FitKinetics=function(data,name="kinetics",type=c("nlls","ntr","lm"),slot=Default
 
     if (substr(tolower(type[1]),1,1)=="n" && !all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
 
-    fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nnls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
+    fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nlls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
     if (is.null(fun)) stop(sprintf("Type %s unknown!",type))
     result=plapply(Genes(data),
                       fun,
@@ -968,6 +968,56 @@ TransformKineticParameters=function(old=NULL,new=NULL,total=NULL,ntr=NULL,t=2,s=
     if (!is.null(name.prefix)) colnames(re)=paste0(name.prefix,".",colnames(re))
     re
 }
+
+
+#' Estimate parameters for a one-shot experiment.
+#'
+#' Under steady state conditions it is straight-forward to estimate s and d. Otherwise, the total levels at some other time point are needed.
+#'
+#' @param ntr the new to total RNA ratio (measured)
+#' @param total the total level of RNA (measured)
+#' @param t the labeling duration
+#' @param t0 time before measurement at which f0 is total level (only necessary under non-steady-state conditions)
+#' @param f0 total level at t0 (only necessary under non-steady-state conditions)
+#'
+#' @return a named vector for s and d
+#'
+#' @export
+#'
+TransformOneShot=function(ntr,total,t,t0=NULL,f0=NULL) {
+    if (is.null(f0)) {
+        d=-1/t*log(1-ntr)
+        s=total*d
+    } else if (t0==t) {
+        Fval=pmin(total*(1-ntr)/f0,1)
+        d=ifelse(Fval>=1,0,-1/t*log(Fval))
+        s=-1/t*total*ntr * ifelse(Fval>=1,-1,ifelse(is.infinite(Fval),0,log(Fval)/(1-Fval)))
+    } else if (length(ntr)>1 || length(total)>1 || length(f0)>1) {
+        m=cbind(ntr,total,f0)
+        return(t(sapply(1:nrow(m),function(i) TransformOneShot(m[i,1],m[i,2],t,t0,m[i,3]))))
+    } else {
+        new=total*ntr
+        old=total-new
+        f0new=f0-new
+        inter=c(log(2)/48,log(2)/0.001)
+        #print(c(total,ntr,f0))
+        eq=function(d) total*exp(-t*d)-f0*exp(-t0*d)*exp(-t*d)+f0new*exp(-t0*d)-old
+        #print((eq(inter[1])))
+        #print((eq(inter[2])))
+        if (eq(inter[1])<0) {
+            d=0
+            s=0
+        } else if (eq(inter[2])>0) {
+            d=Inf
+            s=Inf
+        } else {
+            d=uniroot(eq,inter)$root
+            s=new*d/(1-exp(-t*d))
+        }
+    }
+    if (length(s)>1) cbind(s=unname(s),d=unname(d)) else c(s=unname(s),d=unname(d))
+}
+
 
 #' Generate plots about potential kinetic parameters and their changes for observed abundance and ntr estimates
 #'
