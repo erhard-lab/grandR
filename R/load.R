@@ -113,7 +113,8 @@ Semantics.time=function(s,name) {
 #' @rdname Design.Semantics
 #' @export
 Design.Semantics=list(
-  duration.4sU=Semantics.time
+  duration.4sU=Semantics.time,
+  Experimental.time=Semantics.time
 )
 
 
@@ -157,7 +158,8 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
 
-  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,type.convert(sapply(spl,function(v) v[i]),as.is=FALSE,na.strings=c("DKSALDJLKSADLKSJDLKSJDLJDA"))) # stupid function!
+  str2fac=function(s) if (is.character(s)) factor(s,levels=unique(s)) else s
+  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,str2fac(type.convert(sapply(spl,function(v) v[i]),as.is=TRUE,na.strings=c("DKSALDJLKSADLKSJDLKSJDLJDA")))) # stupid function!
   names(coldata)[-1]=design[!is.na(design)]
   if (rownames) rownames(coldata)=coldata$Name
 
@@ -248,6 +250,7 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   checknames=function(a,b){
     if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
     if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
+
   }
   do.callback=function() {}
 
@@ -489,10 +492,6 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     m
   }
 
-  checknames=function(a,b){
-    if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
-    if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
-  }
   do.callback=function() {}
 
   url=NULL
@@ -560,6 +559,8 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
 
   if (verbose) cat("Reading files...\n")
   data=read.delim(file,stringsAsFactors=FALSE,check.names=FALSE)
+  if (!is.null(rename.sample)) colnames(data)=sapply(colnames(data),rename.sample)
+
   if (anyDuplicated(data$Gene)) {
     dupp=table(data$Gene)
     dupp=names(dupp)[which(dupp>1)]
@@ -625,7 +626,12 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     re$beta=correctmat(re$beta)
   }
 
-  for (slot in slots) checknames(re$count,re[[slot]])
+  checknames=function(a){
+    if (!all(colnames(a)==coldata$Name)) stop("Column names do not match!")
+    if (!all(rownames(a)==gene.info$Gene)) stop("Row names do not match!")
+  }
+
+  for (slot in slots) checknames(re[[slot]])
 
   coldata$no4sU=no4sU.cols
 

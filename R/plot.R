@@ -272,7 +272,7 @@ PlotScatter=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=lo
 #	df=data.frame(lfc=LFC.fun(w,n),PHL=phl)[ntr<1,]
 #	df=df[df$PHL<quantile(df$PHL[is.finite(df$PHL)],hl.quantile),]
 #	ggplot(df,aes(PHL,lfc,color=density2d(PHL, lfc, n = 100)))+
-#			scale_color_viridis_c(name = "Density",guide=FALSE)+
+#			scale_color_viridis_c(name = "Density",guide='none')+
 #			geom_point(alpha=1)+
 #			geom_hline(yintercept=0)+
 ##			geom_smooth(method="loess")+
@@ -292,7 +292,7 @@ PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quant
 
 	df=data.frame(lfc=LFC.fun(w,n),M=(log10(w+1)+log10(n+1))/2)
 	ggplot(df,aes(M,lfc,color=density2d(M, lfc, n = 100)))+
-			scale_color_viridis_c(name = "Density",guide=FALSE)+
+			scale_color_viridis_c(name = "Density",guide='none')+
 			geom_point(alpha=1)+
 			geom_hline(yintercept=0)+
 #			geom_smooth(method="loess")+
@@ -310,6 +310,7 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
 
 VulcanoPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,highlight=NULL,label=NULL) {
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
+  names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",names(df)))
   aes=modifyList(aes(LFC,-log10(Q),color=density2d(LFC,-log10(Q))),aest)
 
   g=ggplot(df,mapping=aes)+
@@ -347,13 +348,15 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lf
 
 
 
-MAPlot=function(data,analysis=Analyses(data)[1],mode="Total",aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label=NULL,repel=1) {
+MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,label=NULL,repel=1) {
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
+  if (is.numeric(analysis)) analysis=Analyses(data)[analysis]
+  names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",gsub(".*.M","M",names(df))))
   aes=modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
   g=ggplot(df,mapping=aes)+
     geom_point(size=1)+
     scale_x_log10()+
-    scale_color_manual(values=c(Sig.="black",NS="grey50"),guide=FALSE)+
+    scale_color_manual(values=c(Sig.="black",NS="grey50"),guide='none')+
     ylab(bquote(log[2]~FC))+
     xlab("Total expression")+
     geom_hline(yintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
@@ -366,7 +369,10 @@ MAPlot=function(data,analysis=Analyses(data)[1],mode="Total",aest=aes(),p.cutoff
     df2[label,"label"]=rownames(df2)[label]
     g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE,force=repel)
   }
-
+  if (label.numbers) {
+    n=c(sum(df$LFC>lfc.cutoff & df$Q<p.cutoff,na.rm = TRUE),sum(df$LFC< -lfc.cutoff & df$Q<p.cutoff,na.rm = TRUE))
+    g=g+annotate("label",x=c(Inf,Inf),y=c(Inf,-Inf),label=paste0("n=",n),hjust=c(1.1,1.1),vjust=c(1.1,-0.1))
+  }
   g
 }
 

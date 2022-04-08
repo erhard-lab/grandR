@@ -17,16 +17,23 @@ d=LFC(d,"total",contrasts=contrasts,mode="total")
 
 SetParallel()
 d=EstimateRegulation(d,"Regulation",contrasts=contrasts,steady.state=steady.state,verbose=T)
-df=GetAnalysisTable(d)
+saveRDS(d,"mirna.rds")
+d=readRDS("mirna.rds")
 
 sm=read.delim("/mnt/hilbert/projects/erhard/grandslam/paper_plots/final/f7/seedmatches.tsv")
 sm$Symbol=gsub("\\..*","",sm$Transcript)
 sm$Seed=factor(sm$Seed,levels=c("No","6mer","7mer A1","7mer m8","8mer"))
 sm=ddply(sm,.(Symbol),function(s) data.frame(Seed=s$Seed[order(s$Seed,decreasing=TRUE)][1]))
+
+df=GetAnalysisTable(d)
 df=merge(df,sm,by="Symbol")
 
 ggplot(df,aes(`Regulation.Xpo5KO vs wt.HL.log2FC`,color=Seed))+stat_ecdf()+coord_cartesian(xlim=c(-2,2))
 ggplot(df,aes(`Regulation.Xpo5KO vs wt.s.log2FC`,color=Seed))+stat_ecdf()+coord_cartesian(xlim=c(-2,2))
+
+ggplot(df,aes(`new.Xpo5KO vs wt.LFC`,color=Seed))+stat_ecdf()+coord_cartesian(xlim=c(-2,2))
+ggplot(df,aes(`old.Xpo5KO vs wt.LFC`,color=Seed))+stat_ecdf()+coord_cartesian(xlim=c(-2,2))
+
 
 ggplot(df,aes(Seed,`Regulation.Xpo5KO vs wt.HL.log2FC`,color=Seed))+geom_boxplot()
 ggplot(df,aes(Seed,`Regulation.Xpo5KO vs wt.s.log2FC`,color=Seed))+geom_boxplot()

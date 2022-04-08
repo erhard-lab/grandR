@@ -26,10 +26,54 @@ m=LFC(m,"old",GetContrasts(m,contrast = c("Condition","control")),mode="old")
 m=Normalize(m)
 
 SetParallel()
-m=EstimateRegulation(m,"Regulation",contrasts = GetContrasts(m,contrast = c("Condition","control")),steady.state=FindReferences(m,Condition=="control",group=NULL),verbose=TRUE)
-m=PairwiseNtrTest(m,"NTR",contrasts = GetContrasts(m,contrast = c("Condition","control")),verbose = T)
+m=EstimateRegulation(m,"Regulation",contrasts = GetContrasts(m,contrast = c("Condition","control")),steady.state=FindReferences(m,Condition=="control",group=NULL),verbose=TRUE,sample.f0.in.ss = TRUE)
+#m=PairwiseNtrTest(m,"NTR",contrasts = GetContrasts(m,contrast = c("Condition","control")),verbose = T)
 
 saveRDS(m,file="perturbed.rds")
+
+corrROPE=function(v) pmax(pmin(v,10000),-10000)
+pp=function(min) ggroc(list(
+  ROPE.s=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(corrROPE(df$`Regulation.s vs control.s.ROPE`))),
+  ROPE.HL=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(corrROPE(df$`Regulation.s vs control.HL.ROPE`))),
+  new.q=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`new.s vs control.Q`),
+  total.q=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`total.s vs control.Q`),
+  old.q=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`old.s vs control.Q`),
+  new.LFC=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(df$`new.s vs control.LFC`)),
+  total.LFC=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(df$`total.s vs control.LFC`)),
+  old.LFC=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(df$`old.s vs control.LFC`))
+))
+
+pp=function(min) ggroc(list(
+  ROPE.s=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(corrROPE(df$`Regulation.HL vs control.s.ROPE`))),
+  ROPE.HL=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(corrROPE(df$`Regulation.HL vs control.HL.ROPE`))),
+  new.q=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`new.HL vs control.Q`),
+  total.q=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`total.HL vs control.Q`),
+  old.q=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`old.HL vs control.Q`),
+  new.LFC=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(df$`new.HL vs control.LFC`)),
+  total.LFC=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(df$`total.HL vs control.LFC`)),
+  old.LFC=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(df$`old.HL vs control.LFC`))
+))
+
+
+
+pp=function(min) ggroc(list(
+  ROPE=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(corrROPE(df$`Regulation.unperturbed vs control.s.ROPE`))),
+  new=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`new.unperturbed vs control.Q`),
+  total=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`total.unperturbed vs control.Q`),
+  old=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`old.unperturbed vs control.Q`)
+))
+
+pp=function(min) ggroc(list(
+  ROPE=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(corrROPE(df$`Regulation.s vs control.HL.ROPE`))),
+  new=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`new.s vs control.Q`),
+  total=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`total.s vs control.Q`),
+  old=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`old.s vs control.Q`)
+))
+
+
+
+
+
 
 m=DropAnalysis(m)
 m=subset(m,columns=Coldata(m)$Replicate %in% c("A","B","C"))
@@ -50,7 +94,52 @@ m=EstimateRegulation(m,"Regulationsampf0",sample.f0.in.ss = TRUE,contrasts = Get
 #m=PairwiseNtrTest(m,"NTR",contrasts = GetContrasts(m,contrast = c("Condition","control")),verbose = T)
 
 saveRDS(m,file="perturbed_3rep.rds")
+
+
 m=readRDS("perturbed_3rep.rds")
+corrROPE=function(v) pmax(pmin(v,10000),-10000)
+
+
+pp=function(min) ggroc(list(
+  ROPE.s=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(corrROPE(df$`Regulation.s vs control.s.ROPE`))),
+  ROPE.HL=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(corrROPE(df$`Regulation.s vs control.HL.ROPE`))),
+  new.q=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`new.s vs control.Q`),
+  total.q=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`total.s vs control.Q`),
+  old.q=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`old.s vs control.Q`),
+  new.LFC=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(df$`new.s vs control.LFC`)),
+  total.LFC=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(df$`total.s vs control.LFC`)),
+  old.LFC=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(df$`old.s vs control.LFC`))
+))
+
+pp=function(min) ggroc(list(
+  ROPE.s=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(corrROPE(df$`Regulation.HL vs control.s.ROPE`))),
+  ROPE.HL=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(corrROPE(df$`Regulation.HL vs control.HL.ROPE`))),
+  new.q=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`new.HL vs control.Q`),
+  total.q=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`total.HL vs control.Q`),
+  old.q=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`old.HL vs control.Q`),
+  new.LFC=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(df$`new.HL vs control.LFC`)),
+  total.LFC=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(df$`total.HL vs control.LFC`)),
+  old.LFC=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(df$`old.HL vs control.LFC`))
+))
+
+
+
+pp=function(min) ggroc(list(
+  ROPE=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,abs(corrROPE(df$`Regulation.unperturbed vs control.s.ROPE`))),
+  new=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`new.unperturbed vs control.Q`),
+  total=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`total.unperturbed vs control.Q`),
+  old=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`old.unperturbed vs control.Q`)
+))
+
+pp=function(min) ggroc(list(
+  ROPE=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,abs(corrROPE(df$`Regulation.s vs control.HL.ROPE`))),
+  new=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`new.s vs control.Q`),
+  total=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`total.s vs control.Q`),
+  old=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`old.s vs control.Q`)
+))
+
+
+
 
 pp=function(min) ggroc(list(
   ROPE=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`Regulation.s vs control.s.ROPE`),
@@ -61,14 +150,6 @@ pp=function(min) ggroc(list(
   total=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`total.s vs control.Q`),
   old=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`old.s vs control.Q`)
 ))
-
-pp=function(min) ggroc(list(
-  ROPE=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`Regulation.s vs control.s.ROPE`),
-  new=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`new.s vs control.Q`),
-  total=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`total.s vs control.Q`),
-  old=roc(abs(log2(df$true_s/df$true_s.perturbed.s))>min,df$`old.s vs control.Q`)
-))
-
 
 pp=function(min) ggroc(list(
   ROPE=roc(abs(log2(df$true_d/df$true_d.perturbed.d))>min,df$`Regulation.HL vs control.HL.ROPE`),
@@ -111,12 +192,9 @@ VulcanoPlot(m,analysis="old.s vs control",lfc.cutoff = 0.25) | VulcanoPlot(m,ana
 
 
 
-df=cbind(GetAnalysisTable(m,"old|new|total",column="LFC|Q"),GetAnalysisTable(m,"Regulation",gene.info = FALSE),GetAnalysisTable(m,"NTR",gene.info = FALSE))
+df=cbind(GetAnalysisTable(m,"old|new|total",column="LFC|Q"),GetAnalysisTable(m,"Regulation",gene.info = FALSE))
 PlotScatter(df,x=-log2(true_d.perturbed.d/true_d),y=`old.HL vs control.LFC`,remove.outlier=F)+geom_abline()
 PlotScatter(df,x=-log2(true_d.perturbed.d/true_d),y=`Regulation.HL vs control.HL.log2FC`,remove.outlier=F)+geom_abline()
-PlotScatter(df,x=-log2(true_d.perturbed.d/true_d),y=-log10(`NTR.HL vs control.Q`),remove.outlier=F,ylim=c(-2,10))
-PlotScatter(df,x=-log2(true_s.perturbed.s/true_s),y=-log10(`NTR.s vs control.Q`),remove.outlier=F,ylim=c(-2,10))
-
 
 PlotScatter(df,x=rank(log(2)/true_d),y=`new.HL vs control.LFC`,ylim=c(-1,1))
 PlotScatter(df,x=rank(log(2)/true_d),y=`Regulation.HL vs control.s.log2FC`,ylim=c(-1,1))
@@ -125,5 +203,7 @@ PlotScatter(df,x=rank(log(2)/true_d),y=`Regulation.HL vs control.s.log2FC`,ylim=
 
 
 
+PlotScatter(df,x=-log2(true_s/true_s.perturbed.s),y=`new.s vs control.LFC`,remove.outlier=F)+geom_abline()
+PlotScatter(df,x=-log2(true_s/true_s.perturbed.s),y=`Regulation.s vs control.s.log2FC`,remove.outlier=F)+geom_abline()
 
 

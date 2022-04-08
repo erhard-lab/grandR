@@ -498,7 +498,10 @@ Coldata=function(data,column=NULL,value=NULL) {
 #'
 #' @return Whether or not the given name is valid and unique for the grandR object
 #'
-check.analysis=function(data,analyses,regex) sapply(analyses,function(pattern) any(grepl(pattern,Analyses(data),fixed=!regex)))
+check.analysis=function(data,analyses,regex) {
+  if (!regex) return(is.logical(analyses) || is.numeric(analyses) || all(analyses %in% Analyses(data)))
+  sapply(analyses,function(pattern) any(grepl(pattern,Analyses(data),fixed=!regex)))
+}
 #' @rdname check.analysis
 check.slot=function(data,slot) slot %in% names(data$data)
 #' @rdname check.analysis
@@ -815,6 +818,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #'
 #' @param data A grandR object
 #' @param reference Expression evaluating to a logical vector to indicate which columns are reference columns; evaluated in an environment having the columns of \link{Coldata}(data)
+#' @param reference.function Function evaluating to a logical vector to indicate which columns are reference columns; called with the data frame row corresponding to the sample, and evaluated in an environment having the columns of \link{Coldata}(data)
 #' @param group a vector of colnames in \link{Coldata}(data)
 #' @param as.list return it as a list (names correspond to each sample, elements are the reference samples)
 #' @param columns find references only for a subset of the columns (samples or cells; can be NULL)
@@ -834,16 +838,28 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #'
 #' @export
 #'
-FindReferences=function(data,reference, group="Condition", as.list=FALSE,columns=NULL) {
+FindReferences=function(data,reference=NULL, reference.function=NULL,group="Condition", as.list=FALSE,columns=NULL) {
   if (!is.grandR(data)) stop("Data is not a grandR object!")
   if (!is.null(group) && !group %in% names(Coldata(data))) stop(sprintf("No %s in Coldata!",group))
 
   df=Coldata(data)
   if (!is.null(columns)) df=df[columns,]
   df$group=as.character(if(is.null(group)) 1 else interaction(df[group],drop=FALSE,sep="."))
-  e=substitute(reference)
-  map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
-  pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
+  ef=substitute(reference.function)
+  if (!is.null(reference.function)) {
+    setColnames=function(m,n) {colnames(m)=n; m}
+    map=dlply(df,.(group),function(s) setColnames(sapply(1:nrow(s),function(row) setNames(eval(ef,s,parent.frame())(as.list(s[row,])),s$Name) ),s$Name))
+    re=matrix(FALSE,nrow=nrow(df),ncol=nrow(df))
+    colnames(re)=df$Name
+    rownames(re)=df$Name
+    for (mat in map) re[rownames(mat),colnames(mat)]=mat
+    return(re)
+
+  } else {
+    e=substitute(reference)
+    map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
+    pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
+  }
   if (as.list) return(pairs)
   mat = sapply(pairs,function(names) colnames(data) %in% names)
   rownames(mat)=colnames(data)
@@ -970,7 +986,13 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
-  analyses=if (is.null(analyses)) 1:length(Analyses(data)) else unlist(lapply(analyses,function(pat) grep(pat,Analyses(data),fixed=!regex)))
+  if (is.null(analyses)) {
+    analyses=1:length(Analyses(data))
+  } else if (regex) {
+    analyses=unlist(lapply(analyses,function(pat) grep(pat,Analyses(data))))
+  } else if (is.character(analyses)) {
+    analyses=which(Analyses(data) %in% analyses)
+  }
   for (name in Analyses(data)[analyses]) {
     t=data$analysis[[name]][genes,,drop=FALSE]
     if (!is.null(columns)) {
