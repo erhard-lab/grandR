@@ -352,7 +352,7 @@ Condition <- function(data,value=NULL) {
   if (is.null(value)) {
     data$coldata$Condition=NULL
   } else if (all(value %in% names(data$coldata))) {
-    data$coldata$Condition <- interaction(data$coldata[value])
+    data$coldata$Condition <- interaction(data$coldata[value],drop=TRUE)
   } else{
     data$coldata$Condition <- as.factor(value)
   }

@@ -970,6 +970,187 @@ TransformKineticParameters=function(old=NULL,new=NULL,total=NULL,ntr=NULL,t=2,s=
 }
 
 
+
+
+#' Compute the posterior distributions of RNA synthesis and degradation for a particular gene
+#'
+#' @param data the grandR object
+#' @param gene a gene name or symbol or index
+#' @param columns samples or cell representing the same experimental condition (must refer to a unique labeling duration)
+#' @param reference.columns either a reference matrix (\code{\link{FindReferences}}) to define reference columns for each of the samples or cell defined by the \code{columns} parameter, or a
+#' logical vector denoting the reference columns; can be NULL, but then the samples or cells have to be in steady state
+#' @param dispersion dispersion parameter for the given columns (if NULL, this is estimated from the data, takes a lot of time!)
+#' @param slot the data slot to take f0 and totals from
+#' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
+#' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
+#' @param sample.f0.in.ss whether or not to sample f0 under steady state conditions
+#' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
+#' @param return.samples return the posterior samples of the parameters?
+#' @param return.points return the point estimates per replicate as well?
+#' @param N the posterior sample size
+#' @param N.max the maximal number of posterior samples (necessary if old RNA > f0); if more are necessary, a warning is generated
+#' @param conf.int A number between 0 and 1 representing the size of the credible interval
+#'
+#' @details The kinetic parameters s and d are computed using \link{TransformSnapshot}. For that, the sample either must be in steady state
+#' (this is the case if defined in the reference.columns matrix), or if the levels of reference samples from a specific prior time point are known. This time point is
+#' defined by \code{time.experiment} (i.e. the difference between the reference samples and samples themselves). If
+#' \code{time.experiment} is NULL, then the labeling time of the samples is used (e.g. useful if labeling was started concomitantly with
+#' the perturbation, and the reference samples are unperturbed samples).
+#'
+#' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
+#' that approximates the mixture of betas from the replicate samples. (see \link{beta.approximate.mixture}).
+#'
+#' @return a list containing the posterior mean of s and s, its credible intervals and,
+#' if return.samples=TRUE a data frame containing all posterior samples
+#'
+#'
+#' @export
+#'
+FitKineticsSnapshot=function(data,gene,columns,
+                             reference.columns=NULL,
+                             dispersion=NULL,
+                             slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL,
+                             sample.f0.in.ss=TRUE,
+                             hierarchical=TRUE,
+                             return.samples=FALSE,
+                             return.points=FALSE,
+                             N=10000,N.max=N*10,
+                             conf.int=0.95) {
+    if (is.matrix(reference.columns)) reference.columns=apply(reference.columns[,Columns(data,columns)]==1,1,any)
+
+    alpha=GetData(data,mode.slot="alpha",genes=gene,columns = columns)
+    if (!is.numeric(time.labeling) && length(unique(alpha[[time.labeling]]))!=1) stop("A has to refer to a unique labeling duration!")
+    if (!is.null(time.experiment) && length(unique(alpha[[time.experiment]]))!=1) stop("A has to refer to a unique experimental time!")
+    beta=GetData(data,mode.slot="beta",genes=gene,columns = columns)
+    total=GetData(data,mode.slot=slot,genes=gene,columns = columns)
+    ss=GetData(data,mode.slot=slot,genes=gene,columns = reference.columns)
+    if (!is.null(time.experiment) && length(unique(ss[[time.experiment]]))!=1) stop("Steady state for A has to refer to a unique experimental time!")
+
+    if (is.null(dispersion)) dispersion=estimate.dispersion(as.matrix(GetTable(data,type="count",columns=columns,gene.info = F)))[ToIndex(data,gene)]
+
+
+    use=total$Value>0 & !is.na(alpha$Value)
+
+    emptyres=function() {
+        re=list(
+            s=NA,
+            d=NA,
+            s.conf.int=c(-Inf,Inf),
+            d.conf.int=c(-Inf,Inf)
+        )
+        if (return.samples)
+            re$samples=data.frame(s=numeric(0),d=numeric(0))
+        if (return.points)
+            re$points=data.frame(s=numeric(0),d=numeric(0))
+        return(re)
+    }
+
+    if (sum(use)<2 || sum(ss$Value>0)==0) return(emptyres())
+
+
+    alpha=alpha[use,]
+    beta=beta[use,]
+    total=total[use,]
+    ss=ss[ss$Value>0,]
+
+    t=if (is.numeric(time.labeling)) time.labeling else unique(alpha[[time.labeling]])
+    t0=if (is.null(time.experiment)) t else unique(alpha[[time.experiment]])-unique(ss[[time.experiment]])
+    is.steady.state=any(reference.columns & columns)
+
+
+    if (return.points)
+        points=as.data.frame(if (is.steady.state) TransformSnapshot(ntr=alpha$Value/(alpha$Value+beta$Value),total=total$Value,t=t) else TransformSnapshot(ntr=alpha$Value/(alpha$Value+beta$Value),total=total$Value,t=t,t0=t0,f0=mean(ss$Value)))
+
+    if (N<1) {
+        ntr=sum(alpha$Value)/(sum(alpha$Value)+sum(beta$Value))
+        if (is.steady.state) {
+            param=TransformSnapshot(ntr=ntr,total=mean(total$Value),t=t)
+        } else {
+            if (t0<=0) stop("Experimental time is not properly defined (the steady state sample must be prior to each of A and B)!")
+            f0=mean(ss$Value)
+            param=TransformSnapshot(ntr=ntr,total=mean(total$Value),t=t,t0=t0,f0=f0)
+        }
+
+        re=list(
+            s=param['s'],
+            d=param['d'],
+            s.conf.int=c(-Inf,Inf),
+            d.conf.int=c(-Inf,Inf)
+        )
+        if (return.samples)
+            re$samples=data.frame(s=numeric(0),d=numeric(0))
+        if (return.points)
+            re$points=points
+        return(re)
+    }
+
+    if (hierarchical) {
+        mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample.mu
+    } else {
+        fit=beta.approximate.mixture(alpha$Value,beta$Value)
+        mod=function(N) rbeta(N,fit$a,fit$b)
+    }
+
+    sample.ss.with.f0=function(N) {
+        f0=0.1+rnbinom(N,size=1/dispersion,mu=mean(total$Value))
+        ntr=mod(N)
+        total=0.1+rnbinom(N,size=1/dispersion,mu=mean(total$Value))
+        TransformSnapshot(ntr=ntr,total=total,t=t,f0=f0,t0=t)
+    }
+    sample.ss.without.f0=function(N) {
+        ntr=mod(N)
+        total=0.1+rnbinom(N,size=1/dispersion,mu=mean(total$Value))
+        TransformSnapshot(ntr=ntr,total=total,t=t)
+    }
+    sample.non.ss=function(N) {
+        if (t0<=0) stop("Experimental time is not properly defined (the steady state sample must be prior to each of A and B)!")
+        f0=0.1+rnbinom(N,size=1/dispersion,mu=mean(ss$Value))
+        total=0.1+rnbinom(N,size=1/dispersion,mu=mean(total$Value))
+        ntr=mod(N)
+        TransformSnapshot(ntr=ntr,total=total,t=t,t0=t0,f0=f0)
+    }
+    resample=function(FUN) {
+        mat=FUN(N)
+        inadmissible=mat[,'d']==0 | is.infinite(mat[,'d'])
+        if (sum(inadmissible)>0) {
+            success.prob=1-sum(inadmissible)/N
+            additional.samples=sum(inadmissible)+ceiling(sum(inadmissible)*(1-success.prob)/success.prob)
+            if (additional.samples>N.max-N) {
+                warning("Inefficient sampling; results might be unreliable")
+                additional.samples=N.max-N
+            }
+            mat2=FUN(additional.samples)
+            inadmissible2=mat2[,'d']==0 | is.infinite(mat2[,'d'])
+            mat=rbind(mat[!inadmissible,],mat2[!inadmissible2,])
+        }
+        mat
+    }
+
+    samp=if (!is.steady.state) sample.non.ss else if (sample.f0.in.ss) sample.ss.with.f0 else sample.ss.without.f0
+
+    samp=resample(samp)
+
+    N=nrow(samp)
+    if (N==0) return(emptyres())
+
+    sc=quantile(samp[,'s'],c(0.5-conf.int/2,0.5+conf.int/2))
+    dc=quantile(samp[,'d'],c(0.5-conf.int/2,0.5+conf.int/2))
+
+    re=list(
+        s=mean(samp[,'s']),
+        d=mean(samp[,'d']),
+        s.conf.int=sc,
+        d.conf.int=dc
+    )
+    if (return.samples)
+        re$samples=data.frame(s=samp[,'s'],d=samp[,'d'])
+    if (return.points)
+        re$points=points
+
+    re
+}
+
+
 #' Estimate parameters for a one-shot experiment.
 #'
 #' Under steady state conditions it is straight-forward to estimate s and d. Otherwise, the total levels at some other time point are needed.
@@ -984,7 +1165,7 @@ TransformKineticParameters=function(old=NULL,new=NULL,total=NULL,ntr=NULL,t=2,s=
 #'
 #' @export
 #'
-TransformOneShot=function(ntr,total,t,t0=NULL,f0=NULL) {
+TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL) {
     if (is.null(f0)) {
         d=-1/t*log(1-ntr)
         s=total*d
@@ -994,7 +1175,7 @@ TransformOneShot=function(ntr,total,t,t0=NULL,f0=NULL) {
         s=-1/t*total*ntr * ifelse(Fval>=1,-1,ifelse(is.infinite(Fval),0,log(Fval)/(1-Fval)))
     } else if (length(ntr)>1 || length(total)>1 || length(f0)>1) {
         m=cbind(ntr,total,f0)
-        return(t(sapply(1:nrow(m),function(i) TransformOneShot(m[i,1],m[i,2],t,t0,m[i,3]))))
+        return(t(sapply(1:nrow(m),function(i) TransformSnapshot(m[i,1],m[i,2],t,t0,m[i,3]))))
     } else {
         new=total*ntr
         old=total-new

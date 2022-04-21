@@ -284,7 +284,7 @@ bayesian.beta.test=function(alpha.A,beta.A,alpha.B,beta.B,plot1=FALSE,plot2=FALS
 #' @param data the grandR object
 #' @param name the name of the analysis added to the grandR object
 #' @param contrasts A contrast matrix defining pairwise comparisons
-#' @param reference.samples either a reference matrix (\code{\link{FindReferences}}) to define reference samples for each sample in A and B, or a
+#' @param reference.columns either a reference matrix (\code{\link{FindReferences}}) to define reference samples for each sample in A and B, or a
 #' name list with names A and B containing logical vectors denoting the reference samples
 #' @param slot the data slot to take f0 and totals from
 #' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
@@ -298,8 +298,8 @@ bayesian.beta.test=function(alpha.A,beta.A,alpha.B,beta.B,plot1=FALSE,plot2=FALS
 #' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
 #' @param verbose Vebose output
 #'
-#' @details The kinetic parameters s and d are computed using \link{TransformOneShot}. For that, the sample either must be in steady state
-#' (this is the case if defined in the reference.samples matrix), or if the levels at a specific time point are known. This time point is
+#' @details The kinetic parameters s and d are computed using \link{TransformSnapshot}. For that, the sample either must be in steady state
+#' (this is the case if defined in the reference.columns matrix), or if the levels at a specific time point are known. This time point is
 #' defined by \code{time.experiment} (i.e. the difference between the steady state samples and the A or B samples themselves). If
 #' \code{time.experiment} is NULL, then the labeling time of the A or B samples is used (e.g. usefull if labeling was started concomitantly with
 #' the perturbation, and the steady state samples are unperturbed samples).
@@ -312,7 +312,7 @@ bayesian.beta.test=function(alpha.A,beta.A,alpha.B,beta.B,plot1=FALSE,plot2=FALS
 #'
 #' @export
 #'
-EstimateRegulation=function(data,name,contrasts,reference.samples,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, hierarchical=TRUE, verbose=FALSE) {
+EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, hierarchical=TRUE, verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
 
@@ -321,7 +321,7 @@ EstimateRegulation=function(data,name,contrasts,reference.samples,slot=DefaultSl
     A=contrasts[[n]]==1
     B=contrasts[[n]]==-1
 
-    ss=if (is.matrix(reference.samples)) list(A=apply(reference.samples[,Columns(data,A)]==1,1,any),B=apply(reference.samples[,Columns(data,B)]==1,1,any))
+    ss=if (is.matrix(reference.columns)) list(A=apply(reference.columns[,Columns(data,A)]==1,1,any),B=apply(reference.columns[,Columns(data,B)]==1,1,any))
     dispersion.A = if (sum(ss$A)==1) rep(0.1,nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$A))
     dispersion.B = if (sum(ss$B)==1) rep(0.1,nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$B))
 
@@ -340,8 +340,52 @@ EstimateRegulation=function(data,name,contrasts,reference.samples,slot=DefaultSl
 
     re=plapply(1:nrow(data),function(i) {
     #for (i in 1:nrow(data)) { print (i);
-      re=EstimateGeneRegulation(data=data,gene=i,A=A,B=B,dispersion.A =dispersion.A[i], dispersion.B = dispersion.B[i],reference.samples = reference.samples,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,ROPE.max.log2FC=ROPE.max.log2FC,sample.f0.in.ss = sample.f0.in.ss,return.samples = FALSE,N=N,N.max=N.max,conf.int = conf.int, hierarchical = hierarchical)
-      unlist(re[c("s.A","s.B","HL.A","HL.B","s.log2FC","s.ROPE","HL.log2FC","HL.ROPE")])
+      fit.A=FitKineticsSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int)
+      fit.B=FitKineticsSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int)
+      samp.a=fit.A$samples
+      samp.b=fit.B$samples
+
+      N=min(nrow(samp.a),nrow(samp.b))
+      if (N==0) return(c(
+        s.A=NA,
+        s.B=NA,
+        HL.A=NA,
+        HL.B=NA,
+        s.log2FC=NA,
+        s.cred.lower=-Inf,
+        s.cred.upper=-Inf,
+        s.ROPE=NA,
+        HL.log2FC=NA,
+        HL.cred.lower=-Inf,
+        HL.cred.upper=Inf,
+        HL.ROPE=NA
+      ))
+      samp.a=samp.a[1:N,,drop=FALSE]
+      samp.b=samp.b[1:N,,drop=FALSE]
+
+      savelfc=function(a,b) ifelse((is.infinite(a) & is.infinite(b)) | (a==0&b==0),0,log2(a/b))
+      lfc.s=savelfc(samp.a[,'s'],samp.b[,'s'])
+      lfc.HL=savelfc(samp.b[,'d'],samp.a[,'d'])
+
+      sc=quantile(lfc.s,c(0.5-conf.int/2,0.5+conf.int/2))
+      hc=quantile(lfc.HL,c(0.5-conf.int/2,0.5+conf.int/2))
+
+      return(
+        c(
+        s.A=mean(samp.a[,'s']),
+        s.B=mean(samp.b[,'s']),
+        HL.A=log(2)/mean(samp.a[,'d']),
+        HL.B=log(2)/mean(samp.b[,'d']),
+        s.log2FC=mean(lfc.s),
+        s.cred.lower=unname(sc[1]),
+        s.cred.upper=unname(sc[2]),
+        s.ROPE=ROPE.LFC(lfc.s,ROPE.max.log2FC),
+        HL.log2FC=mean(lfc.HL),
+        HL.conf.upper=unname(hc[1]),
+        HL.conf.lower=unname(hc[2]),
+        HL.ROPE=ROPE.LFC(lfc.HL,ROPE.max.log2FC)
+        )
+        )
     },seed=seed)
 
     re.df=as.data.frame(t(simplify2array(re)))
@@ -361,7 +405,7 @@ EstimateRegulation=function(data,name,contrasts,reference.samples,slot=DefaultSl
 #' @param B columns for condition B (must refer to a unique labeling duration)
 #' @param dispersion.A dispersion parameter for condition A (if NULL this is estimated, takes a lot of time!)
 #' @param dispersion.B dispersion parameter for condition B (if NULL this is estimated, takes a lot of time!)
-#' @param reference.samples either a reference matrix (\code{\link{FindReferences}}) to define reference samples for each sample in A and B, or a
+#' @param reference.columns either a reference matrix (\code{\link{FindReferences}}) to define reference samples for each sample in A and B, or a
 #' name list with names A and B containing logical vectors denoting the reference samples
 #' @param slot the data slot to take f0 and totals from
 #' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
@@ -374,8 +418,8 @@ EstimateRegulation=function(data,name,contrasts,reference.samples,slot=DefaultSl
 #' @param conf.int A number between 0 and 1 representing the size of the credible interval
 #' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
 #'
-#' @details The kinetic parameters s and d are computed using \link{TransformOneShot}. For that, the sample either must be in steady state
-#' (this is the case if defined in the reference.samples matrix), or if the levels at a specific time point are known. This time point is
+#' @details The kinetic parameters s and d are computed using \link{TransformSnapshot}. For that, the sample either must be in steady state
+#' (this is the case if defined in the reference.columns matrix), or if the levels at a specific time point are known. This time point is
 #' defined by \code{time.experiment} (i.e. the difference between the steady state samples and the A or B samples themselves). If
 #' \code{time.experiment} is NULL, then the labeling time of the A or B samples is used (e.g. usefull if labeling was started concomitantly with
 #' the perturbation, and the steady state samples are unperturbed samples).
@@ -455,7 +499,7 @@ EstimateGeneRegulation=function(data,gene,A,B,dispersion.A=NULL,dispersion.B=NUL
   if (N<1) {
     ntr=sum(alpha.A$Value)/(sum(alpha.A$Value)+sum(beta.A$Value))
     comp.ss=function(disp,mod,total,t) {
-      TransformOneShot(ntr=ntr,total=mean(total$Value),t=t)
+      TransformSnapshot(ntr=ntr,total=mean(total$Value),t=t)
       #d=-1/t*log(1-ntr)
       #s=f0*d
       #cbind(s,d)
@@ -463,7 +507,7 @@ EstimateGeneRegulation=function(data,gene,A,B,dispersion.A=NULL,dispersion.B=NUL
     comp.non.ss=function(disp,ss,mod,total,t,t0) {
       if (t0<=0) stop("Experimental time is not properly defined (the steady state sample must be prior to each of A and B)!")
       f0=mean(ss$Value)
-      TransformOneShot(ntr=ntr,total=mean(total$Value),t=t,t0=t0,f0=f0)
+      TransformSnapshot(ntr=ntr,total=mean(total$Value),t=t,t0=t0,f0=f0)
     }
 
     samp.a=if (any(reference.samples$A & A)) comp.ss(dispersion.A,mod.A,total.A,t.A) else comp.non.ss(dispersion.A,ss.A,mod.A,total.A,t.A,t0.A)
@@ -507,11 +551,11 @@ EstimateGeneRegulation=function(data,gene,A,B,dispersion.A=NULL,dispersion.B=NUL
       f0=0.1+rnbinom(N,size=1/disp,mu=mean(total$Value))
       ntr=mod(N)
       total=0.1+rnbinom(N,size=1/disp,mu=mean(total$Value))
-      TransformOneShot(ntr=ntr,total=total,t=t,f0=f0,t0=t)
+      TransformSnapshot(ntr=ntr,total=total,t=t,f0=f0,t0=t)
     } else {
       ntr=mod(N)
       total=0.1+rnbinom(N,size=1/disp,mu=mean(total$Value))
-      TransformOneShot(ntr=ntr,total=total,t=t)
+      TransformSnapshot(ntr=ntr,total=total,t=t)
     }
     #d=-1/t*log(1-ntr)
     #s=f0*d
@@ -522,7 +566,7 @@ EstimateGeneRegulation=function(data,gene,A,B,dispersion.A=NULL,dispersion.B=NUL
     f0=0.1+rnbinom(N,size=1/disp,mu=mean(ss$Value))
     total=0.1+rnbinom(N,size=1/disp,mu=mean(total$Value))
     ntr=mod(N)
-    TransformOneShot(ntr=ntr,total=total,t=t,t0=t0,f0=f0)
+    TransformSnapshot(ntr=ntr,total=total,t=t,t0=t0,f0=f0)
     #Fval=pmin(mean(total$Value)*(1-ntr)/f0,1)
     #d=ifelse(Fval>=1,0,-1/t*log(Fval))
     #s=-1/t*mean(total$Value)*ntr * ifelse(Fval>=1,-1,ifelse(is.infinite(Fval),0,log(Fval)/(1-Fval)))
@@ -596,7 +640,7 @@ ROPE.LFC=function(lfc,ROPE.max.log2FC) {
   r=sum(lfc> ROPE.max.log2FC)
   m=sum(lfc<=ROPE.max.log2FC & lfc>=-ROPE.max.log2FC)+na
 
-  if (l>r) -l/(m+r) else r/(m+l)
+  if (l>r) -l/(m+r+l) else r/(m+l+r)
 }
 
 beta.approximate.mixture=function(a,b) {

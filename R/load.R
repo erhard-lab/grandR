@@ -364,12 +364,17 @@ ReadGRAND3_sparse=function(prefix, design=c(Design$Library,Design$Sample,Design$
     warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
     gene.info$Gene=make.unique(gene.info$Gene)
   }
+  if (any(is.na(gene.info$Symbol) | gene.info$Symbol=="")) {
+    warning(sprintf("No gene symbols (e.g. %s) present, replacing by gene ids!",paste(head(gene.info$Gene[is.na(gene.info$Symbol) | gene.info$Symbol==""]),collapse=",")),call. = FALSE,immediate. = TRUE)
+    gene.info$Symbol[is.na(gene.info$Symbol) | gene.info$Symbol==""]=gene.info$Gene[is.na(gene.info$Symbol) | gene.info$Symbol==""]
+  }
   if (anyDuplicated(gene.info$Symbol)) {
     dupp=table(gene.info$Symbol)
     dupp=names(dupp)[which(dupp>1)]
     warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
     gene.info$Symbol=make.unique(gene.info$Symbol)
   }
+  if (any(gene.info$Gene=="")) stop("Gene name may not be empty!")
 
 #  if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
 #    ill=gene.info$Symbol[which(make.names(gene.info$Symbol)!=gene.info$Symbol)]
@@ -546,13 +551,13 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   terms=strsplit(conds[1],".",fixed=TRUE)[[1]]
 
   if (is.data.frame(design)) {
-    if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(terms,collapse=".")))
+    if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(conds,collapse=", ")))
     coldata=design
   } else if (is.function(design)) {
     coldata=design(conds)
-    if (length(conds)!=nrow(coldata)) stop(paste0("Design parameter (function) is incompatible with input data: ",paste(terms,collapse=".")))
+    if (length(conds)!=nrow(coldata)) stop(paste0("Design parameter (function) is incompatible with input data: ",paste(conds,collapse=", ")))
   } else {
-    if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
+    if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(conds,collapse=", ")))
     coldata=MakeColdata(conds,design)
   }
 
@@ -567,6 +572,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
     data$Gene=make.unique(data$Gene)
   }
+  if (any(data$Gene=="")) stop("Gene name may not be empty!")
   if (any(is.na(data$Symbol) | data$Symbol=="")) {
     warning(sprintf("No gene symbols (e.g. %s) present, replacing by gene ids!",paste(head(data$Gene[is.na(data$Symbol) | data$Symbol==""]),collapse=",")),call. = FALSE,immediate. = TRUE)
     data$Symbol[is.na(data$Symbol) | data$Symbol==""]=data$Gene[is.na(data$Symbol) | data$Symbol==""]

@@ -270,7 +270,7 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
     d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
     ylim=c(-d,d)
   }
-  ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
+  ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
     scale_color_viridis_c(name = "Density",guide=FALSE)+
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+
@@ -279,12 +279,12 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
     coord_cartesian(ylim=ylim)
 }
 
-PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",hl.quantile=0.8,correction=1) {
+PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot=DefaultSlot(d),hl.quantile=0.8,correction=1) {
   time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   df=df[df$covar<quantile(df$covar[is.finite(df$covar)],hl.quantile) & df$ntr<1 & df$ntr>0,]
   if (is.null(ylim)) {
-    d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
+    d=max(abs(quantile(df$lfc[is.finite(df$lfc)],c(0.01,0.99))))*1.5
     ylim=c(-d,d)
   }
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+

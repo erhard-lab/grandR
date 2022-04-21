@@ -1,5 +1,5 @@
 
-density2d=function(x, y, facet=NULL, n=100) {
+density2d=function(x, y, facet=NULL, n=100, margin='n') {
   bandwidth.nrd.ex=function (x)
   {
     r <- range(x)
@@ -14,6 +14,9 @@ density2d=function(x, y, facet=NULL, n=100) {
         bw.y=MASS::bandwidth.nrd(y[use])
         if (bw.y==0) bw.y=bandwidth.nrd.ex(y[use])
         d=MASS::kde2d(x[use], y[use], h=c(bw.x,bw.y), n=n)
+        if (margin=='x') d$z=d$z/apply(d$z,1,max)
+        else if (margin=='y') d$z=t(t(d$z)/apply(d$z,2,max))
+        else d$z=d$z/max(d$z)
         r=rep(NA,length(x))
         r[use]=d$z[cbind(findInterval(x[use], d$x),findInterval(y[use], d$y))]
 	r=r/max(r,na.rm=T)
