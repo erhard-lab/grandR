@@ -69,6 +69,18 @@ my.precision=function (x)
   }
 }
 
+sd.from.hessian=function(H) {
+  m=-H
+  keep=rep(T,nrow(m))
+  while(sum(keep>0) && rcond(m[keep,keep,drop=FALSE])<.Machine$double.eps) {
+    s=apply(abs(m),1,sum)
+    keep=keep&s>min(s[keep])
+  }
+  d=rep(0,nrow(m))
+  d[keep]=sqrt(diag(solve(m[keep,keep])))
+  d
+}
+
 
 cnt=function(m) {
   m=as.matrix(m)
@@ -122,7 +134,9 @@ plapply=function(...,seed=NULL) {
 opt <- new.env()
 opt$lapply=function(...) lapply2(...)
 opt$sapply=function(...) simplify2array(opt$lapply(...))
+opt$nworkers=0
 SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
+  opt$nworkers=cores
   if (cores>1) {
     if (.Platform$OS.type!="unix") stop("Parallelism is not supported under windows!")
     opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)
@@ -130,7 +144,7 @@ SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
     opt$lapply<-function(...) lapply2(...)
   }
 }
-IsParallel=function() grepl("mclapply",capture.output(print(opt$lapply))[1])
+IsParallel=function() opt$nworkers>1
 
 
 #' Wrapper around lapply to track progress

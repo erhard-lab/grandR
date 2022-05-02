@@ -5,7 +5,7 @@ Title: Grand3 R package
 Description: Downstream analysis for (sc-) SLAM/TimeLapse/TUC-seq experiments
 Author: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
 Maintainer: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
-License: Apache License (>= 2.0)
+License: Apache License (>= 2)
 Depends:
     Matrix,
     stats,
@@ -18,6 +18,9 @@ Depends:
 Suggests: knitr,
     rmarkdown,
     DESeq2,
+    clusterProfiler,
+    msigdbr,
+    fgsea,
     rclipboard,
     minpack.lm,
     parallel,

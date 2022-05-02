@@ -115,7 +115,7 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
         tab=data.frame(`Half-life`=log(2)/re[[cond]])
         columns=if(is.null(cond)) colnames(data) else colnames(data)[Condition(data)==cond]
         name=if(is.null(cond)) name else paste0(name,".",cond)
-        AddAnalysis(data,MakeAnalysis(name=name,analysis="PulseR",columns = columns),tab)
+        AddAnalysis(data,name=name,tab)
     }
 
     for (cond in levels(Condition(data))) data=adder(cond)
@@ -264,17 +264,6 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
         c(old$Value-f(old$time),new$Value-g(new$time))
     }
 
-    sd.from.hessian=function(H) {
-        m=-H
-        keep=rep(T,nrow(m))
-        while(sum(keep>0) && rcond(m[keep,keep,drop=FALSE])<.Machine$double.eps) {
-            s=apply(abs(m),1,sum)
-            keep=keep&s>min(s[keep])
-        }
-        d=rep(0,nrow(m))
-        d[keep]=sqrt(diag(solve(m[keep,keep])))
-        d
-    }
     logLik.nls.lm <- function(object, REML = FALSE, ...)
     {
         res <- object$fvec
@@ -327,7 +316,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
                        new=ndf[ndf$use,],
                        control=minpack.lm::nls.lm.control(maxiter = maxiter))
 
-        if (model.p$niter==maxiter) return(list(data=NA,modifier=NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
+        if (model.p$niter==maxiter) return(list(data=NA,modifier=if (compute.modifier) data.frame(Name=ndf$Name,Time=NA,Norm.factor=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
         conf.p=try(sd.from.hessian(-model.p$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
         par=setNames(model.p$par,c("s","d"))
         rmse=sqrt(model.p$deviance/(nrow(ndf)+nrow(odf)))
@@ -376,7 +365,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
                        old=odf[oind,],
                        new=ndf[nind,],
                        control=minpack.lm::nls.lm.control(maxiter = maxiter))
-        if (model.m$niter==maxiter) return(list(data=NA,modifier=NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
+        if (model.m$niter==maxiter) return(list(data=NA,modifier=if (compute.modifier) data.frame(Name=ndf$Name,Time=NA,Norm.factor=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
         par=setNames(model.m$par,c("s","d"))
         f0=par[3]
         conf.m=try(sd.from.hessian(-model.m$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
@@ -720,12 +709,18 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #'
 #' The NTRs of each sample might be systematically too small (or large). This function identifies such systematic
 #' deviations and computes labeling durations without systematic deviations.
+#'
 #' @param data A grandR object
 #' @param slot The data slot to take expression values from
 #' @param time The column in the column annotation table representing the labeling duration
 #' @param time.name The name in the column annotation table to put the calibrated labeling durations
+#' @param time.conf.name The name in the column annotation table to put the confidence values for the labeling durations (half-size of the confidence interval)
+#' @param conf.int The level for confidence intervals
 #' @param steady.state either a named list of logical values representing conditions in steady state or not, or a single logical value for all conditions
 #' @param n.estimate the times are calibrated with the top n expressed genes
+#' @param n.iter the maximal number of iterations for the numerical optimization
+#' @param verbose verbose output
+#' @param ... forwarded to FitKinetics
 #'
 #' @return
 #' A new grandR object containing the calibrated durations in the column data annotation
@@ -736,71 +731,62 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #' i.e. specifically new RNA made early during the labeling is underestimated. This, especially for short labeling (<2h), the effective labeling duration
 #' might be significantly less than the nominal labeling duration.
 #'
-#' @details It is impossible to obtain a perfect absolute calibration, i.e. all durations might be off by a constant factor. Check whether at least the
-#' calibrated times for long nominal labeling durations are realistic!
+#' @details It is impossible to obtain a perfect absolute calibration, i.e. all durations might be off by a factor.
 #'
-#' @details Since the calibration is based on the non-linear least squares fitting procedure, data has to be properly normalized!
-#'
-#'
-#' @seealso \link{FitKineticsGeneLeastSquares}
+#' @seealso \link{FitKinetics}
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #' sars <- Normalize(sars)
 #' SetParallel()
-#' sars<-CalibrateTimes(sars,steady.state=list(Mock=TRUE,SARS=FALSE))
+#' sars<-CalibrateEffectiveLabelingTime(sars,steady.state=list(Mock=TRUE,SARS=FALSE))
 #' Coldata(sars)
 #'
 #' @export
 #'
-CalibrateTimes=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="norm_time",steady.state=NULL,n.estimate=1000) {
+CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",conf.int=0.95,steady.state=NULL,n.estimate=1000, n.iter=1000, verbose=FALSE,...) {
 
     conds=Coldata(data)
     if (is.null(conds$Condition)) {
         conds$Condition=factor("Data")
         if (length(steady.state)==1) names(steady.state)="Data"
     }
-    timecol=setNames(rep(NA,nrow(conds)),conds$Name)
-    norm.df=list()
+    re=matrix(NA,ncol=2,nrow=nrow(conds),dimnames = list(conds$Name,c(time.name,time.conf.name)))
     for (cond in levels(conds$Condition)) {
+        if (verbose) cat(sprintf("Calibrating %s...\n",cond))
         sub=subset(data,columns=conds$Condition==cond)
         Condition(sub)=NULL
 
         # restrict to top n genes
         totals=rowSums(GetTable(sub,type=slot))
         threshold=sort(totals,decreasing = TRUE)[min(length(totals),n.estimate)]
+        genes=Genes(sub)[Genes(sub) %in% names(which(totals>=threshold))]
+        sub=FilterGenes(sub,use=genes)
 
-        # fit models
-        fits=opt$lapply(Genes(sub)[Genes(sub) %in% names(which(totals>=threshold))],FitKineticsGeneLeastSquares,data=sub,time=time,steady.state = steady.state[[cond]],compute.modifier=TRUE)
-        #HL=log(2)/sapply(fits,function(fit) fit$param['d'])
+        opt.fun=function(times) {
+            tt=init
+            tt[use]=times
+            Coldata(sub,Design$dur.4sU)=tt
+            #fit=FitKinetics(sub,return.fields='logLik',steady.state=steady.state[[cond]],...)
+            fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]])
+            sum(GetAnalysisTable(fit,gene.info=FALSE)[,1])
+        }
+        init=Coldata(sub)[[time]]
+        init[init>0]=init[init>0]
+        use=init>0 & init<max(init)
+        fit=optim(init[use],fn=opt.fun,hessian=TRUE, control=list(fnscale=-1))
+        if (fit$convergence!=0) stop(sprintf("Did not converge!"))
+        conf=try(sd.from.hessian(fit$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
 
-        # extract modifiers
-        times=t(sapply(fits,function(fit)fit$modifier[,"Time"]))
-        colnames(times)=fits[[1]]$modifier$Name
-
-        #norm.factor=t(sapply(fits[Genes(sub) %in% names(which(totals>=threshold))],function(fit)fit$modifier[,"Norm.factor"]))
-        #colnames(norm.factor)=fits[[1]]$modifier$Name
-
-        # just the median for the time!
-        timecol[colnames(times)]=apply(times,2,function(v) median(v[!is.nan(v)]))
-
-        # spline regression for the normalization factors
-        #for (i in 1:ncol(norm.factor)) {
-        #    df=data.frame(x=log10(HL[Genes(sub) %in% names(which(totals>=threshold))]),y=log10(norm.factor[,i]))
-        #    df=df[is.finite(df$y) & is.finite(df$x),]
-        #    spl=smooth.spline(df$x,df$y,nknots = 5)
-        #    norm.df[[colnames(norm.factor)[i]]]=GetTable(data,type=slot,columns=colnames(norm.factor)[i],name.by = "Gene")*10^predict(spl,log10(HL))$y
-        #}
-
+        tt=init
+        tt[use]=fit$par
+        re[as.character(Coldata(sub)$Name),time.name]=tt
+        tt=rep(0,length(tt))
+        tt[use]=conf
+        re[as.character(Coldata(sub)$Name),time.conf.name]=tt
     }
-
-    #norm.df=as.matrix(as.data.frame(norm.df)[,Coldata(data)$Name])
-
-    #data=AddSlot(data,name=norm.name,matrix=norm.df,set.to.default=set.to.default)
-    timecol[Coldata(data)[[time]]==0]=0
-    data=Coldata(data,time.name,timecol)
-
+    data=Coldata(data,re)
     data
 }
 
@@ -865,11 +851,14 @@ FitKinetics=function(data,name="kinetics",type=c("nlls","ntr","lm"),slot=Default
                       ...)
 
     adder=function(cond) {
-        slam.param=as.data.frame(t(sapply(result,kinetics2vector,condition=cond,return.fields=return.fields,return.extra=return.extra)))
+        tttr=function(re) {
+            if (is.matrix(re)) as.data.frame(t(re)) else setNames(data.frame(re),names(kinetics2vector(result[[1]],condition=cond,return.fields=return.fields,return.extra=return.extra)))
+        }
+        slam.param=tttr(sapply(result,kinetics2vector,condition=cond,return.fields=return.fields,return.extra=return.extra))
         rownames(slam.param)=Genes(data,use.symbols = FALSE)
         columns=if(is.null(cond)) colnames(data) else colnames(data)[Condition(data)==cond]
         name=if(is.null(cond)) name else paste0(name,".",cond)
-        AddAnalysis(data,MakeAnalysis(name=name,analysis="FitKinetics",columns = columns),slam.param)
+        AddAnalysis(data,name=name,slam.param)
     }
 
     if (!is.null(Condition(data))) {

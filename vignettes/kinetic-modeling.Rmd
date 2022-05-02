@@ -102,17 +102,17 @@ sars<-FitKinetics(sars,name="ntr_kinetics",type="ntr")
 sars<-FitKinetics(sars,name="normntr_kinetics",type="ntr",time="norm_time")
 sars<-FitKinetics(sars,name="lm_kinetics",type="lm")
 
-df<-cbind(GetTable(sars,c("kinetics.Mock"),columns="rmse"),GetTable(sars,c("norm_kinetics.Mock"),columns="rmse"))
+df<-cbind(GetAnalysisTable(sars,c("kinetics.Mock"),regex=FALSE,columns="rmse",gene.info = FALSE),GetAnalysisTable(sars,c("norm_kinetics.Mock"),regex=FALSE,columns="rmse",gene.info = FALSE))
 PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()
 ```
 
 ```{r}
 df<-cbind(
-  GetTable(sars,c("kinetics.Mock"),columns="Half-life"),
-  GetTable(sars,c("norm_kinetics.Mock"),columns="Half-life"),
-  GetTable(sars,c("ntr_kinetics.Mock"),columns="Half-life"),
-  GetTable(sars,c("normntr_kinetics.Mock"),columns="Half-life"),
-  GetTable(sars,c("lm_kinetics.Mock"),columns="Half-life")
+  GetAnalysisTable(sars,c("kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE),
+  GetAnalysisTable(sars,c("norm_kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE),
+  GetAnalysisTable(sars,c("ntr_kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE),
+  GetAnalysisTable(sars,c("normntr_kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE),
+  GetAnalysisTable(sars,c("lm_kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE)
   )
 PlotScatter(df,xcol=1,ycol=5,log=T)+geom_abline()
 (PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()|

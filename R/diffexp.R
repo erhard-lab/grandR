@@ -48,7 +48,7 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
     Q=p.adjust(res.tot$pvalue,method="BH")
   )
 
-  AddAnalysis(data,description=MakeAnalysis(name = paste0(name),analysis = "DESeq2.LRT",mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)),table = df)
+  AddAnalysis(data,name = paste0(name),table = df)
 }
 
 
@@ -73,7 +73,7 @@ ApplyContrasts=function(data,analysis,name,contrasts,mode.slot="count",verbose=F
   for (n in names(contrasts)) {
     if (verbose) cat(sprintf("Computing %s for %s...\n",analysis,n))
     re.df=FUN(mat,contrasts[[n]]==1,contrasts[[n]]==-1,...)
-    data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = analysis,mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
+    data=AddAnalysis(data,name = paste0(name,".",n),table = re.df)
   }
   data
 }
@@ -172,112 +172,12 @@ PairwiseDESeq2=function(data,name=mode,contrasts,separate=FALSE,mode="total",nor
         Q=l$padj
       )
       if (logFC) re.df$LFC=l$log2FoldChange
-      data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = "DESeq2.Wald",mode = mode.slot$mode,slot=mode.slot$slot,columns = colnames(mat)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
+      data=AddAnalysis(data,name = paste0(name,".",n),table = re.df)
     }
     return(data)
   }
 }
 
-
-PairwiseNtrTest=function(data,name,contrasts,verbose=FALSE) {
-
-  alpha=as.matrix(GetTable(data,type="alpha",ntr.na=TRUE))
-  beta=as.matrix(GetTable(data,type="beta",ntr.na=TRUE))
-  bvar=function(a,b) a*b/(a+b)^2/(a+b+1)
-
-  for (n in names(contrasts)) {
-    if (verbose) cat(sprintf("Computing NTR test for %s...\n",n))
-
-    A=contrasts[[n]]==1
-    B=contrasts[[n]]==-1
-
-    go=function(i,plot1=F,plot2=F) {
-      alpha.A=alpha[i,A][alpha[i,A]>0&beta[i,A]>0]
-      beta.A=beta[i,A][alpha[i,A]>0&beta[i,A]>0]
-      alpha.B=alpha[i,B][alpha[i,B]>0&beta[i,B]>0]
-      beta.B=beta[i,B][alpha[i,B]>0&beta[i,B]>0]
-
-      bayesian.beta.test(alpha.A,beta.A,alpha.B,beta.B,plot1 = plot1,plot2 = plot2) #,plot=c(0.05,0.35))
-    }
-
-    re=psapply(1:nrow(data),go)
-
-    re.df=data.frame(P=re,Q=p.adjust(re,method="BH"))
-
-    data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = "NTR-test",slot="ntr",columns = colnames(data)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
-  }
-  data
-}
-
-compute.posterior.quantiles=function(a,b,sd) {
-  mu=a/(a+b)
-
-  eps=1E-3
-  rr=range(mu)
-  e.rr=c(0,1)
-  if (0.25>=sd^2) e.rr=c(0.5-sqrt(0.25-sd^2)+eps,0.5+sqrt(0.25-sd^2)-eps)
-  rr[1]=max(rr[1],e.rr[1])
-  rr[2]=min(rr[2],e.rr[2])
-
-  optfun=function(mu) {
-    pa=mu*(mu*(1-mu)/sd^2-1)
-    pb=(1-mu)*(mu*(1-mu)/sd^2-1)
-    qs=sapply(seq_along(a),function(i) integrate(function(x) dbeta(x,pa,pb)*pbeta(x,a[i],b[i]),lower=qbeta(0.001,pa,pb),upper=qbeta(0.999,pa,pb))$value)
-    mean(qs)-0.5
-  }
-  if (optfun(rr[2])<0) rr=c(rr[2],e.rr[2]) else if (optfun(rr[1])>0) rr=c(e.rr[1],rr[1])
-  opt=uniroot(optfun,interval = rr)
-
-  mu=opt$root
-  pa=mu*(mu*(1-mu)/sd^2-1)
-  pb=(1-mu)*(mu*(1-mu)/sd^2-1)
-
-  sapply(seq_along(a),function(i) integrate(function(x) dbeta(x,pa,pb)*pbeta(x,a[i],b[i]),lower=qbeta(0.001,pa,pb),upper=qbeta(0.999,pa,pb))$value)
-}
-
-bayesian.beta.test=function(alpha.A,beta.A,alpha.B,beta.B,plot1=FALSE,plot2=FALSE) {
-  if (length(alpha.A)<2 || length(alpha.B)<2) return(NA)
-  fit=hierarchical.beta.posterior(a=c(alpha.A,alpha.B),b=c(beta.A,beta.B))
-  fit1=hierarchical.beta.posterior(a=alpha.A,b=beta.A)
-  #print(sqrt(bvar(fit1$a,fit1$b)))
-  fit2=hierarchical.beta.posterior(a=alpha.B,b=beta.B)
-
-  #fit=hierarchical.beta.posterior2(a=c(alpha.A,alpha.B),b=c(beta.A,beta.B))
-  #fit1=hierarchical.beta.posterior2(a=alpha.A,b=beta.A)
-  #fit2=hierarchical.beta.posterior2(a=alpha.B,b=beta.B)
-
-  #fit=hierarchical.beta.posterior(a=c(alpha.A,alpha.B),b=c(beta.A,beta.B),compute.marginal.likelihood = TRUE,compute.grid=T,var.prior.min.sd=0.026)
-  #fit1=hierarchical.beta.posterior(a=alpha.A,b=beta.A,compute.marginal.likelihood = TRUE,compute.grid=T,var.prior.min.sd=0.026)
-  #fit2=hierarchical.beta.posterior(a=alpha.B,b=beta.B,compute.marginal.likelihood = TRUE,compute.grid=T,var.prior.min.sd=0.026)
-  bvar=function(a,b) a*b/(a+b)^2/(a+b+1)
-  bmean=function(a,b) a/(a+b)
-  bdiff.mean=bmean(fit1$a,fit1$b)-bmean(fit2$a,fit2$b)
-  bdiff.sd=sqrt(bvar(fit1$a,fit1$b)+bvar(fit2$a,fit2$b))
-
-  if (plot1) {
-    x=seq(min(qbeta(0.001,c(alpha.A,alpha.B),c(beta.A,beta.B))),max(qbeta(0.999,c(alpha.A,alpha.B),c(beta.A,beta.B))),length.out=1000)
-    plot(x,pbeta(x,alpha.A[1],beta.A[1]),type='l',xlim=range(x),ylim=c(0,1)); for (i in 2:length(alpha.A)) lines(x,pbeta(x,alpha.A[i],beta.A[i]));for (i in 1:length(alpha.B)) lines(x,pbeta(x,alpha.B[i],beta.B[i]),col='red'); lines(x,pbeta(x,fit2$a,fit2$b),col='red',lwd=2); lines(x,pbeta(x,fit1$a,fit1$b),col='black',lwd=2); lines(x,pbeta(x,fit$a,fit$b),col='gray',lwd=2)
-    efit=beta.approximate.mixture(a=c(alpha.A,alpha.B),b=c(beta.A,beta.B))
-    efit1=beta.approximate.mixture(a=alpha.A,b=beta.A)
-    efit2=beta.approximate.mixture(a=alpha.B,b=beta.B)
-    lines(x,pbeta(x,efit$a,efit$b),col='gray',lwd=2,lty=2)
-    lines(x,pbeta(x,efit2$a,efit2$b),col='red',lwd=2,lty=2)
-    lines(x,pbeta(x,efit1$a,efit1$b),col='black',lwd=2,lty=2)
-    #lines(x,pnorm(x,bmean(fit1$a,fit1$b),sqrt(bvar(fit1$a,fit1$b))),col='black',lwd=2,lty=2)
-    #lines(x,pnorm(x,bmean(fit2$a,fit2$b),sqrt(bvar(fit2$a,fit2$b))),col='red',lwd=2,lty=2)
-
-  }
-
-  if (plot2) {
-    x=seq(qnorm(0.001,bdiff.mean,bdiff.sd),qnorm(0.999,bdiff.mean,bdiff.sd),length.out=1000)
-    plot(x,pnorm(x,bdiff.mean,bdiff.sd),type='l',xlim=range(x),ylim=c(0,1));
-    abline(v=0,lt=2)
-  }
-  p=pnorm(0,bdiff.mean,bdiff.sd)
-
-  # two-sided p value
-  if (p>0.5) 2*(1-p) else 2*p
-}
 
 #' Compute the posterior logFC distributions of RNA synthesis and degradation
 #'
@@ -390,247 +290,10 @@ EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSl
 
     re.df=as.data.frame(t(simplify2array(re)))
 
-    data=AddAnalysis(data,description=MakeAnalysis(name = paste0(name,".",n),analysis = "Regulation",mode = "total",slot=slot,columns = colnames(data)[contrasts[[n]]==1|contrasts[[n]]==-1]),table = re.df)
+    data=AddAnalysis(data,name = paste0(name,".",n),table = re.df)
   }
   data
 }
-
-
-
-#' Compute the posterior logFC distributions of RNA synthesis and degradation for a particular gene
-#'
-#' @param data the grandR object
-#' @param gene a gene name or symbol or index
-#' @param A columns for condition A (must refer to a unique labeling duration)
-#' @param B columns for condition B (must refer to a unique labeling duration)
-#' @param dispersion.A dispersion parameter for condition A (if NULL this is estimated, takes a lot of time!)
-#' @param dispersion.B dispersion parameter for condition B (if NULL this is estimated, takes a lot of time!)
-#' @param reference.columns either a reference matrix (\code{\link{FindReferences}}) to define reference samples for each sample in A and B, or a
-#' name list with names A and B containing logical vectors denoting the reference samples
-#' @param slot the data slot to take f0 and totals from
-#' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
-#' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
-#' @param ROPE.max.log2FC the region of practical equivalence is [-ROPE.max.log2FC,ROPE.max.log2FC] in log2 fold change space
-#' @param sample.f0.in.ss whether or not to sample f0 under steady state conditions
-#' @param return.samples return the sampled logFCs for s and HL?
-#' @param N the sample size
-#' @param N.max the maximal number of samples (necessary if old RNA > f0); if more are necessary, a warning is generated
-#' @param conf.int A number between 0 and 1 representing the size of the credible interval
-#' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
-#'
-#' @details The kinetic parameters s and d are computed using \link{TransformSnapshot}. For that, the sample either must be in steady state
-#' (this is the case if defined in the reference.columns matrix), or if the levels at a specific time point are known. This time point is
-#' defined by \code{time.experiment} (i.e. the difference between the steady state samples and the A or B samples themselves). If
-#' \code{time.experiment} is NULL, then the labeling time of the A or B samples is used (e.g. usefull if labeling was started concomitantly with
-#' the perturbation, and the steady state samples are unperturbed samples).
-#'
-#' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
-#' that approximates the mixture of betas from the replicate samples. (see \link{beta.approximate.mixture}).
-#'
-#' @return a list containing the posterior median, the credible interval and whether
-#' 0 is within the credible interval for both synthesis rate (s) and RNA half-life (HL).
-#' If return.samples=TRUE  the list also contains a data frame containing all samples
-#'
-#'
-#' @export
-#'
-EstimateGeneRegulation=function(data,gene,A,B,dispersion.A=NULL,dispersion.B=NULL,reference.samples,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25, sample.f0.in.ss=FALSE, return.samples=FALSE,N=10000,N.max=N*10,conf.int=0.95, hierarchical=TRUE) {
-  if (is.matrix(reference.samples)) reference.samples=list(A=apply(reference.samples[,Columns(data,A)]==1,1,any),B=apply(reference.samples[,Columns(data,B)]==1,1,any))
-
-  #ntr=GetData(data,mode.slot=c("ntr",slot,"new.norm","old.norm"),genes=gene,columns = A|B)
-  alpha.A=GetData(data,mode.slot="alpha",genes=gene,columns = A)
-  alpha.B=GetData(data,mode.slot="alpha",genes=gene,columns = B)
-  if (!is.numeric(time.labeling) && length(unique(alpha.A[[time.labeling]]))!=1) stop("A has to refer to a unique labeling duration!")
-  if (!is.numeric(time.labeling) && length(unique(alpha.B[[time.labeling]]))!=1) stop("B has to refer to a unique labeling duration!")
-  if (!is.null(time.experiment) && length(unique(alpha.A[[time.experiment]]))!=1) stop("A has to refer to a unique experimental time!")
-  if (!is.null(time.experiment) && length(unique(alpha.B[[time.experiment]]))!=1) stop("B has to refer to a unique experimental time!")
-  beta.A=GetData(data,mode.slot="beta",genes=gene,columns = A)
-  beta.B=GetData(data,mode.slot="beta",genes=gene,columns = B)
-  total.A=GetData(data,mode.slot=slot,genes=gene,columns = A)
-  total.B=GetData(data,mode.slot=slot,genes=gene,columns = B)
-  ss.A=GetData(data,mode.slot=slot,genes=gene,columns = reference.samples$A)
-  ss.B=GetData(data,mode.slot=slot,genes=gene,columns = reference.samples$B)
-  if (!is.null(time.experiment) && length(unique(ss.A[[time.experiment]]))!=1) stop("Steady state for A has to refer to a unique experimental time!")
-  if (!is.null(time.experiment) && length(unique(ss.B[[time.experiment]]))!=1) stop("Steady state for B has to refer to a unique experimental time!")
-
-  if (is.null(dispersion.A)) dispersion.A=estimate.dispersion(as.matrix(GetTable(data,type="count",columns=colnames(data)[A],gene.info = F)))[ToIndex(data,gene)]
-  if (is.null(dispersion.B)) dispersion.B=estimate.dispersion(as.matrix(GetTable(data,type="count",columns=colnames(data)[B],gene.info = F)))[ToIndex(data,gene)]
-
-
-  use.A=total.A$Value>0
-  use.B=total.B$Value>0
-
-  emptyres=function() {
-    re=list(
-      s.A=NA,
-      s.B=NA,
-      HL.A=NA,
-      HL.B=NA,
-      s.log2FC=0,
-      s.conf.int=c(-Inf,Inf),
-      s.ROPE=1,
-      HL.log2FC=0,
-      HL.conf.int=c(-Inf,Inf),
-      HL.ROPE=1
-    )
-    if (return.samples)
-      re$samples=data.frame(s.log2FC=numeric(0),HL.log2FC=numeric(0),A.s=numeric(0),A.HL=numeric(0),B.s=numeric(0),B.HL=numeric(0))
-    return(re)
-  }
-
-  if (sum(use.A)<2 || sum(use.B)<2) return(emptyres())
-
-
-  alpha.A=alpha.A[use.A,]
-  beta.A=beta.A[use.A,]
-  total.A=total.A[use.A,]
-  ss.A=ss.A[ss.A$Value>0,]
-  alpha.B=alpha.B[use.B,]
-  beta.B=beta.B[use.B,]
-  total.B=total.B[use.B,]
-  ss.B=ss.B[ss.B$Value>0,]
-
-  t.A=if (is.numeric(time.labeling)) time.labeling else unique(alpha.A[[time.labeling]])
-  t.B=if (is.numeric(time.labeling)) time.labeling else unique(alpha.B[[time.labeling]])
-  t0.A=if (is.null(time.experiment)) t.A else unique(alpha.A[[time.experiment]])-unique(ss.A[[time.experiment]])
-  t0.B=if (is.null(time.experiment)) t.B else unique(alpha.B[[time.experiment]])-unique(ss.B[[time.experiment]])
-
-
-  if (N<1) {
-    ntr=sum(alpha.A$Value)/(sum(alpha.A$Value)+sum(beta.A$Value))
-    comp.ss=function(disp,mod,total,t) {
-      TransformSnapshot(ntr=ntr,total=mean(total$Value),t=t)
-      #d=-1/t*log(1-ntr)
-      #s=f0*d
-      #cbind(s,d)
-    }
-    comp.non.ss=function(disp,ss,mod,total,t,t0) {
-      if (t0<=0) stop("Experimental time is not properly defined (the steady state sample must be prior to each of A and B)!")
-      f0=mean(ss$Value)
-      TransformSnapshot(ntr=ntr,total=mean(total$Value),t=t,t0=t0,f0=f0)
-    }
-
-    samp.a=if (any(reference.samples$A & A)) comp.ss(dispersion.A,mod.A,total.A,t.A) else comp.non.ss(dispersion.A,ss.A,mod.A,total.A,t.A,t0.A)
-    samp.b=if (any(reference.samples$B & B)) comp.ss(dispersion.B,mod.B,total.B,t.B) else comp.non.ss(dispersion.B,ss.B,mod.B,total.B,t.B,t0.B)
-
-
-    savelfc=function(a,b) ifelse(is.infinite(a) & is.infinite(b),0,log2(a/b))
-    lfc.s=savelfc(samp.a['s'],samp.b['s'])
-    lfc.HL=savelfc(samp.b['d'],samp.a['d'])
-
-    re=list(
-      s.A=(samp.a['s']),
-      s.B=(samp.b['s']),
-      HL.A=log(2)/(samp.a['d']),
-      HL.B=log(2)/(samp.b['d']),
-      s.log2FC=unname(lfc.s),
-      s.conf.int=c(-Inf,Inf),
-      s.ROPE=1,
-      HL.log2FC=unname(lfc.HL),
-      HL.conf.int=c(-Inf,Inf),
-      HL.ROPE=1
-    )
-    if (return.samples)
-      re$samples=data.frame(s.log2FC=numeric(0),HL.log2FC=numeric(0),A.s=numeric(0),A.HL=numeric(0),B.s=numeric(0),B.HL=numeric(0))
-    return(re)
-  }
-
-  #bayesian.beta.test(alpha.A$Value,beta.A$Value,alpha.B$Value,beta.B$Value,TRUE,FALSE)
-  if (hierarchical) {
-    mod.A=hierarchical.beta.posterior(alpha.A$Value,beta.A$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample.mu
-    mod.B=hierarchical.beta.posterior(alpha.B$Value,beta.B$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample.mu
-  } else {
-    fit1=beta.approximate.mixture(alpha.A$Value,beta.A$Value)
-    fit2=beta.approximate.mixture(alpha.B$Value,beta.B$Value)
-    mod.A=function(N) rbeta(N,fit1$a,fit1$b)
-    mod.B=function(N) rbeta(N,fit2$a,fit2$b)
-  }
-
-  sample.ss=function(N,disp,ss,mod,total,t,t0,samples) {
-    if (sample.f0.in.ss) {
-      f0=0.1+rnbinom(N,size=1/disp,mu=mean(total$Value))
-      ntr=mod(N)
-      total=0.1+rnbinom(N,size=1/disp,mu=mean(total$Value))
-      TransformSnapshot(ntr=ntr,total=total,t=t,f0=f0,t0=t)
-    } else {
-      ntr=mod(N)
-      total=0.1+rnbinom(N,size=1/disp,mu=mean(total$Value))
-      TransformSnapshot(ntr=ntr,total=total,t=t)
-    }
-    #d=-1/t*log(1-ntr)
-    #s=f0*d
-    #cbind(s,d)
-  }
-  sample.non.ss=function(N,disp,ss,mod,total,t,t0,samples) {
-    if (t0<=0) stop("Experimental time is not properly defined (the steady state sample must be prior to each of A and B)!")
-    f0=0.1+rnbinom(N,size=1/disp,mu=mean(ss$Value))
-    total=0.1+rnbinom(N,size=1/disp,mu=mean(total$Value))
-    ntr=mod(N)
-    TransformSnapshot(ntr=ntr,total=total,t=t,t0=t0,f0=f0)
-    #Fval=pmin(mean(total$Value)*(1-ntr)/f0,1)
-    #d=ifelse(Fval>=1,0,-1/t*log(Fval))
-    #s=-1/t*mean(total$Value)*ntr * ifelse(Fval>=1,-1,ifelse(is.infinite(Fval),0,log(Fval)/(1-Fval)))
-    #cbind(s,d)
-  }
-  resample=function(FUN,disp,ss,mod,total,t,t0,samples) {
-    mat=FUN(N,disp,ss,mod,total,t,t0,samples)
-    inadmissible=mat[,'d']==0 | is.infinite(mat[,'d'])
-    if (sum(inadmissible)>0) {
-      success.prob=1-sum(inadmissible)/N
-      additional.samples=sum(inadmissible)+ceiling(sum(inadmissible)*(1-success.prob)/success.prob)
-      if (additional.samples>N.max-N) {
-        warning("Inefficient sampling; results might be unreliable")
-        additional.samples=N.max-N
-      }
-      mat2=FUN(additional.samples,disp,ss,mod,total,t,t0,samples)
-      inadmissible2=mat2[,'d']==0 | is.infinite(mat2[,'d'])
-      mat=rbind(mat[!inadmissible,],mat2[!inadmissible2,])
-    }
-    mat
-  }
-
-  samp.a=if (any(reference.samples$A & A)) sample.ss else sample.non.ss
-  samp.b=if (any(reference.samples$B & B)) sample.ss else sample.non.ss
-
-  samp.a=resample(samp.a,dispersion.A,ss.A,mod.A,total.A,t.A,t0.A,A)
-  samp.b=resample(samp.b,dispersion.B,ss.B,mod.B,total.B,t.B,t0.B,B)
-
-  N=min(nrow(samp.a),nrow(samp.b))
-  if (N==0) return(emptyres())
-  samp.a=samp.a[1:N,,drop=FALSE]
-  samp.b=samp.b[1:N,,drop=FALSE]
-
-  savelfc=function(a,b) ifelse((is.infinite(a) & is.infinite(b)) | (a==0&b==0),0,log2(a/b))
-  lfc.s=savelfc(samp.a[,'s'],samp.b[,'s'])
-  lfc.HL=savelfc(samp.b[,'d'],samp.a[,'d'])
-
-  sc=quantile(lfc.s,c(0.5-conf.int/2,0.5+conf.int/2))
-  hc=quantile(lfc.HL,c(0.5-conf.int/2,0.5+conf.int/2))
-
-  re=list(
-    s.A=median(samp.a[,'s']),
-    s.B=median(samp.b[,'s']),
-    HL.A=log(2)/median(samp.a[,'d']),
-    HL.B=log(2)/median(samp.b[,'d']),
-    s.log2FC=median(lfc.s),
-#    s.log2FC.SEM=mad(lfc.s)/sqrt(length(lfc.s)),
-#    s.log2FC.SEMdist=median(lfc.s)/(mad(lfc.s)/sqrt(length(lfc.s))),
-    s.conf.int=sc,
-    s.ROPE=ROPE.LFC(lfc.s,ROPE.max.log2FC),
-#    s.regulated=c0<sc[1] || 0>sc[2],
-    HL.log2FC=median(lfc.HL),
-#    HL.log2FC.SEM=mad(lfc.HL)/sqrt(length(lfc.HL)),
-#    HL.log2FC.SEMdist=median(lfc.HL)/(mad(lfc.HL)/sqrt(length(lfc.HL))),
-    HL.conf.int=hc,
-    HL.ROPE=ROPE.LFC(lfc.HL,ROPE.max.log2FC)
-#    HL.regulated=0<hc[1] || 0>hc[2]
-  )
-  if (return.samples)
-    re$samples=data.frame(s.log2FC=lfc.s,HL.log2FC=lfc.HL,A.s=samp.a[,'s'],A.HL=log(2)/samp.a[,'d'],B.s=samp.b[,'s'],B.HL=log(2)/samp.b[,'d'])
-
-  re
-}
-
 
 ROPE.LFC=function(lfc,ROPE.max.log2FC) {
   na=sum(is.na(lfc))
@@ -740,6 +403,36 @@ hierarchical.beta.posterior=function(a,b,
     if (!is.null(re$sample.mu)) lines(ecdf(re$sample.mu(10000)),col='red')
   }
   re
+}
+
+
+AnalyzeGeneSets=function(data,analysis=Analyses(data)[1],criteria=LFC,species = NULL, category = NULL, subcategory = NULL, verbose=TRUE, minSize=10, maxSize=500, process.genesets=NULL) {
+  if (is.null(species)) {
+    if (sum(grepl("ENSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="Homo sapiens"
+    if (sum(grepl("ENSMUSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="Mus musculus"
+  }
+  if (is.null(species)) stop("Cannot recognize species! Specify one of msigdbr::msigdbr_species()$species_name")
+
+  if (verbose) cat(sprintf("Querying msigdb for %s (%s) in %s ...\n",category,subcategory,species))
+  gs = unique(as.data.frame(msigdbr::msigdbr(species = species, category = category, subcategory = subcategory)[,c('gs_name','ensembl_gene')]))
+  if (verbose) cat(sprintf("Found %d gene sets!\n",length(unique(gs$gs_name))))
+
+  if (!is.null(process.genesets)) {
+    ugs=unique(gs$gs_name)
+    map=setNames(process.genesets(ugs),ugs)
+    gs$gs_name=map[as.character(gs$gs_name)]
+  }
+
+  genes=eval(substitute(GetSignificantGenes(data,analysis=analysis,criteria=criteria,return.values=TRUE,use.symbols=FALSE)),enclos = parent.frame()) # this is necessary to call the eval subs function!
+
+  if (mode(genes)=="numeric") {
+    if (verbose) cat("Performing GSEA (using fgsea)...\n")
+    clusterProfiler::GSEA(genes,TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
+  }
+  else {
+    if (verbose) cat(sprintf("Performing ORA (for n=%d/%d genes)...",length(genes),nrow(d)))
+    clusterProfiler::enricher(gene = genes, universe = Genes(data,use.symbols=FALSE), TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
+  }
 }
 
 

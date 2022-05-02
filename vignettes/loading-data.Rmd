@@ -34,7 +34,7 @@ name represents an aspect of the design. For example, the sample named Mock.2h.A
 The design vector is mandatory. Attempting to read in the data without it
 results in an error:
 
-```{r}
+```{r error=TRUE}
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz")
 ```
 
@@ -316,7 +316,7 @@ based on columns from the data annotation table (eg condition). To retrieve all
 the mock samples in this way, we can simply set the Condition to "Mock":
 
 ```{r}
-sars.mock3 <- subset(sars, columns = Condition == "Mock")
+sars.mock3 <- subset.grandR(sars, columns = Condition == "Mock")
 Coldata(sars.mock3)
 ```
 

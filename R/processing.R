@@ -68,7 +68,7 @@ ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name, max.HL=48, C
   }
 
   if (as.analysis) {
-    AddAnalysis(data,MakeAnalysis(name = name,analysis = "SteadyStateHalfLives",columns = colnames(data)),table = as.data.frame(hls))
+    AddAnalysis(data,name = name,table = as.data.frame(hls))
   } else {
     AddSlot(data,name,hls)
   }

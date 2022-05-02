@@ -198,7 +198,7 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
     if (!is.null(names(list))) add$coldata[[column.name]]=names(list)[i]
     if (any(colnames(add) %in% colnames(re))) stop("Sample names must be unique!")
     if (any(rownames(add)!=rownames(re))) stop("Data sets must have the same genes!")
-    if (any(colnames(add$coldata)!=colnames(re$coldata))) stop("Data sets must have the coldata columns!")
+    if (any(colnames(add$coldata)!=colnames(re$coldata))) stop("Data sets have distinct coldata columns!")
     if (!all(names(add$data) %in% names(re$data))) stop("Data sets must have the same data tables!")
     re$coldata=rbind(re$coldata,add$coldata)
 
@@ -213,6 +213,10 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
         GeneInfo(re,column = paste0(n,".",names(list)[i]))=gi[[n]]
       }
     }
+
+    # add analyses
+    for (ana in Analyses(add))
+    re=AddAnalysis(re,name=ana,add$analysis[[ana]])
   }
   re
 }
@@ -450,7 +454,7 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 #' \code{\link{MakeColdata}}
 #'
 #' @param data A grandR object
-#' @param column The name of the additional annotation column
+#' @param column The name of the additional annotation column; can also be a data frame (then value is ignored and the data frame is added)
 #' @param value The additional annotation per sample or cell
 #'
 #' @details New columns can be added either by \code{data<-Coldata(data,name,values)} or by \code{Coldata(data,name)<-values}.
@@ -474,7 +478,14 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 #' @export
 #'
 Coldata=function(data,column=NULL,value=NULL) {
-  if (is.null(column)) data$coldata else {
+  if (is.null(column)) {
+    data$coldata
+  } else if (is.data.frame(column)||is.matrix(column)) {
+    data$coldata=cbind(data$coldata,column)
+    data
+  } else if (is.null(value)) {
+    data$coldata[[column]]
+  } else {
     data$coldata[[column]]=value
     data
   }
@@ -557,13 +568,19 @@ get.mode.slot=function(data,mode.slot) {
 #' @export
 #'
 ToIndex=function(data,gene,regex=FALSE) {
+  if (any(is.na(gene))) {
+    warning("There were NA genes, removed!");
+    gene=gene[!is.na(gene)]
+  }
   if (regex) gene=grepl(gene,data$gene.info$Gene)|grepl(gene,data$gene.info$Symbol)
   if (is.null(gene)) return(1:nrow(data))
   if (is.numeric(gene)) return(gene)
   if (is.logical(gene) && length(gene)==nrow(data)) return(which(gene))
   if (all(gene %in% data$gene.info$Gene)) return(setNames(1:nrow(data),data$gene.info$Gene)[gene])
   if (all(gene %in% data$gene.info$Symbol)) return(setNames(1:nrow(data),data$gene.info$Symbol)[gene])
-  stop("Could not find all genes!")
+  warning("Could not find all genes!")
+  if (sum(gene %in% data$gene.info$Gene) > sum(gene %in% data$gene.info$Symbol)) return(setNames(1:nrow(data),data$gene.info$Gene)[intersect(gene,data$gene.info$Gene)])
+  return(setNames(1:nrow(data),data$gene.info$Symbol)[intersect(gene,data$gene.info$Symbol)])
 }
 
 #' Obtain a genes x values table
@@ -810,6 +827,38 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
   re
 }
 
+#' Get a list of significant genes for this grandR object
+#'
+#' @param data the grandR object
+#' @param analysis the analysis name
+#' @param criteria the criteria used to define what significant means; can use the column names of the analysis table as variables,  should be a logical or numerical value per gene (see Details)
+#' @param use.symbols return them as symbols (gene ids otherwise)
+#' @param return.values return the criteria values as well (if criteria is numerical)
+#'
+#' @seealso \link{GetSignificanceOrderedGenes}
+#'
+#' @details If criteria is a logical, it obtains significant genes defined by cut-offs (e.g. on q value and LFC).
+#' If it is a numerical, all genes are returned sorted (descendingly) by this value.
+#'
+#'
+#' @return a vector of gene names (or symbols)
+#' @export
+#'
+GetSignificantGenes=function(data,analysis=Analyses(data)[1],criteria=Q<0.05 & abs(LFC)>1,use.symbols=TRUE,return.values=FALSE) {
+  criteria=substitute(criteria)
+  df=GetAnalysisTable(data,analyses = analysis, regex=FALSE, name.by=if (use.symbols) "Symbol" else "Gene",gene.info = FALSE,prefix.by.analysis = FALSE)
+  use=eval(criteria,envir=df,enclos = parent.frame())
+  if (is.logical(use)) {
+    rownames(df)[use]
+  } else if (return.values) {
+    df$use=use
+    df=df[order(use,decreasing=TRUE),]
+    setNames(df$use,rownames(df))
+  } else {
+    rownames(df)[order(use,decreasing=TRUE)]
+  }
+}
+
 
 #' Obtain reference columns (samples or cells) for all columns (samples or cells) in the data set
 #'
@@ -873,7 +922,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group="Cond
 #'
 #' @param data A grandR object
 #' @param pattern A regular expression that is matched to analysis names
-#' @param description A metatable created by MakeAnalysis
+#' @param name A name for the analysis to add
 #' @param table The analysis table to add
 #' @param warn.present Warn if an analysis with the same name is already present (and then overwrite)
 #' @param name The user-defined analysis name
@@ -888,7 +937,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group="Cond
 #' A call to an analysis function might produce more than one table (e.g. because kinetic modeling is done for multiple \link{Condition}s). In this case,
 #' AddAnalysisTable produces more than one analysis table.
 #'
-#' @details \code{AddAnalysis} (and therefore also \code{MakeAnalysis}) is usually not called directly by the user, but is
+#' @details \code{AddAnalysis} is usually not called directly by the user, but is
 #' used by analysis methods to add their final result to a grandR object (e.g., \link{FitKinetics},\link{TestGenesLRT},\link{TestPairwise},\link{LFC}).
 #'
 #' @seealso \link{Slots}, \link{DefaultSlot}
@@ -910,19 +959,15 @@ Analyses=function(data) names(data$analysis)
 
 #' @describeIn Analyses Add an analysis table
 #' @export
-AddAnalysis=function(data,description,table,warn.present=TRUE) {
+AddAnalysis=function(data,name,table,warn.present=TRUE) {
   if (!is.data.frame(table)) stop("Cannot add; analysis table must be a data frame!")
-  stopifnot(!is.null(description$name))
-  description$results=names(table)
   if (is.null(data$analysis)) data$analysis=list()
-  if (is.null(data$analysis[[description$name]])) {
-    data$analysis[[description$name]]=table
-    attr(data$analysis[[description$name]],"analysis")=list(description)
+  if (is.null(data$analysis[[name]])) {
+    data$analysis[[name]]=table
   } else {
-    if (warn.present & any(names(table)%in%names(data$analysis[[description$name]]))) warning(sprintf("Analysis %s already present! Overwritting...",description$name))
-    for (n in names(table)) data$analysis[[description$name]][[n]]=table[[n]]
-    ana = attr(data$analysis[[description$name]],"analysis")
-    attr(data$analysis[[description$name]],"analysis") = list(ana,description)
+    if (warn.present & any(names(table)%in%names(data$analysis[[name]]))) warning(sprintf("Analysis %s already present! Overwritting...",name))
+    for (n in names(table)) data$analysis[[name]][[n]]=table[[n]]
+    ana = attr(data$analysis[[name]],"analysis")
   }
   data
 }
@@ -938,11 +983,6 @@ DropAnalysis=function(data,pattern=NULL) {
   }
   invisible(data)
 }
-#' @describeIn Analyses Create a metatable for an analysis
-#' @export
-MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
-  list(name=name,mode=mode,analysis=analysis,slot=slot,columns=columns)
-}
 
 
 #' Obtain a table of analysis results values
@@ -957,6 +997,7 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
 #' @param genes Restrict the output table to the given genes
 #' @param gene.info Should the table contain the \link{GeneInfo} values as well (at the beginning)?
 #' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
+#' @param prefix.by.analysis Should the column names in the output prefixed by the analysis name?
 #'
 #' @return A data frame containing the analysis results
 #'
@@ -973,7 +1014,7 @@ MakeAnalysis=function(name,analysis,mode=NULL,slot=NULL,columns=NULL) {
 #'
 #' @export
 #'
-GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol") {
+GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol",prefix.by.analysis=TRUE) {
   if (!all(check.analysis(data,analyses,regex))) stop(sprintf("No analysis found for pattern %s!",paste(analyses[!check.analysis(data,analyses,regex)],collapse=",")))
 
   genes=ToIndex(data,genes)
@@ -1001,7 +1042,7 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
      t=t[,use,drop=FALSE]
     }
     if (ncol(t)>0) {
-      names(t)=paste0(name,".",names(t))
+      if (prefix.by.analysis) names(t)=paste0(name,".",names(t))
       re=cbind(re,t)
     }
   }

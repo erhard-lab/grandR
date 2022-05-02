@@ -343,7 +343,7 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 # TODO: do not use read.delim or .csv, nor file.exists (to allow using urls!)
 isSparse=function(prefix) !file.exists(paste0(prefix,".targets/data.tsv.gz")) & !file.exists(prefix)
 
-ReadGRAND3=function(prefix,...) if (isSparse(prefix)) ReadGRAND3_sparse(prefix,...) else ReadGRAND3_dense(prefix,...)
+ReadGRAND3=function(prefix,label="4sU",estimator="Binom",...) if (isSparse(prefix)) ReadGRAND3_sparse(prefix=prefix,label=label,estimator=estimator,...) else ReadGRAND3_dense(prefix=prefix,label=label,estimator=estimator,...)
 
 ReadGRAND3_sparse=function(prefix, design=c(Design$Library,Design$Sample,Design$Barcode), label="4sU",estimator="Binom", read.posterior=FALSE, verbose=FALSE) {
 
@@ -429,7 +429,7 @@ ReadGRAND3_dense=function(prefix, design=c(Design$Condition,Design$Replicate), l
   names(slots)=c("Read count",sprintf("%s %s %s",label,estimator,c("NTR MAP","alpha","beta")))
   if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr")
 
-  re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,Unknown = Unknown,rename.sample = rename.sample,verbose = verbose)
+  re=read.grand.internal(description="GRAND-SLAM 3.0 dense data",prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,Unknown = Unknown,rename.sample = rename.sample,verbose = verbose)
   re
 }
 
@@ -484,7 +484,7 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
 }
 
 
-read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),slots, annotations,classify.genes=GeneType,Unknown=NA, rename.sample=NULL, verbose=FALSE) {
+read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),slots, annotations,classify.genes=GeneType,Unknown=NA, rename.sample=NULL, verbose=FALSE, description="") {
 
   if (!all(c("count","ntr") %in% slots) || !all(c("Gene","Symbol") %in% annotations)) stop("Invalid call to read.grand.internal!")
 
@@ -644,7 +644,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   do.callback()
 
   # insert name no rep and set this as default condition, if there is no condition field!
-  re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 2.0 data"))
+  re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description=description))
   DefaultSlot(re)="count"
   re
 }

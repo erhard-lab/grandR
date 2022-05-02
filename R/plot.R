@@ -311,36 +311,16 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
   })
 }
 
-VulcanoPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,highlight=NULL,label=NULL) {
+VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,...) {
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",names(df)))
-  aes=modifyList(aes(LFC,-log10(Q),color=density2d(LFC,-log10(Q))),aest)
-
-  g=ggplot(df,mapping=aes)+
-    geom_point(size=0.1)+
-    scale_color_viridis_c(guide='none')+
+  g=PlotScatter(df,x=LFC,y=-log10(Q),remove.outlier = FALSE,...)+
     xlab(bquote(log[2]~FC))+
     ylab(bquote("-"~log[10]~FDR))+
     geom_hline(yintercept=-log10(p.cutoff),linetype=2)+
     geom_vline(xintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
     ggtitle(analysis)
 
-
-  if (!is.null(highlight)) {
-    if (is.list(highlight)){
-      for (col in names(highlight)) {
-        g=g+geom_point(data=df[highlight[[col]],],color=col,size=0.5)
-      }
-    } else {
-      g=g+geom_point(data=df[highlight,],color='red',size=0.5)
-    }
-  }
-  if (!is.null(label)) {
-    df2=df
-    df2$label=""
-    df2[label,"label"]=rownames(df2)[label]
-    g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE)
-  }
 
   if (label.numbers) {
     n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),factor(df$Q>p.cutoff,levels=c("FALSE","TRUE")))
@@ -351,7 +331,7 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lf
 
 
 
-MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,label=NULL,repel=1) {
+MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,highlight=NULL,label=NULL,repel=1) {
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
   if (is.numeric(analysis)) analysis=Analyses(data)[analysis]
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",gsub(".*.M","M",names(df))))
@@ -365,6 +345,15 @@ MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cut
     geom_hline(yintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
     ggtitle(analysis)
 
+  if (!is.null(highlight)) {
+    if (is.list(highlight)){
+      for (col in names(highlight)) {
+        g=g+geom_point(data=df[ToIndex(data,highlight[[col]]),],color=col,size=1.5)
+      }
+    } else {
+      g=g+geom_point(data=df[ToIndex(data,highlight),],color='red',size=1.5)
+    }
+  }
   if (!is.null(label)) {
     if (label=="auto") label=abs(df$LFC)>lfc.cutoff & df$Q<p.cutoff & !is.na(df$LFC) & !is.na(df$Q)
     df2=df
