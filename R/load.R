@@ -213,8 +213,13 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' In most cases it is easier to manipulate the \code{\link{Coldata}} table after loading data instead of using this mechanism;
 #' the build-in semantics simply provide a convenient way to reduce this kind of manipulation in most cases.
 #'
-#' @details Sometimes you might have forgotten to name all sampes consistently (or you simply messed something up).
+#' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
 #' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
+#'
+#' @details The \link{classify.genes} list can be used to define gene types. Each element must be a function that returns
+#' either a logical or numeric vector that identifies genes (i.e. all entries that are TRUE, or numbers used as indices).
+#' The type of all identified genes then is the name of the list entry. If a gene receives multiple types, the first in
+#' the list is used!
 #'
 #' @seealso \link{GeneType},\link{MakeColdata},\link{Design.Semantics}
 #'

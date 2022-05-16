@@ -10,4 +10,6 @@ S3method("merge","grandR",merge.grandR)
 S3method("dimnames","grandR",dimnames.grandR)
 S3method("GetSummarizeMatrix","grandR",GetSummarizeMatrix.grandR)
 S3method("GetContrasts","grandR",GetContrasts.grandR)
+S3method("PlotModelNtr","grandR",PlotModelNtr.grandR)
+S3method("PlotModelNtr","data.frame",PlotModelNtr.data.frame)
 

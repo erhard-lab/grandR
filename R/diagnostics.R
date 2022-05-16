@@ -1,7 +1,7 @@
 
 
 PlotMismatchPositionForCondition=function(x,...)  {
-	UseMethod('PlotMismatchPositionForCondition',x)  
+	UseMethod('PlotMismatchPositionForCondition',x)
 }
 
 PlotMismatchPositionForCondition.grandR=function(data,...) {
@@ -33,7 +33,7 @@ PlotMismatchPositionForCondition.data.frame=function(tab,condition,clip=NA,Sense
 
 	lab1=labeling::extended(1,max1,5)
 	lab2=labeling::extended(1,max2,5)
-	
+
 	ymax=quantile(tab$`Mismatch frequency`,0.99,na.rm=T)*1.2
 	g=ggplot(tab,aes(x,`Mismatch frequency`,color=SenseCat,linetype=factor(Corrected),group=interaction(SenseCat,Corrected)))
 	if (!is.na(clip["Used 5p1"]) || !is.na(clip["Used 3p1"])) {
@@ -56,7 +56,7 @@ PlotMismatchPositionForCondition.data.frame=function(tab,condition,clip=NA,Sense
 
 
 PlotMismatchPositionForType=function(x,...)  {
-	UseMethod('PlotMismatchPositionForType',x)  
+	UseMethod('PlotMismatchPositionForType',x)
 }
 
 PlotMismatchPositionForType.grandR=function(data,...) {
@@ -82,11 +82,11 @@ PlotMismatchPositionForType.data.frame=function(tab,genomic,read,clip=c(Inferred
 	sep$`Mismatch frequency`=NA
 	sep$x=max(tab$Position[tab$First.read==1])+1
 	tab=droplevels(rbind(tab,sep))
-	
+
 
 	lab1=labeling::extended(1,max1,5)
 	lab2=labeling::extended(1,max2,5)
-	
+
 	ymax=max(ddply(tab,.(Sample),function(s) quantile(s$`Mismatch frequency`,0.95,na.rm=TRUE)*1.2)[,2])
 	g=ggplot(tab,aes(x,`Mismatch frequency`,color=Sample,linetype=factor(Corrected)))
 	if (!is.na(clip["Used 5p1"]) || !is.na(clip["Used 3p1"])) {
@@ -109,7 +109,7 @@ PlotMismatchPositionForType.data.frame=function(tab,genomic,read,clip=c(Inferred
 
 
 PlotMismatchFreq=function(x,...)  {
-	UseMethod('PlotMismatchFreq',x)  
+	UseMethod('PlotMismatchFreq',x)
 }
 
 PlotMismatchFreq.grandR=function(data,...) {
@@ -124,7 +124,7 @@ PlotMismatchFreq.grandR=function(data,...) {
 PlotMismatchFreq.data.frame=function(tab,category,ncond.boxplot=120) {
 	tab=tab[tab$Category==category,]
 	ncond=nrow(tab)/nrow(unique(data.frame(tab$Genomic,tab$Read,tab$Semantic)))
-	
+
 	if (ncond>=ncond.boxplot) {
 		max=max(ddply(tab,.(Category,Condition,Semantic,Genomic,Read),function(s) c(max=quantile(s$Frequency,0.99)))$max)
 		if (length(unique(tab$Condition))<ncond/100) {
@@ -142,7 +142,7 @@ PlotMismatchFreq.data.frame=function(tab,category,ncond.boxplot=120) {
 
 
 PlotModelNtr=function(x,...)  {
-	UseMethod('PlotModelNtr',x)  
+	UseMethod('PlotModelNtr',x)
 }
 PlotModelNtr.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -151,9 +151,9 @@ PlotModelNtr.grandR=function(data,label="4sU",...) {
 PlotModelNtr.data.frame=function(tab,label="4sU",estimator="Separate",model=c("Binom","TB-Binom")) {
 	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 
-	param=paste(model[1],"ntr")	
-	lower=paste("Lower",model[1],"ntr")	
-	upper=paste("Upper",model[1],"ntr")	
+	param=paste(model[1],"ntr")
+	lower=paste("Lower",model[1],"ntr")
+	upper=paste("Upper",model[1],"ntr")
 	qq=function(s) paste0("`",s,"`")
 
 	if (lower %in% names(tab)) {
@@ -165,7 +165,7 @@ PlotModelNtr.data.frame=function(tab,label="4sU",estimator="Separate",model=c("B
 
 
 PlotModelConv=function(x,...)  {
-	UseMethod('PlotModelConv',x)  
+	UseMethod('PlotModelConv',x)
 }
 PlotModelConv.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -175,9 +175,9 @@ PlotModelConv.data.frame=function(tab,label="4sU",estimator="Separate",model=c("
 	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 
 	if (model[1]=="TB-Binom") {
-		param=paste(model[1],"p.mconv")	
-		lower=paste("Lower",model[1],"p.mconv")	
-		upper=paste("Upper",model[1],"p.mconv")	
+		param=paste(model[1],"p.mconv")
+		lower=paste("Lower",model[1],"p.mconv")
+		upper=paste("Upper",model[1],"p.mconv")
 		qq=function(s) paste0("`",s,"`")
 
 		tab2=tab
@@ -192,9 +192,9 @@ PlotModelConv.data.frame=function(tab,label="4sU",estimator="Separate",model=c("
 			ggplot(tab,aes_string("Condition",qq(param),color="Subread",shape="Type"))+geom_point(position=position_dodge(w=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_shape_manual(NULL,values=c(Max=1,Mean=19))
 		}
 	} else {
-		param=paste(model[1],"p.conv")	
-		lower=paste("Lower",model[1],"p.conv")	
-		upper=paste("Upper",model[1],"p.conv")	
+		param=paste(model[1],"p.conv")
+		lower=paste("Lower",model[1],"p.conv")
+		upper=paste("Upper",model[1],"p.conv")
 		qq=function(s) paste0("`",s,"`")
 
 		if (lower %in% names(tab)) {
@@ -206,7 +206,7 @@ PlotModelConv.data.frame=function(tab,label="4sU",estimator="Separate",model=c("
 }
 
 PlotModelErr=function(x,...)  {
-	UseMethod('PlotModelErr',x)  
+	UseMethod('PlotModelErr',x)
 }
 PlotModelErr.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -215,9 +215,9 @@ PlotModelErr.grandR=function(data,label="4sU",...) {
 PlotModelErr.data.frame=function(tab,label="4sU",estimator="Separate",model=c("Binom","TB-Binom")) {
 	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 
-	param=paste(model[1],"p.err")	
+	param=paste(model[1],"p.err")
 	lower=paste("Lower",model[1],"p.err")
-	upper=paste("Upper",model[1],"p.err")	
+	upper=paste("Upper",model[1],"p.err")
 	qq=function(s) paste0("`",s,"`")
 
 	if (lower %in% names(tab)) {
@@ -229,7 +229,7 @@ PlotModelErr.data.frame=function(tab,label="4sU",estimator="Separate",model=c("B
 
 
 PlotModelShape=function(x,...)  {
-	UseMethod('PlotModelShape',x)  
+	UseMethod('PlotModelShape',x)
 }
 PlotModelShape.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -246,7 +246,7 @@ PlotModelShape.data.frame=function(tab,label="4sU",estimator="Separate") {
 
 
 PlotModelLabelTimeCourse=function(x,...)  {
-	UseMethod('PlotModelLabelTimeCourse',x)  
+	UseMethod('PlotModelLabelTimeCourse',x)
 }
 PlotModelLabelTimeCourse.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -263,7 +263,7 @@ PlotModelLabelTimeCourse.data.frame=function(tab,e,label="4sU",estimator="Separa
 	x=seq(0,1,length.out=100)
 	make.df=function(row) data.frame(x=x,`Labeling efficiency`=qtbeta(x,tab$`TB-Binom p.err`[row],tab$`TB-Binom p.mconv`[row],exp(tab$`TB-Binom shape`[row]),exp(-tab$`TB-Binom shape`[row])),Condition=tab$Condition[row],Subread=tab$Subread[row],check.names=FALSE)
 	df=do.call("rbind",lapply(1:dim(tab)[1],make.df))
-	
+
 	if (length(unique(df$Condition))!=length(e$Condition)) stop("Conditions in experimental design and parameter file are inconsistent!")
 	df=merge(df,e)
 	df$concentration=factor(df$concentration,levels=sort(unique(df$concentration)))
@@ -273,7 +273,7 @@ PlotModelLabelTimeCourse.data.frame=function(tab,e,label="4sU",estimator="Separa
 
 
 PlotModelCompareErrPrior=function(x,...)  {
-	UseMethod('PlotModelCompareErrPrior',x)  
+	UseMethod('PlotModelCompareErrPrior',x)
 }
 PlotModelCompareErrPrior.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -282,14 +282,14 @@ PlotModelCompareErrPrior.grandR=function(data,label="4sU",...) {
 PlotModelCompareErrPrior.data.frame=function(tab,label="4sU",estimator="Separate",model=c("Binom","TB-Binom")) {
 	tab=tab[tab$Label==label & tab$Estimator==estimator,]
 
-	param=paste(model[1],"p.err")	
+	param=paste(model[1],"p.err")
 	qq=function(s) paste0("`",s,"`")
 
 	ggplot(tab,aes_string("(`Lower prior p.err`+`Upper prior p.err`)/2",qq(param),color="Subread",xmin="`Lower prior p.err`",xmax="`Upper prior p.err`"))+geom_point()+geom_errorbarh()+geom_abline()+scale_color_brewer(NULL,palette="Dark2")+xlab("Prior p.err")
 }
 
 PlotModelCompareNtr=function(x,...)  {
-	UseMethod('PlotModelCompareNtr',x)  
+	UseMethod('PlotModelCompareNtr',x)
 }
 PlotModelCompareNtr.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -301,7 +301,7 @@ PlotModelCompareNtr.data.frame=function(tab,label="4sU",estimator="Separate") {
 }
 
 PlotModelCompareErr=function(x,...)  {
-	UseMethod('PlotModelCompareErr',x)  
+	UseMethod('PlotModelCompareErr',x)
 }
 PlotModelCompareErr.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -314,7 +314,7 @@ PlotModelCompareErr.data.frame=function(tab,label="4sU",estimator="Separate") {
 
 
 PlotModelCompareConv=function(x,...)  {
-	UseMethod('PlotModelCompareConv',x)  
+	UseMethod('PlotModelCompareConv',x)
 }
 PlotModelCompareConv.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -327,7 +327,7 @@ PlotModelCompareConv.data.frame=function(tab,label="4sU",estimator="Separate") {
 
 
 PlotModelCompareLL=function(x,...)  {
-	UseMethod('PlotModelCompareLL',x)  
+	UseMethod('PlotModelCompareLL',x)
 }
 PlotModelCompareLL.grandR=function(data,label="4sU",...) {
 	t=read.tsv(paste0(data$prefix,".model.parameters.tsv"))
@@ -341,7 +341,7 @@ PlotModelCompareLL.data.frame=function(tab,label="4sU",estimator="Separate") {
 
 
 PlotProfileLikelihood=function(x,...)  {
-	UseMethod('PlotProfileLikelihood',x)  
+	UseMethod('PlotProfileLikelihood',x)
 }
 
 PlotProfileLikelihood.grandR=function(data,condition,...) {

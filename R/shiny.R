@@ -30,9 +30,11 @@ ServeData=function(data,
 	                        dom = '<"#buttons">lfrtip'
 	                      ))
 	  dttab=DT::formatRound(dttab,names(df)[sapply(df,class)=="numeric"], 2)
-	  dttab=DT::formatRound(dttab,names(df)[grepl("\\.LFC$",names(df))], 2)
-	  dttab=DT::formatSignif(dttab,names(df)[grepl("\\.Q$",names(df))], 2)
-	  dttab=DT::formatSignif(dttab,names(df)[grepl("\\.P$",names(df))], 2)
+	  if (any(grepl("\\.LFC$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.LFC$",names(df))], 2)
+	  if (any(grepl("\\.Q$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.Q$",names(df))], 2)
+	  if (any(grepl("\\.P$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.P$",names(df))], 2)
+	  if (any(grepl("\\.Half-life$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Half-life$",names(df))], 2)
+	  if (any(grepl("\\.Synthesis$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Synthesis$",names(df))], 2)
 	  output$tab <- DT::renderDataTable(dttab)
 	  output$download1 <- downloadHandler(
 	    filename = function() {

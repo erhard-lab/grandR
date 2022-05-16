@@ -452,19 +452,29 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE) {
   g
 }
 
-PlotGeneTimeCourse=function(data,gene,group="Condition",time="Time",type=DefaultSlot(data),aest=aes(color=Condition,shape=Replicate),average.lines=TRUE,log.y=TRUE) {
-  df=GetData(data,genes=gene,mode.slot=type,melt=F,coldata=T,ntr.na = FALSE)
+PlotGeneTimeCourse=function(data,gene,group="Condition",time=Design$dur.4sU,slot=DefaultSlot(data),aest=aes(color=Condition,shape=Replicate),average.lines=TRUE,log.y=TRUE, show.CI=FALSE) {
+  df=GetData(data,genes=gene,mode.slot=slot,melt=F,coldata=T,ntr.na = FALSE)
   aes=modifyList(aes_string(time,"Value",group=group),aest)
   g=ggplot(df,mapping=aes)+
     geom_point(size=2)+
     xlab(NULL)+
-    ylab(paste0(" RNA (",type,")"))
+    ylab(paste0(" RNA (",slot,")"))
   if (log.y) g=g+scale_y_log10()
   if (average.lines) {
     # compute average line:
+    print(df)
     ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
-    ddf=ddply(ddf,.(x,colour),function(s) c(Value=mean(s$y,na.rm=TRUE)))
-    g=g+geom_line(data=ddf,mapping=aes(x,Value,colour=colour,group=colour),inherit.aes=F)
+    print(ddf)
+    ddf=ddply(ddf,.(x,colour,group),function(s) c(Value=mean(s$y,na.rm=TRUE)))
+    ddf[[group]]=ddf$group
+    print(ddf)
+    g=g+geom_line(data=ddf,mapping=aes(x,Value,color=colour,group=interaction(colour,group)),inherit.aes=F)
+  }
+  if (show.CI) {
+    if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
+    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),melt=F,coldata=T,ntr.na = FALSE)
+    if (slot=="ntr") df2$ntr=1
+    g=g+geom_errorbar(data=df2,mapping=aes_string(y=slot,fill=NULL,ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)),width=0)
   }
   g
 }

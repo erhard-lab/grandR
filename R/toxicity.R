@@ -201,15 +201,15 @@ EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC, t
 
 PlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.len",...) {
   if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
-  setNames(lapply(names(pairs),function(n) PlotToxicityTestLength(data,n,pairs[[n]],TU.len = TU.len,...)+ggtitle(n)),names(pairs))
+  setNames(lapply(names(pairs),function(n) PlotToxicityTestLength(data,n,pairs[[n]],TU.len = TU.len,...)),names(pairs))
 }
 PlotToxicityTestRankAll=function(data,pairs=Findno4sUPairs(data),...) {
   if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
-  setNames(lapply(names(pairs),function(n) PlotToxicityTestRank(data,n,pairs[[n]],...)+ggtitle(n)),names(pairs))
+  setNames(lapply(names(pairs),function(n) PlotToxicityTestRank(data,n,pairs[[n]],...)),names(pairs))
 }
 PlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
   if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
-  setNames(lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)+ggtitle(n)),names(pairs))
+  setNames(lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)),names(pairs))
 }
 
 DPlotToxicityTestAll=function(data,pairs=NULL,...) {
@@ -261,22 +261,27 @@ PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr
     scale_x_log10("TU length")+
     geom_smooth(method="loess",formula=y~x)+
     ylab("log FC 4sU/no4sU")+
-    coord_cartesian(ylim=ylim)
+    coord_cartesian(ylim=ylim)+
+    ggtitle(w4sU)
 }
 
 PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",correction=1) {
-  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
+  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(v) rank(-v),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
     ylim=c(-d,d)
   }
+  rho=round(cor(df$covar,df$lfc,method="spearman"),digits = 2)
+  p=cor.test(df$covar,df$lfc,method="spearman")$p.value
+  p=if (p<2.2E-16) p = bquote("<"~2.2 %*% 10^-16) else p = sprintf("= %.2g",p)
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
     scale_color_viridis_c(name = "Density",guide=FALSE)+
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+
-    geom_smooth(method="loess",formula=y~x)+
-    xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
-    coord_cartesian(ylim=ylim)
+    #geom_smooth(method="loess",formula=y~x)+
+    xlab("Half-life rank")+ylab("log FC 4sU/no4sU")+
+    coord_cartesian(ylim=ylim)+
+    ggtitle(w4sU,subtitle = bquote(rho == .(rho) ~ "," ~ p ~ .(p)))
 }
 
 PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot=DefaultSlot(d),hl.quantile=0.8,correction=1) {
@@ -291,7 +296,8 @@ PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,
     scale_color_viridis_c(name = "Density",guide=FALSE)+
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+
-    geom_smooth(method="loess")+
+   # geom_smooth(method="loess")+
     xlab("RNA half-life")+ylab("log FC 4sU/no4sU")+
-    coord_cartesian(ylim=ylim)
+    coord_cartesian(ylim=ylim)+
+    ggtitle(w4sU)
 }

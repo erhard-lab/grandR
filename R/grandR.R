@@ -65,14 +65,14 @@
 #'
 #' @export
 #'
-grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$data,coldata=parent$coldata,metadata=parent$metadata,parent=NULL) {
+grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$data,coldata=parent$coldata,metadata=parent$metadata,analyses=NULL,parent=NULL) {
   info=list()
   info$prefix=prefix
   info$gene.info=gene.info
   info$data=slots
   info$coldata=coldata
   info$metadata=metadata
-  info$analysis=NULL
+  info$analysis=analyses
   class(info)="grandR"
   info
 }
@@ -129,7 +129,12 @@ data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
   }
   ngene.info=if (!is.null(fun.gene.info)) fun.gene.info(data$gene.info,...) else data$gene.info
   ncoldata=if (!is.null(fun.coldata)) fun.coldata(data$coldata,...) else data$coldata
-  grandR(parent=data,gene.info=ngene.info,slots=re,coldata=ncoldata)
+  analysis=NULL
+  if (!is.null(data$analysis)) {
+    map=setNames(1:nrow(data$gene.info),data$gene.info$Gene)
+    analysis=lapply(data$analysis,function(d) d[map[as.character(ngene.info$Gene)],,drop=FALSE])
+  }
+  grandR(parent=data,gene.info=ngene.info,slots=re,coldata=ncoldata,analyses = analysis)
 }
 
 #' @rdname grandR
@@ -145,8 +150,7 @@ reorder.grandR=function(data,order) {
 subset.grandR=function(data,columns) {
   columns = substitute(columns)
   columns = eval(columns, Coldata(data), parent.frame())
-  keep=rownames(data$coldata)[columns]
-  data.apply(data,function(m) m[,intersect(keep,colnames(m))],fun.coldata = function(t)
+  data.apply(data,function(m) m[,columns],fun.coldata = function(t)
     droplevels(t[columns,]))
 }
 
@@ -186,9 +190,7 @@ SwapColumns=function(data,s1,s2) {
 #' @rdname grandR
 #' @export
 merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
-  nn=c(get.varargs.names(...),names(list))
   list=c(list(...),list)
-  names(list)=nn
   if (length(list)==1) return(list[[1]])
 
   re=list[[1]]
@@ -742,7 +744,6 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
       sX <- Matrix::summary(re)
       sY <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       sRes <- merge(sX, sY, by=c("i", "j"))
-      print(dimnames(re))
       return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
                                   dimnames=dimnames(re)))
     }

@@ -34,6 +34,7 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
 
     re=lapply(levels(conditions$Condition),function(n) {
 
+        norms1=norms[conditions$Condition==n]
         counts=counts[,conditions$Condition==n]
         conditions=conditions[conditions$Condition==n,]
 
@@ -75,7 +76,7 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
             formulas$formulaIndexes,
             groups=~fraction+time
         )
-        pd$depthNormalisation <- norms
+        pd$depthNormalisation <- norms1
 
         setOpts <- function(bounds, tolerance, cores = parallel::detectCores()-2, replicates = 5, normFactors = NULL) {
             opts <- pulseR::setFittingOptions(verbose = "verbose")
@@ -111,9 +112,11 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
  #       tp <- unique(re$pd$conditions$time)
     })
 
+    names(re)=levels(conditions$Condition)
+
     adder=function(cond) {
-        tab=data.frame(`Half-life`=log(2)/re[[cond]])
-        columns=if(is.null(cond)) colnames(data) else colnames(data)[Condition(data)==cond]
+        tab=data.frame(`Half-life`=log(2)/re[[cond]],check.names=FALSE)
+        rownames(tab)=Genes(data,use.symbols = FALSE)
         name=if(is.null(cond)) name else paste0(name,".",cond)
         AddAnalysis(data,name=name,tab)
     }
@@ -307,7 +310,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
 
     fit.equi=function(ndf,odf) {
 
-        tinit=min(ndf$time[ndf$Value>0])
+        tinit=if (sum(ndf$Value>0)==0) min(ndf$time[ndf$time>0]) else min(ndf$time[ndf$Value>0])
         init.d=mean(-log(1-(0.1+ndf[ndf$time==tinit,"Value"])/(0.2+ndf[ndf$time==tinit,"Value"]+odf[odf$time==tinit,"Value"])))
         init.s=init.d*mean(odf[odf$time==tinit,"Value"])
         model.p=minpack.lm::nls.lm(c(init.s,init.d),lower=c(0,0.01),
@@ -356,7 +359,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
         oind=union(which(odf$time==0),which(odf$use))
         nind=union(which(ndf$time==0),which(ndf$use))
 
-        tinit=min(ndf$time[ndf$Value>0])
+        tinit=if (sum(ndf$Value>0)==0) min(ndf$time[ndf$time>0]) else min(ndf$time[ndf$Value>0])
         init.d=mean(-log(1-(0.1+ndf[ndf$time==tinit,"Value"])/(0.2+ndf[ndf$time==tinit,"Value"]+odf[odf$time==tinit,"Value"])))
         init.s=max(ndf$Value[ndf$time>0]/ndf$time[ndf$time>0])
         f0=mean(odf[odf$time==0,"Value"])
@@ -763,13 +766,14 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
         threshold=sort(totals,decreasing = TRUE)[min(length(totals),n.estimate)]
         genes=Genes(sub)[Genes(sub) %in% names(which(totals>=threshold))]
         sub=FilterGenes(sub,use=genes)
+        sub=DropAnalysis(sub)
 
         opt.fun=function(times) {
             tt=init
             tt[use]=times
             Coldata(sub,Design$dur.4sU)=tt
-            #fit=FitKinetics(sub,return.fields='logLik',steady.state=steady.state[[cond]],...)
-            fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]])
+            fit=FitKinetics(sub,return.fields='logLik',steady.state=steady.state[[cond]],...)
+            #fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]])
             sum(GetAnalysisTable(fit,gene.info=FALSE)[,1])
         }
         init=Coldata(sub)[[time]]
@@ -840,9 +844,11 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
 #'
 FitKinetics=function(data,name="kinetics",type=c("nlls","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,return.fields=c("Synthesis","Half-life","rmse"),return.extra=NULL,...) {
 
-    if (substr(tolower(type[1]),1,1)=="n" && !all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
-
     fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nlls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
+    funs=switch(tolower(type[1]),ntr="FitKineticsGeneNtr",nlls="FitKineticsGeneLeastSquares",lm="FitKineticsGeneLogSpaceLinear")
+
+    if (funs=="FitKineticsGeneNtr" && !all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
+
     if (is.null(fun)) stop(sprintf("Type %s unknown!",type))
     result=plapply(Genes(data),
                       fun,
@@ -856,7 +862,6 @@ FitKinetics=function(data,name="kinetics",type=c("nlls","ntr","lm"),slot=Default
         }
         slam.param=tttr(sapply(result,kinetics2vector,condition=cond,return.fields=return.fields,return.extra=return.extra))
         rownames(slam.param)=Genes(data,use.symbols = FALSE)
-        columns=if(is.null(cond)) colnames(data) else colnames(data)[Condition(data)==cond]
         name=if(is.null(cond)) name else paste0(name,".",cond)
         AddAnalysis(data,name=name,slam.param)
     }

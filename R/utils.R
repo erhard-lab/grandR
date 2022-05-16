@@ -65,7 +65,7 @@ my.precision=function (x)
     1
   }
   else {
-    pmin(10^(ceiling(log10(smallest_diff))), 1)
+    pmin(10^(floor(log10(smallest_diff))), 1)
   }
 }
 
@@ -87,8 +87,6 @@ cnt=function(m) {
   mode(m) <- "integer"
   m
 }
-
-get.varargs.names=function(...) sapply(as.list(substitute(list(...)))[-1L],as.character)
 
 #' Estimate dispersion parameters for a count matrix using DESeq2
 #'
