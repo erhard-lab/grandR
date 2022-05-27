@@ -189,13 +189,13 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 #' @param use.old a logical vector to exclude old RNA from specific time points
 #' @param use.new a logical vector to exclude new RNA from specific time points
 #' @param maxiter the maximal number of iterations for the Levenberg-Marquardt algorithm used to minimize the least squares
-#' @param compute.modifier set this to TRUE to compute correction factors for the labeling duration
+#' @param compute.residuals set this to TRUE to compute the residual matrix
 #'
 #' @return
 #' A named list containing the model fit:
 #' \itemize{
 #'   \item{data: a data frame containing the observed value used for fittin}
-#'   \item{modifier: the computed correction factors if compute.modifier=TRUE, otherwise NA}
+#'   \item{residuals: the computed residuals if compute.residuals=TRUE, otherwise NA}
 #'   \item{Synthesis: the synthesis rate (in U/h, where U is the unit of the slot)},
 #'   \item{Degradation: the degradation rate (in 1/h)}
 #'   \item{Half-life: the RNA half-life (in h, always equal to log(2)/degradation-rate},
@@ -241,7 +241,7 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 #'
 #' @export
 #'
-FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,steady.state=NULL,use.old=TRUE,use.new=TRUE, maxiter=100, compute.modifier=FALSE) {
+FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,steady.state=NULL,use.old=TRUE,use.new=TRUE, maxiter=100, compute.residuals=FALSE) {
     # residuals of the functions for usage with nls.lm
     res.fun.equi=function(par,old,new) {
         s=par[1]
@@ -319,8 +319,9 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
                        new=ndf[ndf$use,],
                        control=minpack.lm::nls.lm.control(maxiter = maxiter))
 
-        if (model.p$niter==maxiter) return(list(data=NA,modifier=if (compute.modifier) data.frame(Name=ndf$Name,Time=NA,Norm.factor=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
-        conf.p=try(sd.from.hessian(-model.p$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
+        if (model.p$niter==maxiter) return(list(data=NA,residuals=if (compute.residuals) data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=NA,Relative=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
+        conf.p=try(minpack.lm:::confint.nls.lm(model.p,level=conf.int),silent = TRUE)
+        if (!is.matrix(conf.p)) conf.p=matrix(c(NA,NA,NA,NA),nrow=2)
         par=setNames(model.p$par,c("s","d"))
         rmse=sqrt(model.p$deviance/(nrow(ndf)+nrow(odf)))
         fvec=res.fun.equi(par,odf,ndf)
@@ -330,26 +331,30 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
         df=droplevels(rbind(odf[odf$use,],ndf[ndf$use,]))
 
 
-        modifier=NA
-        if (compute.modifier) {
-            s=par["s"]
-            d=par["d"]
-            # solve f.old.equi(t)=old for t! ( and the same for)
-            #time=daply(df,.(Name),function(sub) 1/d * log( 1+ sum(sub$Value[sub$Type=="New"])/sum(sub$Value[sub$Type=="Old"]) ) )
-            # solve f.old.equi(t)=old for t!
-            time=daply(df,.(Name),function(sub) -1/d* mean(c( log(sub$Value[sub$Type=="Old"]*d/s), log(1-sub$Value[sub$Type=="New"]*d/s)   )) )
-            # new+old=s/d, so for a particular time point, multiply such that the sum is s/d
-            norm.fac=daply(df,.(Name),function(sub) s/d / sum(sub$Value))
-            modifier=data.frame(Name=names(norm.fac),Time=time,Norm.factor=norm.fac)
+        residuals=NA
+        if (compute.residuals) {
+            #s=par["s"]
+            #d=par["d"]
+            ## solve f.old.equi(t)=old for t! ( and the same for)
+            ##time=daply(df,.(Name),function(sub) 1/d * log( 1+ sum(sub$Value[sub$Type=="New"])/sum(sub$Value[sub$Type=="Old"]) ) )
+            ## solve f.old.equi(t)=old for t!
+            #time=daply(df,.(Name),function(sub) -1/d* mean(c( log(sub$Value[sub$Type=="Old"]*d/s), log(1-sub$Value[sub$Type=="New"]*d/s)   )) )
+            ## new+old=s/d, so for a particular time point, multiply such that the sum is s/d
+            #norm.fac=daply(df,.(Name),function(sub) s/d / sum(sub$Value))
+            #modifier=data.frame(Name=names(norm.fac),Time=time,Norm.factor=norm.fac)
+
+            resi=res.fun.equi(model.p$par,odf[odf$use,],ndf[ndf$use,])
+            modval=c(odf[odf$use,"Value"],ndf[ndf$use,"Value"])-resi
+            residuals=data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=resi,Relative=resi/modval)
         }
         total=sum(ndf$Value)+sum(odf$Value)
         list(data=df,
-             modifier=modifier,
+             residuals=residuals,
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),
-             conf.lower=c(Synthesis=unname(par[1]-conf.p[1]),Degradation=unname(par[2]-conf.p[2]),`Half-life`=unname(log(2)/(par[2]+conf.p[2]))),
-             conf.upper=c(Synthesis=unname(par[1]+conf.p[1]),Degradation=unname(par[2]+conf.p[2]),`Half-life`=unname(log(2)/(par[2]-conf.p[2]))),
+             conf.lower=c(Synthesis=unname(conf.p[1,1]),Degradation=unname(conf.p[2,1]),`Half-life`=unname(log(2)/(conf.p[2,2]))),
+             conf.upper=c(Synthesis=unname(conf.p[1,2]),Degradation=unname(conf.p[2,2]),`Half-life`=unname(log(2)/(conf.p[2,1]))),
              f0=unname(par['s']/par['d']),
              logLik=logLik.nls.lm(model.p),
              rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
@@ -368,10 +373,11 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
                        old=odf[oind,],
                        new=ndf[nind,],
                        control=minpack.lm::nls.lm.control(maxiter = maxiter))
-        if (model.m$niter==maxiter) return(list(data=NA,modifier=if (compute.modifier) data.frame(Name=ndf$Name,Time=NA,Norm.factor=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
+        if (model.m$niter==maxiter) return(list(data=NA,residuals=if (compute.residuals) data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=NA,Relative=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
         par=setNames(model.m$par,c("s","d"))
         f0=par[3]
-        conf.m=try(sd.from.hessian(-model.m$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
+        conf.m=try(minpack.lm:::confint.nls.lm(model.p,level=conf.int),silent = TRUE)
+        if (!is.matrix(conf.m)) conf.m=matrix(c(NA,NA,NA,NA),nrow=2)
         rmse=sqrt(model.m$deviance/(nrow(ndf)+nrow(odf)))
         fvec=res.fun.nonequi.f0fixed(par,f0,odf,ndf)
         n=nrow(odf)
@@ -379,31 +385,34 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
         rmse.new=sqrt(sum(fvec[(n+1):(n*2)]^2)/n)
         df=droplevels(rbind(odf[oind,],ndf[nind,]))
 
-        modifier=NA
-        if (compute.modifier) {
-            s=par["s"]
-            d=par["d"]
-            f0=unname(f0)
-            # solve f.old.nonequi(t)/f.new(t)=old/new for t!
-            #time=daply(df,.(Name),function(sub) 1/d * log( 1+ (sum(sub$Value[sub$Type=="New"])*f0*d)/(sum(sub$Value[sub$Type=="Old"])*s) ) )
-            # solve f.old.equi(t)=old for t!
-            time=daply(df,.(Name),function(sub) -1/d* mean(c( log(sub$Value[sub$Type=="Old"]/f0), log(1-sub$Value[sub$Type=="New"]*d/s)   )) )
-            # new+old=f.old.nonequi(t)+f.new(t), so for the computed time point t, multiply such that the sum is f.old.nonequi(t)+f.new(t)
-            norm.fac=daply(df,.(Name),function(sub) {
-                t=time[as.character(sub$Name[1])]
-                (f.old.nonequi(t,f0,s,d)+f.new(t,s,d)) / sum(sub$Value)
-            })
-
-            modifier=data.frame(Name=names(norm.fac),Time=time,Norm.factor=norm.fac)
+        residuals=NA
+        if (compute.residuals) {
+            #s=par["s"]
+            #d=par["d"]
+            #f0=unname(f0)
+            ## solve f.old.nonequi(t)/f.new(t)=old/new for t!
+            ##time=daply(df,.(Name),function(sub) 1/d * log( 1+ (sum(sub$Value[sub$Type=="New"])*f0*d)/(sum(sub$Value[sub$Type=="Old"])*s) ) )
+            ## solve f.old.equi(t)=old for t!
+            #time=daply(df,.(Name),function(sub) -1/d* mean(c( log(sub$Value[sub$Type=="Old"]/f0), log(1-sub$Value[sub$Type=="New"]*d/s)   )) )
+            ## new+old=f.old.nonequi(t)+f.new(t), so for the computed time point t, multiply such that the sum is f.old.nonequi(t)+f.new(t)
+            #norm.fac=daply(df,.(Name),function(sub) {
+            #    t=time[as.character(sub$Name[1])]
+            #    (f.old.nonequi(t,f0,s,d)+f.new(t,s,d)) / sum(sub$Value)
+            #})
+            #
+            #modifier=data.frame(Name=names(norm.fac),Time=time,Norm.factor=norm.fac)
+            resi=res.fun.nonequi(model.p$par,odf[odf$use,],ndf[ndf$use,])
+            modval=c(odf[odf$use,"Value"],ndf[ndf$use,"Value"])-resi
+            residuals=data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=resi,Relative=resi/modval)
         }
         total=sum(ndf$Value)+sum(odf$Value)
         list(data=df,
-             modifier=modifier,
+             residuals=residuals,
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),
-             conf.lower=c(Synthesis=unname(par[1]-conf.m[1]),Degradation=unname(par[2]-conf.m[2]),`Half-life`=log(2)/(par[2]+conf.m[2])),
-             conf.upper=c(Synthesis=unname(par[1]+conf.m[1]),Degradation=unname(par[2]+conf.m[2]),`Half-life`=log(2)/(par[2]-conf.m[2])),
+             conf.lower=c(Synthesis=unname(conf.m[1,1]),Degradation=unname(conf.m[2,1]),`Half-life`=unname(log(2)/(conf.m[2,2]))),
+             conf.upper=c(Synthesis=unname(conf.m[1,2]),Degradation=unname(conf.m[2,2]),`Half-life`=unname(log(2)/(conf.m[2,1]))),
              f0=unname(f0),
              logLik=logLik.nls.lm(model.m),
              rmse=rmse, rmse.new=rmse.new, rmse.old=rmse.old,
@@ -526,8 +535,8 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),  # FIXME
-             conf.lower=c(Synthesis=unname(conf.p[1,1]),Degradation=unname(conf.p[2,2]),`Half-life`=unname(log(2)/conf.p[2,1])),
-             conf.upper=c(Synthesis=unname(conf.p[1,2]),Degradation=unname(conf.p[2,1]),`Half-life`=unname(log(2)/conf.p[2,2])),
+             conf.lower=c(Synthesis=unname(conf.p[1,1]),Degradation=unname(conf.p[2,1]),`Half-life`=unname(log(2)/conf.p[2,2])),
+             conf.upper=c(Synthesis=unname(conf.p[1,2]),Degradation=unname(conf.p[2,2]),`Half-life`=unname(log(2)/conf.p[2,1])),
              f0=unname(par['s']/par['d']),
              logLik=logLik(fit),
              rmse=sqrt(mean(fit$residuals^2)),
@@ -761,10 +770,16 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
         sub=subset(data,columns=conds$Condition==cond)
         Condition(sub)=NULL
 
-        # restrict to top n genes
+        # restrict to top n genes stratified by ntr
         totals=rowSums(GetTable(sub,type=slot))
-        threshold=sort(totals,decreasing = TRUE)[min(length(totals),n.estimate)]
-        genes=Genes(sub)[Genes(sub) %in% names(which(totals>=threshold))]
+        ntrs=rowMeans(GetTable(sub,type="ntr"),na.rm=TRUE)
+        ntr.cat=cut(ntrs,quantile(ntrs,seq(0,1,by=0.1)),include.lowest = TRUE)
+        fil=plyr::ddply(data.frame(Gene=Genes(sub),totals,ntr.cat),.(ntr.cat),function(s) {
+           threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/10))]
+           data.frame(Gene=s$Gene,use=s$totals>=threshold)
+        })
+
+        genes=as.character(fil$Gene[fil$use])
         sub=FilterGenes(sub,use=genes)
         sub=DropAnalysis(sub)
 
@@ -1299,7 +1314,7 @@ PlotSimpleKinetics=function(total1,total2,ntr1,ntr2,f0.above.ss.factor=1,t=2,N=1
 #'   PlotGeneKinetics(sars,"SRSF6",type = "ntr",bare.plot=T))  /
 #'    (PlotGeneKinetics(sars,"SRSF6",use.old=Coldata(sars)$Name!="SARS.no4sU.A",bare.plot=T) |
 #'         PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
-#'         REVIEWED BY Lygeri: changed nnls to nlls
+#'         REVIEWED BY Lygeri: changed nlls to nlls
 PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=Genes(data,genes=gene), type=c("nlls","ntr","lm"), bare.plot=FALSE,exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
     if (length(ToIndex(data,gene))==0) return(NULL)
 
@@ -1347,14 +1362,6 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
         }
     }
 
-    if (is.data.frame(fit[[1]]$modifier)) {
-        df$time=sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Time"])
-        df$Value=df$Value*sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Norm.factor"])
-        if (show.CI) {
-            df$lower=df$lower*sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Norm.factor"])
-            df$upper=df$upper*sapply(1:nrow(df),function(i) fit[[as.character(df$Condition)[i]]]$modifier[as.character(df$Name)[i],"Norm.factor"])
-        }
-    }
     df$Condition=if ("Condition" %in% names(df)) df$Condition else gene
     tt=seq(0,max(df$time),length.out=100)
     df.median=ddply(df,c("Condition","Type","duration.4sU","time"),function(s) data.frame(Value=median(s$Value)))
