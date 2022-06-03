@@ -1,0 +1,187 @@
+---
+title: "Getting data"
+author: "Lygeri Sakellaridi"
+date: "6/3/2022"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Loading data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+This vignette will show the most suitable commands to retrieve data for 
+different scenarios.
+
+First we will load the object we will work on and do some initial gene filtering. 
+The data set is from Finkel et al. 2021 [[3]](https://www.nature.com/articles/s41586-021-03610-3). It contains time series samples from the human epithelial cell line (Calu3 cells), 
+where half of the samples were infected with SARS-CoV-2 for different periods of 
+time. For more on these initial commands see the "Loading data" vignette.
+
+```{r}
+suppressPackageStartupMessages({library(grandR)})
+sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
+                  design=c("Condition",Design$dur.4sU,Design$Replicate))
+sars <- FilterGenes(sars, minval = 100, mincol = 6) 
+```
+
+# Getting data for all genes
+
+GetTable extracts slot data for all genes of the grandR object and returns
+the result as a large matrix:
+
+```{r}
+sars.table <- GetTable(sars)
+head(sars.table, 2)
+```
+
+The values shown are from the default slot of the grandR object. In this case
+the default slot is count. This can be seen using the DefaultSlot command:
+
+```{r}
+DefaultSlot(sars)
+```
+
+DefaultSlot can also be used to set a different slot as default. To view the
+available slots, use the Slots command:
+
+```{r}
+Slots(sars) # "count" "ntr"   "alpha" "beta"
+DefaultSlot(sars) # count
+DefaultSlot(sars) <- "ntr" # set the default slot to ntr
+DefaultSlot(sars) # the default slot is now ntr
+```
+
+To summarize values over experimental conditions, set the "summarize" parameter
+to TRUE:
+
+```{r}
+DefaultSlot(sars) <- "count"
+head(GetTable(sars,summarize=TRUE)) # DefaultSlot values averaged over the two conditions
+```
+
+You can specify different types of data to retrieve from different columns.
+For example, the code below returns the estimated new RNA counts
+for all samples that have been labeled with 4SU:
+
+```{r}
+new.no4SU <- head(GetTable(sars, type="new.count",columns=!Coldata(sars)$no4sU))
+head(new.no4SU, 2)
+```
+The "type" parameter describes the type of data to be retrieved. It can be
+a string or a vector of multiple strings. Each string can be a slot of the
+grandR object. For example, the command below returns count and NTR data for
+all samples that have been labeled with 4sU:
+
+```{r}
+count.ntr.no4SU <- GetTable(sars, type=c("count", "ntr"),columns=!Coldata(sars)$no4sU)
+head(count.ntr.no4SU, 2)
+```
+Alternatively, the string(s) can follow a specific syntax composed of three
+parts: the first part should be "new", "old" or "total" (referring to RNA).
+The second part is a single dot, and the third part is a slot. Foe example,
+"total.count" would return total RNA counts for the specified samples. The
+command below returns
+
+```{r}
+new.old.ntr.no4SU <- GetTable(sars, type=c("new.ntr", "old.ntr"),columns=!Coldata(sars)$no4sU)
+head(new.old.ntr.no4SU, 2)
+# Note to self: I actually didn't expect this to work for ntr. What does it mean? :D
+```
+# Getting data for a specific set of genes
+
+If you want to retrieve slot data for a particular gene or a small set of genes,
+the GetData command is more appropriate: it returns the results as a tidy table.
+
+```{r}
+# Return default slot values for the MYC gene
+head(GetData(sars, gene="MYC"), 2)
+```
+To obtain values for specific types of data, we can use the mode.slot parameter,
+which uses the same syntax as the "type" parameter from GetTable: it can either
+be the name of a slot, or one of "new"/"old"/"total" followed by a dot followed
+by the name of a slot.
+
+```{r}
+# Return values from new and old count slots for the MYC gene
+head(GetData(sars, genes ="MYC", mode.slot=c("new.count", "old.count")), 2)
+```
+```{r}
+# Return NTR values for the MYC gene
+head(GetData(sars, genes = "MYC", mode.slot = "ntr"), 2)
+```
+The "columns" parameter can be specified to obtain genes from specific columns
+(to view available columns, use colnames(sars)):
+
+```{r}
+# View columns of the grandR object
+colnames(sars)
+
+# Return count values for the MYC gene
+head(GetData(sars, genes = "MYC", mode.slot = "count", columns = c("Mock.1h.A", "SARS.1h.A")), 2)
+```
+
+To retrieve data for a particular set of genes, pass the set as a vector of 
+strings in the "genes" parameter:
+
+```{r}
+# Return NTR values for a set of genes
+head(GetData(sars, genes = c("SRSF6","MYC"), mode.slot="ntr"), 2)
+```
+If multiple genes or multiple mode slots are specified, it is possible to opt
+to melt the table:
+
+```{r}
+GetData(sars, mode.slot = c("count","ntr"),genes = c("SRSF6","MYC"), melt = TRUE)
+# Error in names(object) <- nm : 
+  #'names' attribute [2] must be the same length as the vector [1]
+# Open issue
+```
+
+# Getting results from an analysis
+
+To retrieve results from an analysis, use the GetAnalysisTable command. 
+First, we will make a kinetic modeling analysis:
+
+```{r}
+SetParallel()
+sars.kinetics <- FitKinetics(sars,name = "kinetics", steady.state = list(Mock=TRUE,SARS=FALSE))
+```
+
+Then we can obtain results as a table:
+
+```{r}
+anal.table <- GetAnalysisTable(sars.kinetics)
+head(anal.table, 2)
+```
+
+Some of the parameters are similar to what we saw before: for example, "genes"
+and "columns" can be set to return results for specific (sets of) genes and/or
+columns. Note that in this case, "columns" refers to the columns of the 
+analysis table, which are different from the columns of the grandR object:
+
+```{r}
+# The columns of the grandR object
+colnames(sars.kinetics) 
+```
+```{r}
+# The columns of the analysis table (can also be accessed with "colnames")
+colnames(anal.table)
+```
+
+Since we performed a kinetic analysis, we get results for RNA half-lives
+and synthesis rates (for more information, see the "Kinetic Modeling" vigentte).
+As usual, we can specify genes as strings or vectors of strings. Columns can
+be specified by a regular expression to be matched against columns of the
+analysis table. For example, the command below extracts the half-lives of the 
+MIB2 and OSBPL9 genes from the mock and SARS samples:
+
+```{r}
+head(GetAnalysisTable(sars.kinetics, columns = "Half-life"), 2)
+```
+Open issue: setting columns by (vectors of) specific strings while setting
+regex to FALSE does not currently work:
+
+```{r}
+head(GetAnalysisTable(sars.kinetics, columns = "kinetics.Mock.Half-life", regex = FALSE), 2)
+head(GetAnalysisTable(sars.kinetics, columns = c("kinetics.Mock.Synthesis", "kinetics.SARS.Synthesis"), regex = FALSE), 2)
+```
+
