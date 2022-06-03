@@ -763,6 +763,8 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
 
 }
 
+#' REVIEWED by Lygeri: currently, "gene" and "genes" both work as a parameter
+#' Not sure if this is intended.
 #' Obtain a tidy table of values for a gene or a small set of genes
 #'
 #' This is the main function to access slot data data from a particular gene
