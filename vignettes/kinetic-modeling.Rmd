@@ -94,12 +94,12 @@ PlotScatter(df,"kinetics.Mock.Half-life","kinetics.SARS.Half-life",log=T)+geom_a
 
 ```{r,fig.height=3.5,fig.width=8}
 SetParallel()
-sars<-CalibrateTimes(sars,steady.state = c(Mock=T,SARS=F))
-PlotGeneKinetics(sars,"MYC",steady.state = c(Mock=T,SARS=F)) | PlotGeneKinetics(sars,"MYC",time = "norm_time",steady.state = c(Mock=T,SARS=F))
+sars<-CalibrateEffectiveLabelingTime(sars,steady.state = c(Mock=T,SARS=F))
+PlotGeneKinetics(sars,"MYC",steady.state = c(Mock=T,SARS=F)) | PlotGeneKinetics(sars,"MYC",time = "calibrated_time",steady.state = c(Mock=T,SARS=F))
 
-sars<-FitKinetics(sars,name="norm_kinetics",slot="norm",time="norm_time",steady.state = c(Mock=T,SARS=F))
+sars<-FitKinetics(sars,name="norm_kinetics",slot="norm",time="calibrated_time",steady.state = c(Mock=T,SARS=F))
 sars<-FitKinetics(sars,name="ntr_kinetics",type="ntr")
-sars<-FitKinetics(sars,name="normntr_kinetics",type="ntr",time="norm_time")
+sars<-FitKinetics(sars,name="normntr_kinetics",type="ntr",time="calibrated_time")
 sars<-FitKinetics(sars,name="lm_kinetics",type="lm")
 
 df<-cbind(GetAnalysisTable(sars,c("kinetics.Mock"),regex=FALSE,columns="rmse",gene.info = FALSE),GetAnalysisTable(sars,c("norm_kinetics.Mock"),regex=FALSE,columns="rmse",gene.info = FALSE))
