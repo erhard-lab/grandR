@@ -654,6 +654,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
     total=total$Value[use]
     ntr=ntr$Value[use]
     t=t[use]
+    #uniroot.save=function(fun,lower,upper) if (is.na(fun(lower)*fun(upper)) || fun(lower)*fun(upper)>=0) NA else uniroot(fun,lower=lower,upper=upper)$root
     uniroot.save=function(fun,lower,upper) if (fun(lower)*fun(upper)>=0) mean(lower,upper) else uniroot(fun,lower=lower,upper=upper)$root
     fits=lapply(levels(c),function(cc) {
 
