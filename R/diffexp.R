@@ -78,7 +78,22 @@ ApplyContrasts=function(data,analysis,name,contrasts,mode.slot="count",verbose=F
   data
 }
 
-LFC=function(data,name=mode,contrasts,LFC.fun=PsiLFC,mode="total",slot="count",normalization=NULL,verbose=FALSE,...) {
+#' Calculate the log fold changes between some data based on a contrast matrix
+#' Requires the LFC package
+#' @param data the grandR object that contains the data
+#' @param name
+#' @param constrasts a contrast matrix that specifies where to compute LFC
+#' @param LFC.fun function to compute log fold change (default: psiLFC)
+#' @param mode one of "total"/"new"/"old"
+#' @param slot the slot of the grandR object to take the data from
+#' @param normalization
+#' @param verbose
+#' @examples
+#' @export
+LFC=function(data, name = mode, contrasts, LFC.fun=PsiLFC, mode="total",
+             slot="count",
+             normalization=NULL,
+             verbose=FALSE,...) {
   mode.slot=paste0(mode,".",slot)
   if (!is.null(normalization))normalization=paste0(normalization,".",slot)
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
@@ -95,7 +110,20 @@ LFC=function(data,name=mode,contrasts,LFC.fun=PsiLFC,mode="total",slot="count",n
   })
 }
 
-PairwiseDESeq2=function(data,name=mode,contrasts,separate=FALSE,mode="total",normalization=mode,logFC=FALSE,verbose=FALSE) {
+#' Apply DESeq2 on pairs of data defined by a contrast matrix
+#' Requires the DESeq2 package
+#' @param data the grandR object that contains the data
+#' @param name
+#' @param constrasts a contrast matrix
+#' @param separate
+#' @param mode one of "total"/"new"/"old"
+#' @param normalization
+#' @param logFC
+#' @param verbose
+#' @examples
+#' @export
+PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total",
+                        normalization=mode, logFC=FALSE, verbose=FALSE) {
   mode.slot=paste0(mode,".count")
   normalization=paste0(normalization,".count")
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
@@ -177,7 +205,6 @@ PairwiseDESeq2=function(data,name=mode,contrasts,separate=FALSE,mode="total",nor
     return(data)
   }
 }
-
 
 #' Compute the posterior logFC distributions of RNA synthesis and degradation
 #'
@@ -405,8 +432,24 @@ hierarchical.beta.posterior=function(a,b,
   re
 }
 
-
-AnalyzeGeneSets=function(data,analysis=Analyses(data)[1],criteria=LFC,species = NULL, category = NULL, subcategory = NULL, verbose=TRUE, minSize=10, maxSize=500, process.genesets=NULL) {
+#' Perform gene-set enrichment and overrepresentation analysis for a specified
+#' set of genes
+#' @param data the grandR object that contains the data to analyze
+#' @param analysis the analysis to use (default: the first analysis)
+#' @param criteria
+#' @param species the species the genes belong to (eg "Homo sapiens")
+#' @param category
+#' @param subcategory
+#' @param verbose
+#' @param minSize
+#' @param maxSize
+#' @param process.genesets
+#' @examples
+#' @export
+AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
+                         species = NULL, category = NULL, subcategory = NULL,
+                         verbose=TRUE, minSize=10, maxSize=500,
+                         process.genesets=NULL) {
   if (is.null(species)) {
     if (sum(grepl("ENSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="Homo sapiens"
     if (sum(grepl("ENSMUSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="Mus musculus"
@@ -434,8 +477,6 @@ AnalyzeGeneSets=function(data,analysis=Analyses(data)[1],criteria=LFC,species = 
     clusterProfiler::enricher(gene = genes, universe = Genes(data,use.symbols=FALSE), TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
   }
 }
-
-
 
 #' Create a summarize matrix
 #'
@@ -610,10 +651,6 @@ GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.form
   }
   re
 }
-
-
-
-
 
 # Normalization of NTRs such that: median logFC new RNA vs. new RNA is 0, there is no correlation of this logFC vs the NTR
 NormalizeEffectiveLabeling=function(data,reference=colnames(data),slot="norm",verbose=FALSE) {
