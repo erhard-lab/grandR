@@ -794,7 +794,7 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
         init=Coldata(sub)[[time]]
         init[init>0]=init[init>0]
         use=init>0 & init<max(init)
-        fit=optim(init[use],fn=opt.fun,hessian=TRUE, control=list(fnscale=-1))
+        fit=optim(init[use],fn=opt.fun,hessian=TRUE, control=list(fnscale=-1,maxit=n.iter))
         if (fit$convergence!=0) stop(sprintf("Did not converge!"))
         conf=try(sd.from.hessian(fit$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
 

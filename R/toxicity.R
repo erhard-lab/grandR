@@ -284,7 +284,7 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
     ggtitle(w4sU,subtitle = bquote(rho == .(rho) ~ "," ~ p ~ .(p)))
 }
 
-PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot=DefaultSlot(d),hl.quantile=0.8,correction=1) {
+PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot=DefaultSlot(data),hl.quantile=0.8,correction=1) {
   time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   df=df[df$covar<quantile(df$covar[is.finite(df$covar)],hl.quantile) & df$ntr<1 & df$ntr>0,]
