@@ -1,3 +1,15 @@
+#' Reviewed by Lygeri
+
+#' Make a 2D density plot
+#' @param x
+#' @param y
+#' @param facet
+#' @param n
+#' @param margin
+#' @return a 2D density plot
+#' @examples
+#' @export
+
 
 density2d=function(x, y, facet=NULL, n=100, margin='n') {
   bandwidth.nrd.ex=function (x)
@@ -28,8 +40,19 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 }
 
 
+#' Make a PCA plot
+#' @param data the grandr object that contains the data to plot
+#' @param type the type of data to plot; slot in the grandr object (eg "count")
+#' @param ntop
+#' @aest parameter to set the visual attributes
+#' @param x
+#' @param y
+#' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
+#' @return a PCA plot
+#' @examples
+#' @export
 
-PlotPCA=function(data,type="count",ntop=500,aest=aes(color=Condition),x=1,y=2,columns=NULL) {
+PlotPCA=function(data, type="count", ntop=500,aest=aes(color=Condition),x=1,y=2,columns=NULL) {
 
   my.cbind=function(...) {
     l=list(...)
@@ -84,6 +107,25 @@ Transform.logFC=function(LFC.fun=PsiLFC,lfc.reference=NULL, contrasts=NULL,...) 
     re
   }
 }
+
+#' Make a heatmap
+#' @param data the grandR object that contains the data to plot
+#' @param genes the genes to be included in the plot (default: all genes)
+#' @param type the RNA measurements to use: one of "Total"/"Old"/"New"
+#' @param slot the slot of the grandR object to use
+#' @param summarize
+#' @param transform
+#' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
+#' @param cluster.genes
+#' @param label.genes
+#' @param breaks
+#' @param colors
+#' @param verbose
+#' @param col.names
+#' @param title the title of the plot
+#' @param return.matrix
+#' @examples
+#' @export
 
 PlotHeatmap=function(data,
                      genes=Genes(data),
@@ -154,8 +196,28 @@ PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
 	plot(pl,main=name)
 }
 
-
-PlotScatter=function(df,xcol=1,ycol=2,x=NULL,y=NULL,log=FALSE,log.x=log,log.y=log,color=NA,remove.outlier=1.5,size=0.3,xlim=NULL,ylim=NULL, highlight=NULL, label=NULL, columns=NULL) {
+#' Make a scatter plot
+#' @param df the data frame that contains the data to be plotted
+#' @param xcol
+#' @param ycol
+#' @param x
+#' @param y
+#' @param log
+#' @param log.x
+#' @param log.y
+#' @param color
+#' @param remove.outlier
+#' @param size
+#' @param xlim
+#' @param ylim
+#' @param highlight
+#' @param label
+#' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
+#' @examples
+#' @export
+PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
+                     log.y=log, color=NA, remove.outlier=1.5, size=0.3,
+                     xlim=NULL, ylim=NULL, highlight=NULL, label=NULL, columns=NULL) {
   df=as.data.frame(df)
   if (!is.data.frame(df)) stop("df must be a data frame (or at least coercable into a data frame)")
   adaptInf=function(df,rx,ry) {
@@ -303,6 +365,13 @@ PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quant
 			coord_cartesian(ylim=ylim)
 }
 
+#' Convenience function to make the same type of plot for multple analyses.
+#' @param data the grandR object that contains the data to be plotted
+#' @param plot.fun the plottinf function to apply
+#' @param analyses the analyses to plot (default: all)
+#' @param add
+#' @examples
+#' @export
 PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
   lapply(analyses,function(analysis) {
     re=plot.fun(data,analysis=analysis,...)
@@ -311,7 +380,17 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
   })
 }
 
-VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,...) {
+#' Make a Vulcano plot
+#' @param data the grandR object that contains the data to be plotted
+#' @param analysis the analysis to plot (default: first analysis)
+#' @param aest parameter to set visual attributes of the plot
+#' @param p.cutoff p-value cutoff (default: 0.05)
+#' @param lfc.cutoff log fold change cutoff (default: 1)
+#' @param label.numbers
+#' @examples
+#' @export
+VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
+                     label.numbers=TRUE,...) {
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",names(df)))
   g=PlotScatter(df,x=LFC,y=-log10(Q),remove.outlier = FALSE,...)+
@@ -330,8 +409,25 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
 }
 
 
+#' Make an MA plot
+#' @param data the grandR object that contains the data to be plotted
+#' @param analysis the analysis to plot (default: first analysis)
+#' @param aest parameter to set visual attributes of the plot
+#' @param p.cutoff p-value cutoff (default: 0.05)
+#' @param lfc.cutoff log fold change cutoff (default: 1)
+#' @param label.numbers
+#' @param highlight
+#' @param label
+#' @param repel
+#' @examples
+#' @export
 
-MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cutoff=1,label.numbers=TRUE,highlight=NULL,label=NULL,repel=1) {
+MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
+                lfc.cutoff=1,
+                label.numbers=TRUE,
+                highlight=NULL,
+                label=NULL,
+                repel=1) {
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
   if (is.numeric(analysis)) analysis=Analyses(data)[analysis]
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",gsub(".*.M","M",names(df))))
@@ -368,6 +464,13 @@ MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,lfc.cut
   g
 }
 
+#' Plot the distribution of gene types
+#' @param data the grandR object to get the data to be plotted from
+#' @param mode.slot
+#' @param relative
+#' @examples
+#' @export
+
 PlotTypeDistribution=function(data,mode.slot=DefaultSlot(data),relative=FALSE) {
 	df=GetTable(data,type=mode.slot)
 	df=sapply(levels(data$gene.info$Type),function(type) colSums(df[ data$gene.info$Type==type,]))
@@ -380,7 +483,17 @@ PlotTypeDistribution=function(data,mode.slot=DefaultSlot(data),relative=FALSE) {
 	ggplot(df,aes(Condition,value,fill=Type))+geom_bar(stat="Identity")+scale_fill_viridis_d()+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ylab(mode.slot)+xlab(NULL)
 }
 
-PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
+#' Plot the old vs new RNA values of a gene or a set of genes
+#' @param data the grandR object to get the data to be plotted from
+#' @param gene the gene(s) to plot
+#' @param slot the slot of the grandR object to get the data from
+#' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
+#' @param aest parameter to set the visual attributes of the plot
+#' @examples
+#' @export
+
+PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,
+                          aest=aes(color=Condition,shape=Replicate)) {
   new=paste0("new.",slot)
   old=paste0("old.",slot)
   df=GetData(data,genes=gene,mode.slot=c(old,new),melt=F,coldata=T,ntr.na = FALSE)
@@ -397,7 +510,17 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=ae
   g
 }
 
-PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
+#' Plot the total RNA of a gene (x axis, log10) against its NTR value (y axis)
+#' @param data the grandR object to get the data to be plotted from
+#' @param gene the gene(s) to be plotted
+#' @param slot the slot of the grandR object to get the data from
+#' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
+#' @param aest parameter to set the visual attributes of the plot
+#' @examples
+#' @export
+
+PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,
+                            aest=aes(color=Condition,shape=Replicate)) {
   df=GetData(data,genes=gene,mode.slot=c("ntr",slot),melt=F,coldata=T,ntr.na = FALSE)
   g=ggplot(df,modifyList(aes_string(slot,"ntr"),aest))+
     geom_point(size=2)+
@@ -411,7 +534,22 @@ PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,aest=
   g
 }
 
-PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data),type="total",log=TRUE,show.CI=FALSE,aest=aes(color=Condition,shape=Replicate)) {
+#' Plot gene groups as points
+#' @param data the grandR objects that contains the data to be plotted
+#' @param gene the genes to be plotted
+#' @param group the thing to group the genes on (default: Condition)
+#' @param slot the slot of the grandR object to take the data from
+#' @param type the RNA measurements to use; one of "total"/"old"/"new"
+#' @param log
+#' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
+#' @param aest parameter to set visual attributes of the plot
+#' @examples
+#' @export
+PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data),
+                              type="total",
+                              log=TRUE,
+                              show.CI=FALSE,
+                              aest=aes(color=Condition,shape=Replicate)) {
   df=GetData(data,genes=gene,mode.slot=c(slot,"ntr"),melt=F,coldata=T,ntr.na = FALSE)
   df$value=switch(type[1],total=df[[slot]],new=df[[slot]]*df[["ntr"]],old=df[[slot]]*(1-df[["ntr"]]),stop(paste0(type," unknown!")))
   g=ggplot(df,modifyList(aes_string(group,"value"),aest))+
@@ -437,6 +575,14 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
   g
 }
 
+#' Plot gene groups as bars
+#' @param data the grandR objects that contains the data to be plotted
+#' @param gene the genes to be plotted
+#' @param slot the slot of the grandR object to take the data from
+#' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
+#' @examples
+#' @export
+
 PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE) {
   df=GetData(data,genes=gene,mode.slot=paste0(c("new.","old."),slot),melt=T,coldata=T,ntr.na = FALSE)
   g=ggplot(df,aes(Name,Value,fill=Type))+
@@ -452,7 +598,24 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE) {
   g
 }
 
-PlotGeneTimeCourse=function(data,gene,group="Condition",time=Design$dur.4sU,slot=DefaultSlot(data),aest=aes(color=Condition,shape=Replicate),average.lines=TRUE,log.y=TRUE, show.CI=FALSE) {
+#' Plot the expression changes of a gene across a time course
+#' @param data the grandR object that contains the data to plot
+#' @param gene the gene to be plotted
+#' @param group
+#' @param time the column that contains the time data
+#' @param aest parameter to set the visual attributes of the plot
+#' @param average.lines
+#' @param log.y transform y axis to log scale; one of TRUE/FALSE (default: TRUE)
+#' @param show.CI show confidence intervals; one of TRUE/FALSE (default: TRUE)
+#' @examples
+#' @export
+
+PlotGeneTimeCourse=function(data,gene,group="Condition",time=Design$dur.4sU,
+                            slot=DefaultSlot(data),
+                            aest=aes(color=Condition,shape=Replicate),
+                            average.lines=TRUE,
+                            log.y=TRUE,
+                            show.CI=FALSE) {
   df=GetData(data,genes=gene,mode.slot=slot,melt=F,coldata=T,ntr.na = FALSE)
   aes=modifyList(aes_string(time,"Value",group=group),aest)
   g=ggplot(df,mapping=aes)+
