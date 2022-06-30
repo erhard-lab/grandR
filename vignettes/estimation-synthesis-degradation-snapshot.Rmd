@@ -31,39 +31,39 @@ from the 2h time point.
 suppressPackageStartupMessages({library(grandR)})
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c("Condition",Design$dur.4sU,Design$Replicate))
-sars=subset(sars,columns=Condition(sars)=="Mock")
-sars=FilterGenes(sars)
-sars=Normalize(sars)
+sars <- subset(sars,columns=Condition(sars)=="Mock")
+sars <- FilterGenes(sars)
+sars <- Normalize(sars)
 SetParallel()
-sars=FitKinetics(sars,type="nlls")
-seed=1337
-f0=GetAnalysisTable(sars)$Synthesis/log(2)*GetAnalysisTable(sars)$`Half-life`
-control = SimulateTimeCourse("control",GeneInfo(sars),
-                           s = GetAnalysisTable(sars)$Synthesis,
-                           d = log(2)/GetAnalysisTable(sars)$`Half-life`,
+sars <- FitKinetics(sars,type="nlls")
+seed = 1337
+f0 <- GetAnalysisTable(sars)$kinetics.Mock.Synthesis/log(2)*GetAnalysisTable(sars)$`kinetics.Mock.Half-life`
+control <- SimulateTimeCourse("control", GeneInfo(sars),
+                           s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
+                           d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
                            dispersion = estimate.dispersion(GetTable(sars,type="count")),
                            f0 = f0,
                            s.variation = 1.05,
                            d.variation = 1.05,
                            timepoints = c(2, 2, 2),
-                           beta.approx = TRUE, num.reads=5E7, seed=seed)
-unperturbed = SimulateTimeCourse("unperturbed",GeneInfo(sars),
-                                 s = GetAnalysisTable(sars)$Synthesis,
-                                 d = log(2)/GetAnalysisTable(sars)$`Half-life`,
+                           beta.approx = TRUE, num.reads = 5E7, seed = seed)
+unperturbed <- SimulateTimeCourse("unperturbed", GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
+                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
                                  dispersion=estimate.dispersion(GetTable(sars,type="count")),
                                  f0 = f0,s.variation = 1.05,d.variation = 1.05,timepoints = c(2,2,2),
                                  beta.approx = TRUE,
                                  num.reads=5E7,
                                  seed=seed*13)
-perturbed.d = SimulateTimeCourse("HL",GeneInfo(sars),
-                                 s = GetAnalysisTable(sars)$Synthesis,
-                                 d = log(2)/GetAnalysisTable(sars)$`Half-life` *2^rnorm(nrow(sars),0,1) ,
+perturbed.d <- SimulateTimeCourse("HL", GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
+                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life` *2^rnorm(nrow(sars),0,1) ,
                                  dispersion = estimate.dispersion(GetTable(sars,type="count")),
                                  f0 = f0, s.variation = 1.05, d.variation = 1.05,
                                  timepoints = c(2,2,2),beta.approx = TRUE,
                                  num.reads=5E7, seed = seed*13*13)
-perturbed.s = SimulateTimeCourse("s",GeneInfo(sars),
-                                 s = GetAnalysisTable(sars)$Synthesis *2^rnorm(nrow(sars),0,1) ,
+perturbed.s <- SimulateTimeCourse("s",GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis *2^rnorm(nrow(sars),0,1) ,
                                  d = log(2)/GetAnalysisTable(sars)$`Half-life`,
                                  dispersion = estimate.dispersion(GetTable(sars,type="count")),
                                  f0 = f0, s.variation = 1.05, d.variation = 1.05,
@@ -72,7 +72,7 @@ perturbed.s = SimulateTimeCourse("s",GeneInfo(sars),
                                  seed=seed*13*13*13)
 
 
-m = merge(control, unperturbed, perturbed.d, perturbed.s)
+m <- merge(control, unperturbed, perturbed.d, perturbed.s)
 ```
 This simulation, as well as equivalent simulations for the 1h and 4h time points,
 are available here (insert Internet location).
