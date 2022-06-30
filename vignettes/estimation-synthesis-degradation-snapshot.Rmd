@@ -1,0 +1,205 @@
+---
+title: "Estimation of synthesis and degradation rates from snapshot experiments"
+author: "Lygeri Sakellaridi"
+date: "6/30/2022"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Kinetic modeling}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+Synthesis and degradation can be estimated from a single time point in an 
+unbiased way and without assuming steady state. In this vignette we explore how.
+
+Throughout the vignette, "sigma" and "delta" are used as short terms for
+"synthesis rate" and "degradation rate" respectively.
+
+# Data simulation
+
+We simulate a data set based on the SARS-CoV-2 data set from Finkel et al. 2021
+[[3]](https://www.nature.com/articles/s41586-021-03610-3). The data set contains 
+time series samples from the human epithelial cell line (Calu3 cells); half of 
+the samples were infected with SARS-CoV-2 for different periods of time.
+Consequently, there are two conditions, "SARS" and "Mock."
+
+In the mock condition, we perturb synthesis (sigma) or degradation (delta) rate.
+We also leave a simulation unperturbed as control. We simulate three replicates
+from the 2h time point.
+
+```{r}
+suppressPackageStartupMessages({library(grandR)})
+sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
+                  design=c("Condition",Design$dur.4sU,Design$Replicate))
+sars=subset(sars,columns=Condition(sars)=="Mock")
+sars=FilterGenes(sars)
+sars=Normalize(sars)
+SetParallel()
+sars=FitKinetics(sars,type="nlls")
+seed=1337
+f0=GetAnalysisTable(sars)$Synthesis/log(2)*GetAnalysisTable(sars)$`Half-life`
+control = SimulateTimeCourse("control",GeneInfo(sars),
+                           s = GetAnalysisTable(sars)$Synthesis,
+                           d = log(2)/GetAnalysisTable(sars)$`Half-life`,
+                           dispersion = estimate.dispersion(GetTable(sars,type="count")),
+                           f0 = f0,
+                           s.variation = 1.05,
+                           d.variation = 1.05,
+                           timepoints = c(2, 2, 2),
+                           beta.approx = TRUE, num.reads=5E7, seed=seed)
+unperturbed = SimulateTimeCourse("unperturbed",GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$Synthesis,
+                                 d = log(2)/GetAnalysisTable(sars)$`Half-life`,
+                                 dispersion=estimate.dispersion(GetTable(sars,type="count")),
+                                 f0 = f0,s.variation = 1.05,d.variation = 1.05,timepoints = c(2,2,2),
+                                 beta.approx = TRUE,
+                                 num.reads=5E7,
+                                 seed=seed*13)
+perturbed.d = SimulateTimeCourse("HL",GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$Synthesis,
+                                 d = log(2)/GetAnalysisTable(sars)$`Half-life` *2^rnorm(nrow(sars),0,1) ,
+                                 dispersion = estimate.dispersion(GetTable(sars,type="count")),
+                                 f0 = f0, s.variation = 1.05, d.variation = 1.05,
+                                 timepoints = c(2,2,2),beta.approx = TRUE,
+                                 num.reads=5E7, seed = seed*13*13)
+perturbed.s = SimulateTimeCourse("s",GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$Synthesis *2^rnorm(nrow(sars),0,1) ,
+                                 d = log(2)/GetAnalysisTable(sars)$`Half-life`,
+                                 dispersion = estimate.dispersion(GetTable(sars,type="count")),
+                                 f0 = f0, s.variation = 1.05, d.variation = 1.05,
+                                 timepoints = c(2,2,2),
+                                 beta.approx = TRUE, num.reads = 5E7,
+                                 seed=seed*13*13*13)
+
+
+m = merge(control, unperturbed, perturbed.d, perturbed.s)
+```
+This simulation, as well as equivalent simulations for the 1h and 4h time points,
+are available here (insert Internet location).
+
+# Testing causes of log-fold change (LFC) between conditions in old and new RNA
+
+To estimate sigma and delta, we can use the following equations:
+
+(3)
+
+(4)
+
+Two theoretical considerations stem from these equations: 
+
+1. A LFC in the old RNA between conditions means that either the
+RNA labels before labeling were already different, or that delta differs by
+an additive constant rather than a multiplicative factor.
+
+To test this, we compare the LFC between the unpertubed simulation and the
+simulation with pertubed delta:
+
+```{r}
+# Put LFC of unpertubed vs pertubed delta in a dataframe
+# Use PlotScatter
+```
+
+We can see there is no linear correlation, which is expected from old RNA LFC
+resulting from an additive change in delta.
+
+2. A LFC in new RNA, previously associated with changes in sigma, can also be
+due to changes in delta. This is especially true for genes with short-lived
+RNA.
+
+To test this, we plotted delta-induced LFC for new RNA, with an emphasis
+on short-lived genes. For this example, we consider "short-lived" to mean
+"with a half-life <= 1 h", but we encourage users to experiment with different
+cutoffs.
+
+```{r}
+# LFC
+# PlotScatter, new RNA unpertubed vs pertubed delta LFC
+# Optionally VulcanoPlot
+# Highlight short-lived genes or make a separate plot for them
+```
+
+We can see there are significant LFCs for short-lived genes when delta
+(but not sigma) is changed.
+
+# Unbiased estimation of synthesis and degradation rates
+
+We have seen that it is possible to estimate sigma and delta from equations
+(3) and (4). However, these estimates can be inaccurate due to technical
+factors (eg low number of reads) as well as subject to biological variability
+between replicates.
+
+To estimate sigma and delta without the bias introduced by these factors, we 
+apply a Bayesian hierarchical model:
+
+```{r}
+# EstimateRegulation
+# PlotScatter on estimates vs true sigma/delta; slope should be 1, meaning no bias
+# Also try separately after filtering genes (reads) and for the top and bottom
+# 10% of genes in terms of half-life
+```
+
+Plotting the estimates of sigma and delta against their true values results 
+in a scatterplot with a slope equal to (approaching?) one, indicating that
+the estimates are unbiased.
+
+We also observe that sigma and delta are small for the unpertubed simulations.
+and that the variance for delta is substantially larger than the variance for 
+sigma:
+
+```{r}
+# Insert boxplots here
+```
+
+# Region of practical equivalence (ROPE) analysis outperforms DESeq2
+
+Our Bayesian model also gives us the marginal posterior distributions for
+sigma and delta. It is worth noting that these distributions accurately cover
+deviations from ground truth, which means that they really reflect measurement
+uncertainty:
+
+```{r}
+# Behold, a plot
+```
+
+This allows us to perform ROPE analysis [reference] to quantify significant
+changes in sigma and delta, and compare the results to those of the frequentist
+approach as implemented in DESeq2.
+
+```{r}
+# Behold, code
+```
+
+ROPE outperforms DEseq2 as evidenced by ROC analysis.
+
+```{r}
+# Insert ROC analysis
+```
+
+# Comparison of degradation rate changes: full time course versus snapshot
+
+We compare delta between a snapshot from a single time point (2h) versus a
+full time course.
+
+```{r}
+# Code
+```
+
+They're basically the same.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
