@@ -21,9 +21,8 @@ We simulate a data set based on the SARS-CoV-2 data set from Finkel et al. 2021
 [[3]](https://www.nature.com/articles/s41586-021-03610-3). The data set contains 
 time series samples from the human epithelial cell line (Calu3 cells); half of 
 the samples were infected with SARS-CoV-2 for different periods of time.
-Consequently, there are two conditions, "SARS" and "Mock."
 
-In the mock condition, we perturb synthesis (sigma) or degradation (delta) rate.
+In the mock samples, we perturb synthesis (sigma) or degradation (delta) rate.
 We also leave a simulation unperturbed as control. We simulate three replicates
 from the 2h time point.
 
@@ -62,9 +61,9 @@ perturbed.d <- SimulateTimeCourse("HL", GeneInfo(sars),
                                  f0 = f0, s.variation = 1.05, d.variation = 1.05,
                                  timepoints = c(2,2,2),beta.approx = TRUE,
                                  num.reads=5E7, seed = seed*13*13)
-perturbed.s <- SimulateTimeCourse("s",GeneInfo(sars),
+perturbed.s <- SimulateTimeCourse("s", GeneInfo(sars),
                                  s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis *2^rnorm(nrow(sars),0,1) ,
-                                 d = log(2)/GetAnalysisTable(sars)$`Half-life`,
+                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
                                  dispersion = estimate.dispersion(GetTable(sars,type="count")),
                                  f0 = f0, s.variation = 1.05, d.variation = 1.05,
                                  timepoints = c(2,2,2),
@@ -73,9 +72,11 @@ perturbed.s <- SimulateTimeCourse("s",GeneInfo(sars),
 
 
 m <- merge(control, unperturbed, perturbed.d, perturbed.s)
+saveRDS(m, "snapshot.est.step1.rds")
 ```
-This simulation, as well as equivalent simulations for the 1h and 4h time points,
-are available here (insert Internet location).
+
+All simulations used in these vignette, as well as equivalent simulations for 
+the 1h and 4h time points, are available here (insert Internet location).
 
 # Testing causes of log-fold change (LFC) between conditions in old and new RNA
 
@@ -91,12 +92,21 @@ Two theoretical considerations stem from these equations:
 RNA labels before labeling were already different, or that delta differs by
 an additive constant rather than a multiplicative factor.
 
-To test this, we compare the LFC between the unpertubed simulation and the
-simulation with pertubed delta:
+To test this, we compare the LFC between the control and the simulation with 
+pertubed delta:
 
 ```{r}
+# Get LFC values for old RNA
+m <- LFC(m, "old", GetContrasts(m, contrast = c("Condition","control")), mode="old")
+
 # Put LFC of unpertubed vs pertubed delta in a dataframe
+anal.table <-GetAnalysisTable(m)
+lfc.pertubed.d.vs.control.old <- anal.table$`old.HL vs control.LFC`
+lfc.unperturbed.vs.control.old <- anal.table$`old.unperturbed vs control.LFC`
+df.old <- data.frame(cbind(lfc.pertubed.d.vs.control.old, lfc.unperturbed.vs.control.old))
+
 # Use PlotScatter
+PlotScatter(df.old)
 ```
 
 We can see there is no linear correlation, which is expected from old RNA LFC
@@ -111,15 +121,36 @@ on short-lived genes. For this example, we consider "short-lived" to mean
 "with a half-life <= 1 h", but we encourage users to experiment with different
 cutoffs.
 
+First, we will make a list that contains all the names of short-lived genes.
+In order to do this, we will extract the true values for delta from the analysis
+table of our grandR object and then convert them to half-lives using the 
+following equation from [REF: grand-slam paper]:
+
+(9)
+
 ```{r}
-# LFC
+m <- LFC(m, "new", GetContrasts(m, contrast = c("Condition","control")), mode="new")
+anal.table <- GetAnalysisTable(m)
+threshold <- 1 # our half-life threshold for short-lived genes
+hl <- log(2)/anal.table$true_d
+genes <- rownames(anal.table)
+short.lived.genes <- genes[hl <= threshold]
+```
+
+Now we can make our scatter plot:
+
+```{r}
+lfc.pertubed.d.vs.control.new <- anal.table$`new.HL vs control.LFC`
+lfc.unperturbed.vs.control.new <- anal.table$`new.unperturbed vs control.LFC`
+df.new <- data.frame(cbind(lfc.pertubed.d.vs.control.new, lfc.unperturbed.vs.control.new))
+rownames(df.new) <- rownames(anal.table) # add gene names to data frame
+
 # PlotScatter, new RNA unpertubed vs pertubed delta LFC
-# Optionally VulcanoPlot
-# Highlight short-lived genes or make a separate plot for them
+PlotScatter(df.new, highlight = short.lived.genes)
 ```
 
 We can see there are significant LFCs for short-lived genes when delta
-(but not sigma) is changed.
+(but not sigma) is changed. (Nope)
 
 # Unbiased estimation of synthesis and degradation rates
 
