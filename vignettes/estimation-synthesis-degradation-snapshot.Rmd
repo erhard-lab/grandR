@@ -210,6 +210,22 @@ sigma:
 
 ```{r}
 # Insert boxplots here
+# Plotting the following distributions:
+
+# Changes in delta
+par(mfrow = c(1, 3))
+boxplot(anal.table.reg$`Regulation.unperturbed vs control.HL.log2FC`) 
+boxplot(anal.table.reg$`Regulation.HL vs control.HL.log2FC`)
+boxplot(anal.table.reg$`Regulation.s vs control.HL.log2FC`)
+```
+
+```{r}
+# Changes in sigma
+
+par(mfrow = c(1, 3))
+boxplot(anal.table.reg$`Regulation.unperturbed vs control.s.log2FC`)
+boxplot(anal.table.reg$`Regulation.HL vs control.s.log2FC`)
+boxplot(anal.table.reg$`Regulation.s vs control.s.log2FC`)
 ```
 
 # Region of practical equivalence (ROPE) analysis outperforms DESeq2
