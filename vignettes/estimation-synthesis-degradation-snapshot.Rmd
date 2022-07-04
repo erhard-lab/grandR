@@ -163,17 +163,48 @@ To estimate sigma and delta without the bias introduced by these factors, we
 apply a Bayesian hierarchical model:
 
 ```{r}
+# Add total RNA
+m <- LFC(m,"total", GetContrasts(m, contrast = c("Condition","control")), mode="total")
+
 # EstimateRegulation
+m <- Normalize(m)
+
+SetParallel()
+m <- EstimateRegulation(m, "Regulation", contrasts = GetContrasts(m,contrast = c("Condition","control")), reference.columns = FindReferences(m, Condition == "control", group = NULL),verbose = TRUE, sample.f0.in.ss = TRUE)
+
+# Get new analysis table and take a look at the columns
+anal.table.reg <- GetAnalysisTable(m)
+colnames(anal.table.reg)
+
 # PlotScatter on estimates vs true sigma/delta; slope should be 1, meaning no bias
+# x is... my best guess is Regulation.unperturbed vs control.HL.LFC and Regulation.unperturbed vs control.s.LFC
+# y is "Regulation.HL vs control.HL.log2FC" and "Regulation.s vs control.s.log2FC" 
+true.s.lfc <- anal.table.reg$`Regulation.unperturbed vs control.s.log2FC`
+true.hl.lfc <- anal.table.reg$`Regulation.unperturbed vs control.HL.log2FC`
+est.s.lfc <- anal.table.reg$`Regulation.s vs control.s.log2FC`
+est.hl.lfc <- anal.table.reg$`Regulation.HL vs control.HL.log2FC`
+
+df.hl <- data.frame(cbind(true.hl.lfc, est.hl.lfc))
+df.s <- data.frame(cbind(true.s.lfc, est.s.lfc))
+
+
 # Also try separately after filtering genes (reads) and for the top and bottom
 # 10% of genes in terms of half-life
 ```
 
 Plotting the estimates of sigma and delta against their true values results 
 in a scatterplot with a slope equal to (approaching?) one, indicating that
-the estimates are unbiased.
+the estimates are unbiased:
 
-We also observe that sigma and delta are small for the unpertubed simulations.
+```{r}
+PlotScatter(df.hl, label = (paste0("slope==", coef(lm(df.hl$est.hl.lfc~df.hl$true.hl.lfc))))) # unsuccessful attempt to include slope in plot
+```
+
+```{r}
+PlotScatter(df.s, label = (paste0("slope==", coef(lm(df.s$est.s.lfc~df.s$true.s.lfc))))) # unsuccessful attempt to include slope in plot
+```
+
+We also observe that sigma and delta are small for the unperturbed simulations.
 and that the variance for delta is substantially larger than the variance for 
 sigma:
 
