@@ -208,10 +208,6 @@ est.hl.lfc <- anal.table.reg$`Regulation.HL vs control.HL.log2FC`
 
 df.hl <- data.frame(cbind(true.hl.lfc, est.hl.lfc))
 df.s <- data.frame(cbind(true.s.lfc, est.s.lfc))
-
-
-# Also try separately after filtering genes (reads) and for the top and bottom
-# 10% of genes in terms of half-life
 ```
 
 Plotting the estimates of sigma and delta against their true values results 
@@ -226,36 +222,106 @@ PlotScatter(df.hl, label = (paste0("slope==", coef(lm(df.hl$est.hl.lfc~df.hl$tru
 PlotScatter(df.s, label = (paste0("slope==", coef(lm(df.s$est.s.lfc~df.s$true.s.lfc))))) # unsuccessful attempt to include slope in plot
 ```
 
-Something something filter genes and try again. 
+It is interesting to explore how these plots change if we only maintain
+highly expressed genes. We can set different thresholds for expression by
+using the FilterGenes command and playing with the number of reads and samples.
+As an example, we show how the plots are affected if we keep reads that have
+at least 4000 reads in at least half of the samples. These thresholds maintain
+3020 genes.
 
-Something something do again for top and bottom 10% of half-lives.
+```{r}
+m2 <- FilterGenes(m, type = "count", minval = 4000)
+nrow(GeneInfo(m2))
+```
+We repeat the dataframe-making steps for the m2 object:
+
+```{r}
+# Get new analysis table and take a look at the columns
+anal.table.reg2 <- GetAnalysisTable(m2)
+colnames(anal.table.reg2)
+
+# PlotScatter on estimates vs true sigma/delta; slope should be 1, meaning no bias
+
+true.s.lfc.filtered <- log2(GeneInfo(m2)$true_s.perturbed.s/GeneInfo(m2)$true_s)
+est.s.lfc.filtered <- anal.table.reg2$`Regulation.s vs control.s.log2FC`
+
+true.hl.lfc.filtered <- -log2(GeneInfo(m2)$true_d.perturbed.d/GeneInfo(m2)$true_d)
+est.hl.lfc.filtered <- anal.table.reg2$`Regulation.HL vs control.HL.log2FC`
+
+df.hl2 <- data.frame(cbind(true.hl.lfc.filtered, est.hl.lfc.filtered))
+df.s2 <- data.frame(cbind(true.s.lfc.filtered, est.s.lfc.filtered))
+```
+
+Then we remake the plots for half-life:
+
+```{r}
+PlotScatter(df.hl2, label = (paste0("slope==", coef(lm(df.hl2$est.hl.lfc.filtered~df.hl2$true.hl.lfc.filtered))))) # unsuccessful attempt to include slope in plot
+```
+
+(It's just similar but less dense)
+
+And sigma:
+
+```{r}
+PlotScatter(df.s2, label = (paste0("slope==", coef(lm(df.s2$est.s.lfc.filtered~df.s2$true.s.lfc.filtered))))) # unsuccessful attempt to include slope in plot
+```
+
+(I think it looks a bit better, but should really annotate with the slope number.)
 
 We also observe that sigma and delta are small for the unperturbed simulations.
 and that the variance for delta is substantially larger than the variance for 
 sigma:
 
 ```{r}
-# Insert boxplots here
-# Plotting the following distributions:
+library(ggplot2)
+library(reshape2)
+box.hl <- data.frame(unperturbed.vs.control = anal.table.reg$`Regulation.unperturbed vs control.HL.log2FC`,
+                     hl.vs.control = anal.table.reg$`Regulation.HL vs control.HL.log2FC`,
+                     s.vs.control = anal.table.reg$`Regulation.s vs control.HL.log2FC`)
 
-# Changes in delta
-par(mfrow = c(1, 3))
-boxplot(anal.table.reg$`Regulation.unperturbed vs control.HL.log2FC`) 
-boxplot(anal.table.reg$`Regulation.HL vs control.HL.log2FC`)
-boxplot(anal.table.reg$`Regulation.s vs control.HL.log2FC`)
+box.hl.molten <- melt(box.hl)
+
+ggplot(box.hl.molten, aes(x = variable, y = value)) +
+  geom_boxplot()
 ```
 
 ```{r}
-# Changes in sigma
-# Use ggplot and make sure y axis is same
-# Filter for highly expressed genes (higher threshold for this step, optionally for others: 3000-4000 genes)
+box.s <- data.frame(unperturbed.vs.control = anal.table.reg$`Regulation.unperturbed vs control.s.log2FC`,
+                     hl.vs.control = anal.table.reg$`Regulation.HL vs control.s.log2FC`,
+                     s.vs.control = anal.table.reg$`Regulation.s vs control.s.log2FC`)
 
-par(mfrow = c(1, 3))
-boxplot(anal.table.reg$`Regulation.unperturbed vs control.s.log2FC`)
-boxplot(anal.table.reg$`Regulation.HL vs control.s.log2FC`)
-boxplot(anal.table.reg$`Regulation.s vs control.s.log2FC`)
+box.s.molten <- melt(box.s)
+
+ggplot(box.s.molten, aes(x = variable, y = value)) +
+  geom_boxplot()
+```
+Once again, we can explore how these plots are affected by gene filtering.
+
+Half-life:
+
+```{r}
+box.hl.filtered <- data.frame(unperturbed.vs.control = anal.table.reg2$`Regulation.unperturbed vs control.HL.log2FC`,
+                     hl.vs.control = anal.table.reg2$`Regulation.HL vs control.HL.log2FC`,
+                     s.vs.control = anal.table.reg2$`Regulation.s vs control.HL.log2FC`)
+
+box.hl.molten.filtered <- melt(box.hl.filtered)
+
+ggplot(box.hl.molten.filtered, aes(x = variable, y = value)) +
+  geom_boxplot()
 ```
 
+Sigma:
+
+```{r}
+box.s.filtered <- data.frame(unperturbed.vs.control = anal.table.reg2$`Regulation.unperturbed vs control.s.log2FC`,
+                     hl.vs.control = anal.table.reg2$`Regulation.HL vs control.s.log2FC`,
+                     s.vs.control = anal.table.reg2$`Regulation.s vs control.s.log2FC`)
+
+box.s.molten.filtered <- melt(box.s.filtered)
+
+ggplot(box.s.molten.filtered, aes(x = variable, y = value)) +
+  geom_boxplot()
+```
 # Region of practical equivalence (ROPE) analysis outperforms DESeq2
 
 Our Bayesian model also gives us the marginal posterior distributions for
