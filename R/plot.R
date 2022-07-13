@@ -88,9 +88,9 @@ Transform=function(name,label=NULL) function(mat) {
   if (!is.null(label)) attr(re,"label")=label
   re
 }
-Transform.noop=function(mat) {re=mat; attr(re,"label")="Expression"; re}
-Transform.Z=function(mat) {re=t(scale(t(mat))); attr(re,"label")="z score"; re}
-Transform.VST=function(mat) {re=vst(mat); attr(re,"label")="VST"; re}
+Transform.noop=function(label="Expression") function(m) {re=m; attr(re,"label")=label; re}
+Transform.Z=function(label="z score") function(m) {re=t(scale(t(m))); attr(re,"label")=label; re}
+Transform.VST=function(label="VST") function(m) {re=vst(m); attr(re,"label")=label; re}
 Transform.logFC=function(LFC.fun=PsiLFC,lfc.reference=NULL, contrasts=NULL,...) {
   function(m) {
     if (!is.null(contrasts)) {
@@ -129,17 +129,16 @@ Transform.logFC=function(LFC.fun=PsiLFC,lfc.reference=NULL, contrasts=NULL,...) 
 
 PlotHeatmap=function(data,
                      genes=Genes(data),
-                     type=c("Total","New","Old"),
-                     slot=DefaultSlot(data),
+                     type=DefaultSlot(data),
                      summarize=NULL,
-                     transform=Transform.Z,
+                     transform=Transform.Z(),
                      columns=NULL,
                      cluster.genes=NULL,
                      label.genes=length(genes)<=50,
                      breaks=NULL, # either actual breaks, or null (50 and 99 quantile), or the quantiles (number matching to colors); if values centere around 0, then the center color is always 0
                      colors=RColorBrewer::brewer.pal(5,"RdBu"),
                      verbose=FALSE,
-                     col.names=colnames(data),
+                     col.names=NULL,
                      title=NULL,return.matrix=FALSE,...) {
 
   if (length(genes)==1 && genes %in% Analyses(data) && "Q" %in% names(GetAnalysisTable(data,analyses=genes,regex=FALSE))) {
@@ -151,11 +150,7 @@ PlotHeatmap=function(data,
 
   if (is.null(cluster.genes)) cluster.genes=is.logical(genes) || (length(genes)==length(Genes(data)) && all(genes==Genes(data)))
 
-  if (tolower(type[1])=="new") slot=paste0("new.",slot)
-  if (tolower(type[1])=="old") slot=paste0("old.",slot)
-  if (tolower(type[1])!="total" && is.null(columns)) columns=!data$coldata$no4sU
-
-  mat=as.matrix(GetTable(data,type=slot,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE))
+  mat=as.matrix(GetTable(data,type=type,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE))
   mat=transform(mat)
 
   name=attr(mat,"label")
@@ -174,7 +169,7 @@ PlotHeatmap=function(data,
       breaks=quantile(mat,quant/100)
     }
   }
-  colnames(mat)=if (is.null(columns)) col.names else col.names[columns]
+  if (!is.null(col.names)) colnames(mat)= col.names
   col=circlize::colorRamp2(breaks = breaks,colors=colors)
   hm=ComplexHeatmap::Heatmap(mat,name=name,
                           cluster_rows = cluster.genes,

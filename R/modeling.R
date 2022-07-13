@@ -241,7 +241,7 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 #'
 #' @export
 #'
-FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,steady.state=NULL,use.old=TRUE,use.new=TRUE, maxiter=100, compute.residuals=FALSE) {
+FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,steady.state=NULL,use.old=TRUE,use.new=TRUE, maxiter=250, compute.residuals=FALSE) {
     # residuals of the functions for usage with nls.lm
     res.fun.equi=function(par,old,new) {
         s=par[1]
@@ -774,9 +774,9 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
         # restrict to top n genes stratified by ntr
         totals=rowSums(GetTable(sub,type=slot))
         ntrs=rowMeans(GetTable(sub,type="ntr"),na.rm=TRUE)
-        ntr.cat=cut(ntrs,quantile(ntrs,seq(0,1,by=0.1)),include.lowest = TRUE)
+        ntr.cat=cut(ntrs,unique(quantile(ntrs,seq(0,1,by=0.1))),include.lowest = TRUE)
         fil=plyr::ddply(data.frame(Gene=Genes(sub),totals,ntr.cat),.(ntr.cat),function(s) {
-           threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/10))]
+           threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/length(unique(ntr.cat))))]
            data.frame(Gene=s$Gene,use=s$totals>=threshold)
         })
 
@@ -788,15 +788,17 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
             tt=init
             tt[use]=times
             Coldata(sub,Design$dur.4sU)=tt
-            fit=FitKinetics(sub,return.fields='logLik',steady.state=steady.state[[cond]],...)
-            #fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]])
-            sum(GetAnalysisTable(fit,gene.info=FALSE)[,1])
+            fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]],...)
+        #    fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]])
+            re=sum(GetAnalysisTable(fit,gene.info=FALSE)[,1])
+            re
         }
         init=Coldata(sub)[[time]]
         init[init>0]=init[init>0]
         use=init>0 & init<max(init)
-        fit=optim(init[use],fn=opt.fun,hessian=TRUE, control=list(fnscale=-1,maxit=n.iter))
+        fit=optim(init[use],fn=opt.fun,hessian=FALSE, control=list(fnscale=-1,maxit=n.iter),method="Nelder-Mead")
         if (fit$convergence!=0) stop(sprintf("Did not converge!"))
+        fit$hessian=numDeriv::hessian(opt.fun,fit$par)
         conf=try(sd.from.hessian(fit$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
 
         tt=init

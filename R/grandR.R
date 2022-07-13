@@ -213,6 +213,7 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
         GeneInfo(re,column = n)=gi[[n]]
       } else if (!all(GeneInfo(re)[[n]]==gi[[n]])) {
         GeneInfo(re,column = paste0(n,".",names(list)[i]))=gi[[n]]
+        if (is.null(names(list)[i])) stop("Found columns by the same name in the gene info tables with distinct content; please specify names when calling merge!")
       }
     }
 
@@ -630,55 +631,65 @@ GetTable=function(data,type=NULL,columns=NULL,genes=Genes(data),ntr.na=TRUE,gene
 
   mode.slot=check.mode.slot(data,type)
   analysis=check.analysis(data,type,TRUE) & !mode.slot
-  if (!all(analysis|mode.slot)) stop(sprintf("Type %s is neither a mode.slot nor an analysis name!",paste(type[!analysis&!mode.slot],collapse=",")))
-
-  # obtain mode.slot data
-  r1=NULL
-  if (any(mode.slot)) {
-
-    columns=substitute(columns)
-    cols=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
-    cols=Columns(data,cols)
-
-    if (!is.null(summarize)) {
-      if (is.logical(summarize) && length(summarize)==1 && !summarize) {
-        summarize=NULL
-      } else {
-        if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
-        summarize=summarize[cols,]
-        summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
-      }
+  if (!all(analysis|mode.slot)) {
+    r=NULL
+    if (length(type)==1) {
+      r = GetAnalysisTable(data,genes=genes,gene.info = FALSE,name.by=name.by)
+      use=grepl(type,names(r))
+      r=r[,use]
     }
+    if (ncol(r)==0) stop(sprintf("Type %s is neither a mode.slot nor an analysis name!",paste(type[!analysis&!mode.slot],collapse=",")))
+  }
+  else {
 
-    for (tt in type[mode.slot]) {
-      rtt=as.data.frame(t(GetData(data,tt,columns=cols,genes,ntr.na = ntr.na,coldata=FALSE, melt=FALSE, name.by = name.by)))
-      names(rtt)=cols
+    # obtain mode.slot data
+    r1=NULL
+    if (any(mode.slot)) {
+
+      columns=substitute(columns)
+      cols=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
+      cols=Columns(data,cols)
+
       if (!is.null(summarize)) {
-        rtt=as.data.frame(as.matrix(rtt) %*% summarize)
+        if (is.logical(summarize) && length(summarize)==1 && !summarize) {
+          summarize=NULL
+        } else {
+          if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
+          summarize=summarize[cols,]
+          summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
+        }
       }
-      if (length(type[mode.slot])>1) names(rtt)=paste0(names(rtt),".",tt)
-      r1=if(is.null(r1)) rtt else cbind(r1,rtt)
+
+      for (tt in type[mode.slot]) {
+        rtt=as.data.frame(t(GetData(data,tt,columns=cols,genes,ntr.na = ntr.na,coldata=FALSE, melt=FALSE, name.by = name.by)))
+        names(rtt)=cols
+        if (!is.null(summarize)) {
+          rtt=as.data.frame(as.matrix(rtt) %*% summarize)
+        }
+        if (length(type[mode.slot])>1) names(rtt)=paste0(names(rtt),".",tt)
+        r1=if(is.null(r1)) rtt else cbind(r1,rtt)
+      }
     }
-  }
 
-  # check that columns is only used if type is either completely analysis or mode.slot
-  if (!is.null(columns) && sum(mode.slot)>0 && sum(analysis)>0) stop("Columns can only be specified if type either refers to mode.slots or analyses")
+    # check that columns is only used if type is either completely analysis or mode.slot
+    if (!is.null(columns) && sum(mode.slot)>0 && sum(analysis)>0) stop("Columns can only be specified if type either refers to mode.slots or analyses")
 
-  # obtain analysis data
-  r2=NULL
-  if(any(analysis)) {
-    r2 = GetAnalysisTable(data,type[analysis],columns = columns,genes=genes,gene.info = FALSE,name.by=name.by)
-  }
+    # obtain analysis data
+    r2=NULL
+    if(any(analysis)) {
+      r2 = GetAnalysisTable(data,type[analysis],columns = columns,genes=genes,gene.info = FALSE,name.by=name.by)
+    }
 
-  # reorder according to order in type
-  if (is.null(r1)) {
-    r=r2
-  } else if (is.null(r2)) {
-    r=r1
-  } else {
-    r = cbind(r1,r2)
-    r[,mode.slot]=r1
-    r[,analysis]=r2
+    # reorder according to order in type
+    if (is.null(r1)) {
+      r=r2
+    } else if (is.null(r2)) {
+      r=r1
+    } else {
+      r = cbind(r1,r2)
+      r[,mode.slot]=r1
+      r[,analysis]=r2
+    }
   }
 
   # add necessary stuff
@@ -833,12 +844,14 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' Get a list of significant genes for this grandR object
 #'
 #' @param data the grandR object
-#' @param analysis the analysis name
+#' @param analyses the name or names (or regexes) for the analyses
+#' @param regex interpret analyses as regex?
+#' @param q.cutoff Q value cut-off (overridden, if criteria is specified)
+#' @param LFC.cutoff LFC value cut-off (overridden, if criteria is specified)
 #' @param criteria the criteria used to define what significant means; can use the column names of the analysis table as variables,  should be a logical or numerical value per gene (see Details)
+#' @param as.table return a table
 #' @param use.symbols return them as symbols (gene ids otherwise)
-#' @param return.values return the criteria values as well (if criteria is numerical)
-#'
-#' @seealso \link{GetSignificanceOrderedGenes}
+#' @param gene.info add gene infos to the output table
 #'
 #' @details If criteria is a logical, it obtains significant genes defined by cut-offs (e.g. on q value and LFC).
 #' If it is a numerical, all genes are returned sorted (descendingly) by this value.
@@ -847,19 +860,38 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' @return a vector of gene names (or symbols)
 #' @export
 #'
-GetSignificantGenes=function(data,analysis=Analyses(data)[1],criteria=Q<0.05 & abs(LFC)>1,use.symbols=TRUE,return.values=FALSE) {
+GetSignificantGenes=function(data,analyses=NULL,regex=TRUE,q.cutoff=0.05,LFC.cutoff=1,criteria=Q<q.cutoff & abs(LFC)>=LFC.cutoff,as.table=FALSE,use.symbols=TRUE,gene.info=TRUE) {
+  analyses=match.analyses(data,analyses,regex)
   criteria=substitute(criteria)
-  df=GetAnalysisTable(data,analyses = analysis, regex=FALSE, name.by=if (use.symbols) "Symbol" else "Gene",gene.info = FALSE,prefix.by.analysis = FALSE)
-  use=eval(criteria,envir=df,enclos = parent.frame())
-  if (is.logical(use)) {
-    rownames(df)[use]
-  } else if (return.values) {
-    df$use=use
-    df=df[order(use,decreasing=TRUE),]
-    setNames(df$use,rownames(df))
-  } else {
-    rownames(df)[order(use,decreasing=TRUE)]
+
+    re=GeneInfo(data)
+  rownames(re)=if(use.symbols) re$Symbol else re$Gene
+
+  for (name in analyses) {
+    tab=GetAnalysisTable(data,analyses=name,regex=FALSE,gene.info=FALSE,prefix.by.analysis=FALSE)
+    use=eval(criteria,envir=tab,enclos = parent.frame())
+    re[[name]]=use
+    re[[name]][is.na(re[[name]])]=FALSE
   }
+  if (!as.table) {
+    re=re[,(ncol(GeneInfo(data))+1):ncol(re),drop=FALSE]
+    cls=unique(sapply(re,class))
+    if (length(cls)!=1) stop("Output table is mixed logical and numerical!")
+    if (cls=="logical") {
+      re=apply(re,1,any)
+      re=names(re)[re]
+    } else if (cls=="numeric") {
+      if (ncol(re)>1) stop("Multiple numerical values, can only return as a table!")
+      re=rownames(re[order(re[,1],decreasing=TRUE),,drop=FALSE])
+    }
+    return(re)
+  }
+
+  if (!gene.info) {
+    re=re[,(ncol(GeneInfo(data))+1):ncol(re),drop=FALSE]
+  }
+  re=re[order(re[,ncol(re)],decreasing=TRUE),,drop=FALSE]
+  re
 }
 
 
@@ -987,6 +1019,17 @@ DropAnalysis=function(data,pattern=NULL) {
   invisible(data)
 }
 
+match.analyses=function(data,analyses=NULL,regex=TRUE) {
+  if (!all(check.analysis(data,analyses,regex))) stop(sprintf("No analysis found for pattern %s!",paste(analyses[!check.analysis(data,analyses,regex)],collapse=",")))
+  if (is.null(analyses)) {
+    analyses=1:length(Analyses(data))
+  } else if (regex) {
+    analyses=unlist(lapply(analyses,function(pat) grep(pat,Analyses(data))))
+  } else if (is.character(analyses)) {
+    analyses=which(Analyses(data) %in% analyses)
+  }
+  Analyses(data)[analyses]
+}
 
 #' Obtain a table of analysis results values
 #'
@@ -1018,8 +1061,7 @@ DropAnalysis=function(data,pattern=NULL) {
 #' @export
 #'
 GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes(data),gene.info=TRUE,name.by="Symbol",prefix.by.analysis=TRUE) {
-  if (!all(check.analysis(data,analyses,regex))) stop(sprintf("No analysis found for pattern %s!",paste(analyses[!check.analysis(data,analyses,regex)],collapse=",")))
-
+  analyses=match.analyses(data,analyses,regex)
   genes=ToIndex(data,genes)
 
 
@@ -1030,14 +1072,7 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
-  if (is.null(analyses)) {
-    analyses=1:length(Analyses(data))
-  } else if (regex) {
-    analyses=unlist(lapply(analyses,function(pat) grep(pat,Analyses(data))))
-  } else if (is.character(analyses)) {
-    analyses=which(Analyses(data) %in% analyses)
-  }
-  for (name in Analyses(data)[analyses]) {
+  for (name in analyses) {
     t=data$analysis[[name]][genes,,drop=FALSE]
     if (!is.null(columns)) {
      use = rep(TRUE,ncol(t))

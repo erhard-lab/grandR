@@ -27,8 +27,7 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
 	colData=droplevels(Coldata(data)[columns,])
 	mat=GetTable(data,type=mode.slot,columns = columns)
 
-
-	norm.mat=as.matrix(GetTable(data,type=normalization))
+	norm.mat=as.matrix(GetTable(data,type=normalization,columns = columns))
 
 	colData=as.data.frame(lapply(colData,function(c) {
 	  if (is.factor(c)) levels(c)=make.names(levels(c),unique = TRUE)
@@ -308,8 +307,8 @@ EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSl
         s.cred.upper=unname(sc[2]),
         s.ROPE=ROPE.LFC(lfc.s,ROPE.max.log2FC),
         HL.log2FC=mean(lfc.HL),
-        HL.conf.upper=unname(hc[1]),
-        HL.conf.lower=unname(hc[2]),
+        HL.cred.upper=unname(hc[1]),
+        HL.cred.lower=unname(hc[2]),
         HL.ROPE=ROPE.LFC(lfc.HL,ROPE.max.log2FC)
         )
         )
@@ -466,15 +465,14 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
     gs$gs_name=map[as.character(gs$gs_name)]
   }
 
-  genes=eval(substitute(GetSignificantGenes(data,analysis=analysis,criteria=criteria,return.values=TRUE,use.symbols=FALSE)),enclos = parent.frame()) # this is necessary to call the eval subs function!
-
-  if (mode(genes)=="numeric") {
+  genes=eval(substitute(GetSignificantGenes(data,analyses=analysis,criteria=criteria,as.table=TRUE,use.symbols=FALSE,gene.info=FALSE)),enclos = parent.frame()) # this is necessary to call the eval subs function!
+  if (mode(genes[,1])=="numeric") {
     if (verbose) cat("Performing GSEA (using fgsea)...\n")
-    clusterProfiler::GSEA(genes,TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
+    clusterProfiler::GSEA(setNames(genes[,1],rownames(genes)),TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
   }
   else {
-    if (verbose) cat(sprintf("Performing ORA (for n=%d/%d genes)...",length(genes),nrow(d)))
-    clusterProfiler::enricher(gene = genes, universe = Genes(data,use.symbols=FALSE), TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
+    if (verbose) cat(sprintf("Performing ORA (for n=%d/%d genes)...",sum(genes[,1]),nrow(data)))
+    clusterProfiler::enricher(gene = rownames(genes), universe = Genes(data,use.symbols=FALSE), TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
   }
 }
 
