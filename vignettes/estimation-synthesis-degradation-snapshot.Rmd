@@ -112,7 +112,7 @@ pertubed delta:
 m <- LFC(m, "old", GetContrasts(m, contrast = c("Condition","control")), mode="old")
 
 # Get analysis table
-anal.table <-GetAnalysisTable(m)
+anal.table <- GetAnalysisTable(m)
 
 a <- GeneInfo(m)$true_d
 b <- GeneInfo(m)$true_d.perturbed.d
@@ -123,7 +123,7 @@ lfc.unperturbed.vs.control.old <- anal.table$`old.HL vs control.LFC`
 df.old <- data.frame(cbind(lfc.perturbed.d.vs.control.old, lfc.unperturbed.vs.control.old))
 
 # Use PlotScatter
-PlotScatter(df.old)
+PlotScatter(df.old, remove.outlier = 999)
 ```
 
 We can see there is no linear correlation (can we though?), which is expected 
@@ -165,12 +165,11 @@ df.new <- data.frame(cbind(lfc.perturbed.d.vs.control.new,
 rownames(df.new) <- rownames(anal.table) # add gene names to data frame
 
 # PlotScatter, new RNA unpertubed vs pertubed delta LFC
-PlotScatter(df.new, highlight = short.lived.genes)
+PlotScatter(df.new, highlight = short.lived.genes, remove.outlier = 999)
 ```
 
 We can see there are significant LFCs for short-lived genes when delta
-(but not sigma) is changed. (Kind of? There are all these genes that are
-close to 0 for both.)
+(but not sigma) is changed. 
 
 # Unbiased estimation of synthesis and degradation rates
 
@@ -195,16 +194,16 @@ m <- EstimateRegulation(m, "Regulation", contrasts = GetContrasts(m, contrast = 
 saveRDS(m, "regulation.step2.rds")
 
 # Get new analysis table and take a look at the columns
-anal.table.reg <- GetAnalysisTable(m)
-colnames(anal.table.reg)
+anal.table <- GetAnalysisTable(m)
+colnames(anal.table)
 
 # PlotScatter on estimates vs true sigma/delta; slope should be 1, meaning no bias
 
 true.s.lfc <- log2(GeneInfo(m)$true_s.perturbed.s/GeneInfo(m)$true_s)
-est.s.lfc <- anal.table.reg$`Regulation.s vs control.s.log2FC`
+est.s.lfc <- anal.table$`Regulation.s vs control.s.log2FC`
 
 true.hl.lfc <- -log2(GeneInfo(m)$true_d.perturbed.d/GeneInfo(m)$true_d)
-est.hl.lfc <- anal.table.reg$`Regulation.HL vs control.HL.log2FC`
+est.hl.lfc <- anal.table$`Regulation.HL vs control.HL.log2FC`
 
 df.hl <- data.frame(cbind(true.hl.lfc, est.hl.lfc))
 df.s <- data.frame(cbind(true.s.lfc, est.s.lfc))
@@ -215,11 +214,11 @@ in a scatterplot with a slope equal to (approaching?) one, indicating that
 the estimates are unbiased:
 
 ```{r}
-PlotScatter(df.hl, label = (paste0("slope==", coef(lm(df.hl$est.hl.lfc~df.hl$true.hl.lfc))))) # unsuccessful attempt to include slope in plot
+PlotScatter(df.hl, remove.outlier = 999) + geom_abline()
 ```
 
 ```{r}
-PlotScatter(df.s, label = (paste0("slope==", coef(lm(df.s$est.s.lfc~df.s$true.s.lfc))))) # unsuccessful attempt to include slope in plot
+PlotScatter(df.s, remove.outlier = 999) + geom_abline() # unsuccessful attempt to include slope in plot
 ```
 
 It is interesting to explore how these plots change if we only maintain
@@ -237,16 +236,16 @@ We repeat the dataframe-making steps for the m2 object:
 
 ```{r}
 # Get new analysis table and take a look at the columns
-anal.table.reg2 <- GetAnalysisTable(m2)
-colnames(anal.table.reg2)
+anal.table2 <- GetAnalysisTable(m2)
+colnames(anal.table2)
 
 # PlotScatter on estimates vs true sigma/delta; slope should be 1, meaning no bias
 
 true.s.lfc.filtered <- log2(GeneInfo(m2)$true_s.perturbed.s/GeneInfo(m2)$true_s)
-est.s.lfc.filtered <- anal.table.reg2$`Regulation.s vs control.s.log2FC`
+est.s.lfc.filtered <- anal.table2$`Regulation.s vs control.s.log2FC`
 
 true.hl.lfc.filtered <- -log2(GeneInfo(m2)$true_d.perturbed.d/GeneInfo(m2)$true_d)
-est.hl.lfc.filtered <- anal.table.reg2$`Regulation.HL vs control.HL.log2FC`
+est.hl.lfc.filtered <- anal.table2$`Regulation.HL vs control.HL.log2FC`
 
 df.hl2 <- data.frame(cbind(true.hl.lfc.filtered, est.hl.lfc.filtered))
 df.s2 <- data.frame(cbind(true.s.lfc.filtered, est.s.lfc.filtered))
@@ -265,9 +264,6 @@ And sigma:
 ```{r}
 PlotScatter(df.s2, label = (paste0("slope==", coef(lm(df.s2$est.s.lfc.filtered~df.s2$true.s.lfc.filtered))))) # unsuccessful attempt to include slope in plot
 ```
-
-(I think it looks a bit better, but should really annotate with the slope number.)
-
 We also observe that sigma and delta are small for the unperturbed simulations.
 and that the variance for delta is substantially larger than the variance for 
 sigma:
@@ -275,9 +271,9 @@ sigma:
 ```{r}
 library(ggplot2)
 library(reshape2)
-box.hl <- data.frame(unperturbed.vs.control = anal.table.reg$`Regulation.unperturbed vs control.HL.log2FC`,
-                     hl.vs.control = anal.table.reg$`Regulation.HL vs control.HL.log2FC`,
-                     s.vs.control = anal.table.reg$`Regulation.s vs control.HL.log2FC`)
+box.hl <- data.frame(unperturbed.vs.control = anal.table$`Regulation.unperturbed vs control.HL.log2FC`,
+                     hl.vs.control = anal.table$`Regulation.HL vs control.HL.log2FC`,
+                     s.vs.control = anal.table$`Regulation.s vs control.HL.log2FC`)
 
 box.hl.molten <- melt(box.hl)
 
@@ -286,9 +282,9 @@ ggplot(box.hl.molten, aes(x = variable, y = value)) +
 ```
 
 ```{r}
-box.s <- data.frame(unperturbed.vs.control = anal.table.reg$`Regulation.unperturbed vs control.s.log2FC`,
-                     hl.vs.control = anal.table.reg$`Regulation.HL vs control.s.log2FC`,
-                     s.vs.control = anal.table.reg$`Regulation.s vs control.s.log2FC`)
+box.s <- data.frame(unperturbed.vs.control = anal.table$`Regulation.unperturbed vs control.s.log2FC`,
+                     hl.vs.control = anal.table$`Regulation.HL vs control.s.log2FC`,
+                     s.vs.control = anal.table$`Regulation.s vs control.s.log2FC`)
 
 box.s.molten <- melt(box.s)
 
@@ -300,9 +296,9 @@ Once again, we can explore how these plots are affected by gene filtering.
 Half-life:
 
 ```{r}
-box.hl.filtered <- data.frame(unperturbed.vs.control = anal.table.reg2$`Regulation.unperturbed vs control.HL.log2FC`,
-                     hl.vs.control = anal.table.reg2$`Regulation.HL vs control.HL.log2FC`,
-                     s.vs.control = anal.table.reg2$`Regulation.s vs control.HL.log2FC`)
+box.hl.filtered <- data.frame(unperturbed.vs.control = anal.table2$`Regulation.unperturbed vs control.HL.log2FC`,
+                     hl.vs.control = anal.table2$`Regulation.HL vs control.HL.log2FC`,
+                     s.vs.control = anal.table2$`Regulation.s vs control.HL.log2FC`)
 
 box.hl.molten.filtered <- melt(box.hl.filtered)
 
@@ -313,15 +309,19 @@ ggplot(box.hl.molten.filtered, aes(x = variable, y = value)) +
 Sigma:
 
 ```{r}
-box.s.filtered <- data.frame(unperturbed.vs.control = anal.table.reg2$`Regulation.unperturbed vs control.s.log2FC`,
-                     hl.vs.control = anal.table.reg2$`Regulation.HL vs control.s.log2FC`,
-                     s.vs.control = anal.table.reg2$`Regulation.s vs control.s.log2FC`)
+box.s.filtered <- data.frame(unperturbed.vs.control = anal.table2$`Regulation.unperturbed vs control.s.log2FC`,
+                     hl.vs.control = anal.table2$`Regulation.HL vs control.s.log2FC`,
+                     s.vs.control = anal.table2$`Regulation.s vs control.s.log2FC`)
 
 box.s.molten.filtered <- melt(box.s.filtered)
 
 ggplot(box.s.molten.filtered, aes(x = variable, y = value)) +
   geom_boxplot()
 ```
+
+# Filter based on half-life (in control). Expectation: too short and too long
+# are both bad.
+
 # Region of practical equivalence (ROPE) analysis outperforms DESeq2
 
 Our Bayesian model also gives us the marginal posterior distributions for
@@ -331,7 +331,8 @@ uncertainty:
 
 ```{r}
 # region between hl.conf.lower and hl.conf.upper
-# 95% of values are between lower and upper
+# 95% of values (log2(true_s.perturbed.s/true_s), 
+# log2(true_d.perturbed.d/true_d)) are between lower and upper
 # the conf thing will be changed to cred
 # Behold, a plot
 ```
@@ -347,14 +348,40 @@ approach as implemented in DESeq2.
 # ground truth for roc: log2(GeneInfo(m)$true_s.perturbed.s/GeneInfo(m)$true_s.control)
 # if this is smaller than -0.25 or higher than 0.25, it's true
 # vector with true/false + vector with numbers that define an ordering
-m <- LikelihoodRatioTest(m, name = "LRT.old", mode = "old")
-m <- LikelihoodRatioTest(m, name = "LRT.new", mode = "new")
+m <- PairwiseDESeq2(m, "new", GetContrasts(m, contrast = c("Condition","control")), mode = "new",verbose=T)
+m <- PairwiseDESeq2(m, "old", GetContrasts(m, contrast = c("Condition","control")), mode="old",verbose=T)
+saveRDS(m, "regulation.step3.rds")
+anal.table <- GetAnalysisTable(m)
+colnames(anal.table)
 ```
 
 ROPE outperforms DEseq2 as evidenced by ROC analysis.
 
 ```{r}
 # Insert ROC analysis
+library(pROC)
+
+# input: data frame
+roc.rope <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
+               anal.table$`Regulation.HL vs control.HL.ROPE`) 
+roc.deseq <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
+               anal.table$`old.HL vs control.P`) 
+ggroc(list(roc.rope, roc.deseq))
+
+roc.rope.new <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
+               anal.table$`Regulation.s vs control.s.ROPE`) 
+roc.deseq.new <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
+               anal.table$`new.s vs control.P`) 
+ggroc(list(roc.rope.new, roc.deseq.new))
+
+# is abs(log2(true_d/true_d.perturbed.d)) > 0.25 LFC -> is regulated
+# predictor (rope): regulation.HL vs control.HL.ROPE
+# predictor (deseq): p-value (old.d.vs.control.P)
+# the package will calculate the confusion matrix :p
+# (same for s)
+# (same for new rna)
+# (same analysis for the other perturbation)
+# sensitivity vs 1 - specificity
 ```
 
 # Comparison of degradation rate changes: full time course versus snapshot
