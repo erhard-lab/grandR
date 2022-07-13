@@ -208,11 +208,13 @@ PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
 #' @param highlight
 #' @param label
 #' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
+#' @param density.margin either 'n' (no renormalization), 'x' (the densities are normalized along the x axis) or 'y' (the densities are normalized along the y axis)
+#' @param density.n umber of grid points for density estimation
 #' @examples
 #' @export
 PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
                      log.y=log, color=NA, remove.outlier=1.5, size=0.3,
-                     xlim=NULL, ylim=NULL, highlight=NULL, label=NULL, columns=NULL) {
+                     xlim=NULL, ylim=NULL, highlight=NULL, label=NULL, columns=NULL, density.margin = 'n', density.n = 100) {
   df=as.data.frame(df)
   if (!is.data.frame(df)) stop("df must be a data frame (or at least coercable into a data frame)")
   adaptInf=function(df,rx,ry) {
@@ -281,7 +283,7 @@ PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
   }
   if (is.na(color)) {
     if (nrow(df)>1000) {
-      df$color=density2d(df$A.trans, df$B.trans, n = 100)
+      df$color=density2d(df$A.trans, df$B.trans, n = density.n,margin = density.margin)
       colorscale=scale_color_viridis_c(name = "Density",guide="none")
     } else {
       df$color=rep(1,nrow(df))

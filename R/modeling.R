@@ -376,7 +376,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
         if (model.m$niter==maxiter) return(list(data=NA,residuals=if (compute.residuals) data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=NA,Relative=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
         par=setNames(model.m$par,c("s","d"))
         f0=par[3]
-        conf.m=try(minpack.lm:::confint.nls.lm(model.p,level=conf.int),silent = TRUE)
+        conf.m=try(minpack.lm:::confint.nls.lm(model.m,level=conf.int),silent = TRUE)
         if (!is.matrix(conf.m)) conf.m=matrix(c(NA,NA,NA,NA),nrow=2)
         rmse=sqrt(model.m$deviance/(nrow(ndf)+nrow(odf)))
         fvec=res.fun.nonequi.f0fixed(par,f0,odf,ndf)
