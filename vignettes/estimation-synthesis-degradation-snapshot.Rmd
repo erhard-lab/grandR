@@ -487,16 +487,46 @@ deviations from ground truth, which means that they really reflect measurement
 uncertainty:
 
 ```{r}
-# region between hl.conf.lower and hl.conf.upper
-# 95% of values (log2(true_s.perturbed.s/true_s), 
-# log2(true_d.perturbed.d/true_d)) are between lower and upper
-# the conf thing will be changed to cred
-# Behold, a plot
+values.s <- log2(anal.table$true_s.perturbed.s/anal.table$true_s)
+values.d <- log2(anal.table$true_d.perturbed.d/anal.table$true_d)
+
+upper.s <- anal.table$`Regulation.s vs control.HL.conf.upper`
+lower.s <- anal.table$`Regulation.s vs control.HL.conf.lower`
+
+upper.d <- anal.table$`Regulation.HL vs control.HL.conf.upper`
+lower.d <- anal.table$`Regulation.HL vs control.HL.conf.lower`
+
+count.s <- 0
+for (i in 1:length(values.s)) {
+  value.s.i <- values.s[i]
+  # this because upper.s has at least some negative values where lower.s has positive ones
+  max.s.i <- max(upper.s[i], lower.s[i])
+  min.s.i <- min(upper.s[i], lower.s[i])
+  if (value.s.i < max(max.s.i, min.s.i) & value.s.i > min(max.s.i, min.s.i)) {
+    count.s <- count.s + 1
+  }
+}
+
+count.d <- 0
+for (i in 1:length(values.d)) {
+  value.d.i <- values.d[i]
+  # this because upper.s has at least some negative values where lower.s has positive ones
+  max.d.i <- max(upper.d[i], lower.d[i])
+  min.d.i <- min(upper.d[i], lower.d[i])
+  if (value.d.i < max(max.d.i, min.d.i) & value.d.i > min(max.d.i, min.d.i)) {
+    count.d <- count.d + 1
+  }
+}
+count.s # 10112
+count.d # 8298
+
+# Most values are indeed within the boundaries
+# As expected, d is harder to estimate: around 8000 out of 11000 genes
+# were estimated correctly, as opposed to around 10000 for synthesis rate
 ```
 
 This allows us to perform ROPE analysis [reference] to quantify significant
-changes in sigma and delta, and compare the results to those of the frequentist
-approach as implemented in DESeq2.
+changes in sigma and delta, and compare the results to those of the frequentist approach as implemented in DESeq2.
 
 ```{r}
 # EstimateRegulation already gave ROPE output, let's do DESeq
