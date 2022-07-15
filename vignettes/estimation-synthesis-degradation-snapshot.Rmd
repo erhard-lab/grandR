@@ -210,8 +210,8 @@ df.s <- data.frame(cbind(true.s.lfc, est.s.lfc))
 ```
 
 Plotting the estimates of sigma and delta against their true values results 
-in a scatterplot with a slope equal to (approaching?) one, indicating that
-the estimates are unbiased:
+in a scatterplot with a slope close to 1, indicating that the estimates are 
+unbiased:
 
 ```{r}
 PlotScatter(df.hl, remove.outlier = 999) + geom_abline()
@@ -264,9 +264,7 @@ And sigma:
 ```{r}
 PlotScatter(df.s2, label = (paste0("slope==", coef(lm(df.s2$est.s.lfc.filtered~df.s2$true.s.lfc.filtered))))) # unsuccessful attempt to include slope in plot
 ```
-We also observe that sigma and delta are small for the unperturbed simulations.
-and that the variance for delta is substantially larger than the variance for 
-sigma:
+We also observe that sigma and delta are small for the unperturbed simulations, and that the variance for delta is substantially larger than the variance for sigma:
 
 ```{r}
 library(ggplot2)
@@ -280,6 +278,7 @@ box.hl.molten <- melt(box.hl)
 ggplot(box.hl.molten, aes(x = variable, y = value)) +
   geom_boxplot()
 ```
+Sigma: 
 
 ```{r}
 box.s <- data.frame(unperturbed.vs.control = anal.table$`Regulation.unperturbed vs control.s.log2FC`,
@@ -321,6 +320,164 @@ ggplot(box.s.molten.filtered, aes(x = variable, y = value)) +
 
 # Filter based on half-life (in control). Expectation: too short and too long
 # are both bad.
+
+It is also of interest to explore how the plots change if we keep only
+short-lived or only long-lived genes. To test this, we will first get 
+the gene names and half-lives from the analysis table and store the 
+result into a new dataframe:
+
+```{r}
+anal.small <- data.frame(log(2)/anal.table$true_d)
+rownames(anal.small) <- rownames(anal.table)
+colnames(anal.small) <- "gene.halflife"
+```
+
+Then we will order the new dataframe based on (ascending) half-life:
+
+```{r}
+anal.small.ordered <- anal.small[order(anal.small$gene.halflife), , drop = FALSE]
+```
+
+To reconstruct the plots, we will consider the top and bottom 10% of genes in terms of half-life. This amounts to approximately 1084 from each side of
+the dataframe:
+
+```{r}
+nrow(anal.small.ordered) # 10835 genes; 10% is 1083.5, roughly 1084
+top10percent.halflife.genes <- rownames(tail(anal.small.ordered, 1084))
+bottom10percent.halflife.genes <- rownames(head(anal.small.ordered, 1084))
+```
+
+We will make subsets of the GeneInfo table and the analysis table of our simulated object based on these gene sets:
+
+```{r}
+gene.info <- GeneInfo(m)
+rownames(gene.info) <- gene.info$Symbol
+
+top10percent.hl.geneinfo <- subset(gene.info, rownames(gene.info) %in% top10percent.halflife.genes)
+
+bottom10percent.hl.geneinfo <- subset(gene.info, rownames(gene.info) %in% bottom10percent.halflife.genes)
+
+top10percent.hl.analtable <- subset(anal.table, rownames(anal.table) %in%
+                                      top10percent.halflife.genes)
+bottom10percent.hl.analtable <- subset(anal.table, rownames(anal.table) %in%
+                                      bottom10percent.halflife.genes)
+
+# Sanity checks
+all(rownames(top10percent.hl.geneinfo) == rownames(top10percent.hl.analtable))
+all(rownames(bottom10percent.hl.geneinfo) == rownames(bottom10percent.hl.analtable))
+nrow(top10percent.hl.analtable)
+nrow(top10percent.hl.geneinfo)
+```
+Finally, we can redo the plots.
+
+Dataframe-making code for scatterplots:
+
+```{r}
+# PlotScatter on estimates vs true sigma/delta
+
+# top 10%
+true.s.lfc.top10percent.hl <- top10percent.hl.geneinfo$true_s.perturbed.s/top10percent.hl.geneinfo$true_s 
+
+est.s.lfc.top10percent.hl <- top10percent.hl.analtable$`Regulation.s vs control.s.log2FC`
+
+true.hl.lfc.top10percent.hl <- -log2(top10percent.hl.geneinfo$true_d.perturbed.d/top10percent.hl.geneinfo$true_d) 
+est.hl.lfc.top10percent.hl <- top10percent.hl.analtable$`Regulation.HL vs control.HL.log2FC`
+
+df.hl.top10percent.hl <- data.frame(cbind(true.hl.lfc.top10percent.hl, est.hl.lfc.top10percent.hl))
+df.s.top10percent.hl <- data.frame(cbind(true.s.lfc.top10percent.hl, est.s.lfc.top10percent.hl))
+
+# bottom 10%
+true.s.lfc.bottom10percent.hl <- bottom10percent.hl.geneinfo$true_s.perturbed.s/bottom10percent.hl.geneinfo$true_s 
+
+est.s.lfc.bottom10percent.hl <- bottom10percent.hl.analtable$`Regulation.s vs control.s.log2FC`
+
+true.hl.lfc.bottom10percent.hl <- -log2(bottom10percent.hl.geneinfo$true_d.perturbed.d/bottom10percent.hl.geneinfo$true_d) 
+est.hl.lfc.bottom10percent.hl <- bottom10percent.hl.analtable$`Regulation.HL vs control.HL.log2FC`
+
+df.hl.bottom10percent.hl <- data.frame(cbind(true.hl.lfc.bottom10percent.hl, est.hl.lfc.bottom10percent.hl))
+df.s.bottom10percent.hl <- data.frame(cbind(true.s.lfc.bottom10percent.hl, est.s.lfc.bottom10percent.hl))
+```
+
+Then we remake the plots for half-life:
+
+Top 10%:
+
+```{r}
+PlotScatter(df.hl.top10percent.hl)
+```
+
+Bottom 10%:
+
+```{r}
+PlotScatter(df.hl.bottom10percent.hl)
+```
+
+And synthesis rate: 
+
+Top 10%:
+
+```{r}
+PlotScatter(df.s.top10percent.hl)
+```
+
+Bottom 10%:
+
+```{r}
+PlotScatter(df.s.bottom10percent.hl)
+```
+
+Boxplots:
+
+Delta (top 10%):
+
+```{r}
+box.hl.top10percent.hl <- data.frame(unperturbed.vs.control = top10percent.hl.analtable$`Regulation.unperturbed vs control.HL.log2FC`,
+                     hl.vs.control = top10percent.hl.analtable$`Regulation.HL vs control.HL.log2FC`,
+                     s.vs.control = top10percent.hl.analtable$`Regulation.s vs control.HL.log2FC`)
+
+box.hl.molten.top10percent.hl <- melt(box.hl.top10percent.hl)
+
+ggplot(box.hl.molten.top10percent.hl, aes(x = variable, y = value)) +
+  geom_boxplot()
+```
+
+Delta (bottom 10%):
+
+```{r}
+box.hl.bottom10percent.hl <- data.frame(unperturbed.vs.control = bottom10percent.hl.analtable$`Regulation.unperturbed vs control.HL.log2FC`,
+                     hl.vs.control = bottom10percent.hl.analtable$`Regulation.HL vs control.HL.log2FC`,
+                     s.vs.control = bottom10percent.hl.analtable$`Regulation.s vs control.HL.log2FC`)
+
+box.hl.molten.bottom10percent.hl <- melt(box.hl.bottom10percent.hl)
+
+ggplot(box.hl.molten.bottom10percent.hl, aes(x = variable, y = value)) +
+  geom_boxplot()
+```
+Sigma (top 10%):
+
+```{r}
+box.s.top10percent.hl <- data.frame(unperturbed.vs.control = top10percent.hl.analtable$`Regulation.unperturbed vs control.s.log2FC`,
+                     hl.vs.control = top10percent.hl.analtable$`Regulation.HL vs control.s.log2FC`,
+                     s.vs.control = top10percent.hl.analtable$`Regulation.s vs control.s.log2FC`)
+
+box.s.molten.top10percent.hl <- melt(box.s.top10percent.hl)
+
+ggplot(box.s.molten.top10percent.hl, aes(x = variable, y = value)) +
+  geom_boxplot()
+```
+
+Sigma (bottom 10%):
+
+```{r}
+box.s.bottom10percent.hl <- data.frame(unperturbed.vs.control = bottom10percent.hl.analtable$`Regulation.unperturbed vs control.s.log2FC`,
+                     hl.vs.control = bottom10percent.hl.analtable$`Regulation.HL vs control.s.log2FC`,
+                     s.vs.control = bottom10percent.hl.analtable$`Regulation.s vs control.s.log2FC`)
+
+box.s.molten.bottom10percent.hl <- melt(box.s.bottom10percent.hl)
+
+ggplot(box.s.molten.bottom10percent.hl, aes(x = variable, y = value)) +
+  geom_boxplot()
+```
 
 # Region of practical equivalence (ROPE) analysis outperforms DESeq2
 
