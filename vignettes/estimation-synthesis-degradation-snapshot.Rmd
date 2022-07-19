@@ -19,12 +19,10 @@ Throughout the vignette, "sigma" and "delta" are used as short terms for
 
 We simulate a data set based on the SARS-CoV-2 data set from Finkel et al. 2021
 [[3]](https://www.nature.com/articles/s41586-021-03610-3). The data set contains 
-time series samples from the human epithelial cell line (Calu3 cells); half of 
-the samples were infected with SARS-CoV-2 for different periods of time.
+time series samples from the human epithelial cell line (Calu3 cells); half of the samples were infected with SARS-CoV-2 for different periods of time.
 
 In the mock samples, we perturb synthesis (sigma) or degradation (delta) rate.
-We also leave a simulation unperturbed as control. We simulate three replicates
-from the 2h time point.
+We also leave a simulation unperturbed as control. We simulate three replicates from the 2h time point.
 
 ```{r}
 suppressPackageStartupMessages({library(grandR)})
@@ -126,7 +124,7 @@ df.old <- data.frame(cbind(lfc.perturbed.d.vs.control.old, lfc.unperturbed.vs.co
 PlotScatter(df.old, remove.outlier = 999)
 ```
 
-We can see there is no linear correlation (can we though?), which is expected 
+We can see there is no linear correlation, which is expected 
 from old RNA LFC resulting from an additive change in delta.
 
 2. A LFC in new RNA, previously associated with changes in sigma, can also be
@@ -193,9 +191,8 @@ m <- EstimateRegulation(m, "Regulation", contrasts = GetContrasts(m, contrast = 
 
 saveRDS(m, "regulation.step2.rds")
 
-# Get new analysis table and take a look at the columns
+# Get new analysis table 
 anal.table <- GetAnalysisTable(m)
-colnames(anal.table)
 
 # PlotScatter on estimates vs true sigma/delta; slope should be 1, meaning no bias
 
@@ -237,7 +234,6 @@ We repeat the dataframe-making steps for the m2 object:
 ```{r}
 # Get new analysis table and take a look at the columns
 anal.table2 <- GetAnalysisTable(m2)
-colnames(anal.table2)
 
 # PlotScatter on estimates vs true sigma/delta; slope should be 1, meaning no bias
 
@@ -490,11 +486,11 @@ uncertainty:
 values.s <- log2(anal.table$true_s.perturbed.s/anal.table$true_s)
 values.d <- log2(anal.table$true_d.perturbed.d/anal.table$true_d)
 
-upper.s <- anal.table$`Regulation.s vs control.HL.conf.upper`
-lower.s <- anal.table$`Regulation.s vs control.HL.conf.lower`
+upper.s <- anal.table$`Regulation.s vs control.HL.cred.upper`
+lower.s <- anal.table$`Regulation.s vs control.HL.cred.lower`
 
-upper.d <- anal.table$`Regulation.HL vs control.HL.conf.upper`
-lower.d <- anal.table$`Regulation.HL vs control.HL.conf.lower`
+upper.d <- anal.table$`Regulation.HL vs control.HL.cred.upper`
+lower.d <- anal.table$`Regulation.HL vs control.HL.cred.lower`
 
 count.s <- 0
 for (i in 1:length(values.s)) {
@@ -530,7 +526,6 @@ changes in sigma and delta, and compare the results to those of the frequentist 
 
 ```{r}
 # EstimateRegulation already gave ROPE output, let's do DESeq
-# PairwiseDESEq() instead of LikelihoodRatioTest
 # compute deseq2 values for new rna perturbed.s vs control
 # ground truth for roc: log2(GeneInfo(m)$true_s.perturbed.s/GeneInfo(m)$true_s.control)
 # if this is smaller than -0.25 or higher than 0.25, it's true
@@ -539,27 +534,54 @@ m <- PairwiseDESeq2(m, "new", GetContrasts(m, contrast = c("Condition","control"
 m <- PairwiseDESeq2(m, "old", GetContrasts(m, contrast = c("Condition","control")), mode="old",verbose=T)
 saveRDS(m, "regulation.step3.rds")
 anal.table <- GetAnalysisTable(m)
-colnames(anal.table)
 ```
 
-ROPE outperforms DEseq2 as evidenced by ROC analysis.
+ROPE outperforms DEseq2 as evidenced by ROC analysis (nope; ROPE mostly performs
+worse than DESeq2. Although: the x axis says specificity. It's
+supposed to be 1 - specificity. Is this just some weird nomenclature issue?)
 
+Cases: [old/new] RNA, estimate of [s/d]
+
+Old RNA, estimate of d
 ```{r}
-# Insert ROC analysis
 library(pROC)
 
-# input: data frame
-roc.rope <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
+# old rna, estimate of d
+roc.rope.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
-roc.deseq <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
+roc.deseq.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`old.HL vs control.P`) 
-ggroc(list(roc.rope, roc.deseq))
+ggroc(list(roc.rope.old.d, roc.deseq.old.d))
+```
 
-roc.rope.new <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
+New RNA, estimate of d
+```{r}
+# new rna, estimate of d
+roc.rope.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
+               anal.table$`Regulation.HL vs control.HL.ROPE`) 
+roc.deseq.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
+               anal.table$`new.HL vs control.P`) 
+ggroc(list(roc.rope.new.d, roc.deseq.new.d))
+```
+
+Old RNA, estimate of s
+```{r}
+# old rna, estimate of s
+roc.rope.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`Regulation.s vs control.s.ROPE`) 
-roc.deseq.new <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
+roc.deseq.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
+               anal.table$`old.s vs control.P`) 
+ggroc(list(roc.rope.old.s, roc.deseq.old.s))
+```
+
+New RNA, estimate of s
+```{r}
+# new rna, estimate of s
+roc.rope.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
+               anal.table$`Regulation.s vs control.s.ROPE`) 
+roc.deseq.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`new.s vs control.P`) 
-ggroc(list(roc.rope.new, roc.deseq.new))
+ggroc(list(roc.rope.new.s, roc.deseq.new.s))
 
 # is abs(log2(true_d/true_d.perturbed.d)) > 0.25 LFC -> is regulated
 # predictor (rope): regulation.HL vs control.HL.ROPE
@@ -568,7 +590,6 @@ ggroc(list(roc.rope.new, roc.deseq.new))
 # (same for s)
 # (same for new rna)
 # (same analysis for the other perturbation)
-# sensitivity vs 1 - specificity
 ```
 
 # Comparison of degradation rate changes: full time course versus snapshot
@@ -577,7 +598,54 @@ We compare delta between a snapshot from a single time point (2h) versus a
 full time course.
 
 ```{r}
-# Code
+# Code. Same as before, but for a full time course.
+# Using many time points proves the point more strongly.
+seed = 1337
+f0 <- GetAnalysisTable(sars)$kinetics.Mock.Synthesis/log(2)*GetAnalysisTable(sars)$`kinetics.Mock.Half-life`
+control.full <- SimulateTimeCourse("control", GeneInfo(sars),
+                           s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
+                           d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
+                           dispersion = estimate.dispersion(GetTable(sars,type="count")),
+                           f0 = f0,
+                           s.variation = 1.05,
+                           d.variation = 1.05,
+                           timepoints = c(2, 2, 2),
+                           beta.approx = TRUE, num.reads = 5E7, seed = seed)
+unperturbed.full <- SimulateTimeCourse("unperturbed", GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
+                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
+                                 dispersion=estimate.dispersion(GetTable(sars,type="count")),
+                                 f0 = f0,s.variation = 1.05,d.variation = 1.05,timepoints = c(2,2,2),
+                                 beta.approx = TRUE,
+                                 num.reads=5E7,
+                                 seed=seed*13)
+perturbed.d.full <- SimulateTimeCourse("HL", GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
+                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life` *2^rnorm(nrow(sars),0,1) ,
+                                 dispersion = estimate.dispersion(GetTable(sars,type="count")),
+                                 f0 = f0, s.variation = 1.05, d.variation = 1.05,
+                                 timepoints = c(2,2,2),beta.approx = TRUE,
+                                 num.reads=5E7, seed = seed*13*13)
+perturbed.s.full <- SimulateTimeCourse("s", GeneInfo(sars),
+                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis *2^rnorm(nrow(sars),0,1) ,
+                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
+                                 dispersion = estimate.dispersion(GetTable(sars,type="count")),
+                                 f0 = f0, s.variation = 1.05, d.variation = 1.05,
+                                 timepoints = c(2,2,2),
+                                 beta.approx = TRUE, num.reads = 5E7,
+                                 seed=seed*13*13*13)
+
+saveRDS(control.full, "reg.control.full.rds")
+saveRDS(unperturbed.full, "reg.unperturbed.full.rds")
+saveRDS(perturbed.s.full, "reg.perturbed.s.full.rds")
+saveRDS(perturbed.d.full, "reg.perturbed.d.full.rds")
+
+m.full <- merge(control = control.full, unperturbed = unperturbed.full, perturbed.d = perturbed.d.full, perturbed.s = perturbed.s.full)
+# In GeneInfo, they will be called true_d.name, true_s.name
+saveRDS(m.full, "regulation.full.timecourse.rds")
 ```
 
-They're basically the same.
+They're basically the same (fig5).
+
+I think the point is to focus on the d and s values of the d and s pertubations and compare those to the d and s values to those of the
+corresponding simulations from the snapshot.
