@@ -536,9 +536,7 @@ saveRDS(m, "regulation.step3.rds")
 anal.table <- GetAnalysisTable(m)
 ```
 
-ROPE outperforms DEseq2 as evidenced by ROC analysis (nope; ROPE mostly performs
-worse than DESeq2. Although: the x axis says specificity. It's
-supposed to be 1 - specificity. Is this just some weird nomenclature issue?)
+ROPE outperforms DEseq2 as evidenced by ROC analysis (true, kind of).
 
 Cases: [old/new] RNA, estimate of [s/d]
 
@@ -551,7 +549,7 @@ roc.rope.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d))
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
 roc.deseq.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`old.HL vs control.P`) 
-ggroc(list(roc.rope.old.d, roc.deseq.old.d))
+ggroc(list(roc.rope.old.d, roc.deseq.old.d), legacy.axes = TRUE)
 ```
 
 New RNA, estimate of d
@@ -561,7 +559,7 @@ roc.rope.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d))
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
 roc.deseq.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`new.HL vs control.P`) 
-ggroc(list(roc.rope.new.d, roc.deseq.new.d))
+ggroc(list(roc.rope.new.d, roc.deseq.new.d), legacy.axes = TRUE)
 ```
 
 Old RNA, estimate of s
@@ -571,7 +569,7 @@ roc.rope.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s))
                anal.table$`Regulation.s vs control.s.ROPE`) 
 roc.deseq.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`old.s vs control.P`) 
-ggroc(list(roc.rope.old.s, roc.deseq.old.s))
+ggroc(list(roc.rope.old.s, roc.deseq.old.s), legacy.axes = TRUE)
 ```
 
 New RNA, estimate of s
@@ -581,7 +579,7 @@ roc.rope.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s))
                anal.table$`Regulation.s vs control.s.ROPE`) 
 roc.deseq.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`new.s vs control.P`) 
-ggroc(list(roc.rope.new.s, roc.deseq.new.s))
+ggroc(list(roc.rope.new.s, roc.deseq.new.s), legacy.axes = TRUE)
 
 # is abs(log2(true_d/true_d.perturbed.d)) > 0.25 LFC -> is regulated
 # predictor (rope): regulation.HL vs control.HL.ROPE
