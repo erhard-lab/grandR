@@ -484,10 +484,10 @@ uncertainty:
 
 ```{r}
 values.s <- log2(anal.table$true_s.perturbed.s/anal.table$true_s)
-values.d <- log2(anal.table$true_d.perturbed.d/anal.table$true_d)
+values.d <- log2(anal.table$true_d/anal.table$true_d.perturbed.d)
 
-upper.s <- anal.table$`Regulation.s vs control.HL.cred.upper`
-lower.s <- anal.table$`Regulation.s vs control.HL.cred.lower`
+upper.s <- anal.table$`Regulation.s vs control.s.cred.upper`
+lower.s <- anal.table$`Regulation.s vs control.s.cred.lower`
 
 upper.d <- anal.table$`Regulation.HL vs control.HL.cred.upper`
 lower.d <- anal.table$`Regulation.HL vs control.HL.cred.lower`
@@ -504,6 +504,8 @@ for (i in 1:length(values.s)) {
 }
 
 count.d <- 0
+# Instead of for loop
+sum(values.d > upper.d & values.d < lower.d)
 for (i in 1:length(values.d)) {
   value.d.i <- values.d[i]
   # this because upper.s has at least some negative values where lower.s has positive ones
@@ -513,12 +515,15 @@ for (i in 1:length(values.d)) {
     count.d <- count.d + 1
   }
 }
-count.s # 10112
-count.d # 8298
+count.s # 10827 
+count.d # 10815
 
 # Most values are indeed within the boundaries
 # As expected, d is harder to estimate: around 8000 out of 11000 genes
 # were estimated correctly, as opposed to around 10000 for synthesis rate
+# Credible intervals are too big, more than 95% of genes fulfil the condition
+# upper and lower are switched
+# omit fig4f, write results as percentage values
 ```
 
 This allows us to perform ROPE analysis [reference] to quantify significant
@@ -545,6 +550,7 @@ Old RNA, estimate of d
 library(pROC)
 
 # old rna, estimate of d
+# keep, will be main figure
 roc.rope.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
 roc.deseq.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
@@ -555,6 +561,7 @@ ggroc(list(roc.rope.old.d, roc.deseq.old.d), legacy.axes = TRUE)
 New RNA, estimate of d
 ```{r}
 # new rna, estimate of d
+# supplement
 roc.rope.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
 roc.deseq.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
@@ -565,6 +572,7 @@ ggroc(list(roc.rope.new.d, roc.deseq.new.d), legacy.axes = TRUE)
 Old RNA, estimate of s
 ```{r}
 # old rna, estimate of s
+# supplement
 roc.rope.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`Regulation.s vs control.s.ROPE`) 
 roc.deseq.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
@@ -575,6 +583,7 @@ ggroc(list(roc.rope.old.s, roc.deseq.old.s), legacy.axes = TRUE)
 New RNA, estimate of s
 ```{r}
 # new rna, estimate of s
+# keep this, will be main figure
 roc.rope.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`Regulation.s vs control.s.ROPE`) 
 roc.deseq.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
