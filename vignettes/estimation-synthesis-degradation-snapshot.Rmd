@@ -117,11 +117,12 @@ b <- GeneInfo(m)$true_d.perturbed.d
 lfc.perturbed.d.vs.control.old <- log2(a/b)
 lfc.unperturbed.vs.control.old <- anal.table$`old.HL vs control.LFC`
 
-# Put LFC of unpertubed vs pertubed delta in a dataframe
+# Put LFC of unperturbed vs perturbed delta in a dataframe
 df.old <- data.frame(cbind(lfc.perturbed.d.vs.control.old, lfc.unperturbed.vs.control.old))
 
 # Use PlotScatter
-PlotScatter(df.old, remove.outlier = 999)
+# Fig4A
+PlotScatter(df.old, remove.outlier = 999) + xlab("LFC(old RNA): perturbed delta vs control") + ylab("LFC(old RNA): unperturbed vs control")
 ```
 
 We can see there is no linear correlation, which is expected 
@@ -163,7 +164,9 @@ df.new <- data.frame(cbind(lfc.perturbed.d.vs.control.new,
 rownames(df.new) <- rownames(anal.table) # add gene names to data frame
 
 # PlotScatter, new RNA unpertubed vs pertubed delta LFC
-PlotScatter(df.new, highlight = short.lived.genes, remove.outlier = 999)
+# Fig4B
+# Change highlight color so it's not red and green?
+PlotScatter(df.new, highlight = short.lived.genes, remove.outlier = 999) + xlab("LFC(new RNA): perturbed delta vs control") + ylab("LFC(new RNA): unperturbed vs control")
 ```
 
 We can see there are significant LFCs for short-lived genes when delta
@@ -211,13 +214,16 @@ in a scatterplot with a slope close to 1, indicating that the estimates are
 unbiased:
 
 ```{r}
-PlotScatter(df.hl, remove.outlier = 999) + geom_abline()
+# Fig4C
+PlotScatter(df.hl, remove.outlier = 999) + geom_abline() + xlab("True LFC(half-life)") + ylab("MAP estimate of LFC(half-life)")
 ```
 
 ```{r}
-PlotScatter(df.s, remove.outlier = 999) + geom_abline() # unsuccessful attempt to include slope in plot
+# Fig4D
+PlotScatter(df.s, remove.outlier = 999) + geom_abline() + xlab("True LFC(synthesis rate)") + ylab("MAP estimate of LFC(synthesis rate)")
 ```
 
+(This part until approx.l 261 can probably be deleted.)
 It is interesting to explore how these plots change if we only maintain
 highly expressed genes. We can set different thresholds for expression by
 using the FilterGenes command and playing with the number of reads and samples.
@@ -271,8 +277,8 @@ box.hl <- data.frame(unperturbed.vs.control = anal.table$`Regulation.unperturbed
 
 box.hl.molten <- melt(box.hl)
 
-ggplot(box.hl.molten, aes(x = variable, y = value)) +
-  geom_boxplot()
+# Fig4E (distribution of changes in delta)
+ggplot(box.hl.molten, aes(x = variable, y = value)) + xlab("simulation") + ylab("delta") + geom_boxplot() + scale_x_discrete(labels = c("unperturbed vs control", "perturbed delta vs control", "perturbed sigma vs control"))
 ```
 Sigma: 
 
@@ -283,10 +289,11 @@ box.s <- data.frame(unperturbed.vs.control = anal.table$`Regulation.unperturbed 
 
 box.s.molten <- melt(box.s)
 
-ggplot(box.s.molten, aes(x = variable, y = value)) +
-  geom_boxplot()
+# Fig4E (sigma)
+ggplot(box.s.molten, aes(x = variable, y = value)) + xlab("simulation") + ylab("sigma") + geom_boxplot() + scale_x_discrete(labels = c("unperturbed vs control", "perturbed delta vs control", "perturbed sigma vs control"))
 ```
 Once again, we can explore how these plots are affected by gene filtering.
+(Probably can also be deleted: up to approx l 330)
 
 Half-life:
 
@@ -297,8 +304,7 @@ box.hl.filtered <- data.frame(unperturbed.vs.control = anal.table2$`Regulation.u
 
 box.hl.molten.filtered <- melt(box.hl.filtered)
 
-ggplot(box.hl.molten.filtered, aes(x = variable, y = value)) +
-  geom_boxplot()
+ggplot(box.hl.molten.filtered, aes(x = variable, y = value)) + geom_boxplot() 
 ```
 
 Sigma:
@@ -492,6 +498,10 @@ lower.s <- anal.table$`Regulation.s vs control.s.cred.lower`
 upper.d <- anal.table$`Regulation.HL vs control.HL.cred.upper`
 lower.d <- anal.table$`Regulation.HL vs control.HL.cred.lower`
 
+# Instead of for loop
+sum(values.s < upper.s & values.s > lower.s) # 10827
+sum(values.s < max(upper.s, lower.s) & values.s > min(lower.s, upper.s)) # 10835, why?
+
 count.s <- 0
 for (i in 1:length(values.s)) {
   value.s.i <- values.s[i]
@@ -503,9 +513,11 @@ for (i in 1:length(values.s)) {
   }
 }
 
-count.d <- 0
 # Instead of for loop
-sum(values.d > upper.d & values.d < lower.d)
+# What's going on with the signs?
+sum(values.d > upper.d & values.d < lower.d) # 10815
+
+count.d <- 0
 for (i in 1:length(values.d)) {
   value.d.i <- values.d[i]
   # this because upper.s has at least some negative values where lower.s has positive ones
@@ -549,13 +561,14 @@ Old RNA, estimate of d
 ```{r}
 library(pROC)
 
+# Fig4F?
 # old rna, estimate of d
 # keep, will be main figure
 roc.rope.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
 roc.deseq.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`old.HL vs control.P`) 
-ggroc(list(roc.rope.old.d, roc.deseq.old.d), legacy.axes = TRUE)
+ggroc(list("ROPE" = roc.rope.old.d, "DESeq2" = roc.deseq.old.d), legacy.axes = TRUE) + ggtitle("Estimate of delta - old RNA")
 ```
 
 New RNA, estimate of d
@@ -566,7 +579,7 @@ roc.rope.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d))
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
 roc.deseq.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`new.HL vs control.P`) 
-ggroc(list(roc.rope.new.d, roc.deseq.new.d), legacy.axes = TRUE)
+ggroc(list("ROPE" = roc.rope.new.d, "DESEq2" = roc.deseq.new.d), legacy.axes = TRUE) + ggtitle("New RNA - estimate of delta")
 ```
 
 Old RNA, estimate of s
@@ -577,7 +590,7 @@ roc.rope.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s))
                anal.table$`Regulation.s vs control.s.ROPE`) 
 roc.deseq.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`old.s vs control.P`) 
-ggroc(list(roc.rope.old.s, roc.deseq.old.s), legacy.axes = TRUE)
+ggroc(list("ROPE" = roc.rope.old.s, "DESeq2" = roc.deseq.old.s), legacy.axes = TRUE) + ggtitle("Old RNA - estimate of sigma")
 ```
 
 New RNA, estimate of s
@@ -588,7 +601,7 @@ roc.rope.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s))
                anal.table$`Regulation.s vs control.s.ROPE`) 
 roc.deseq.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`new.s vs control.P`) 
-ggroc(list(roc.rope.new.s, roc.deseq.new.s), legacy.axes = TRUE)
+ggroc(list("ROPE" = roc.rope.new.s, "DESeq2" = roc.deseq.new.s), legacy.axes = TRUE) + ggtitle("New RNA - estimate of sigma")
 
 # is abs(log2(true_d/true_d.perturbed.d)) > 0.25 LFC -> is regulated
 # predictor (rope): regulation.HL vs control.HL.ROPE
