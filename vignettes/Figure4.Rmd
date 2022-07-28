@@ -1,0 +1,78 @@
+---
+title: "Figure 3"
+output: 
+  html_document:
+    dev: "svg"
+---
+
+We first load the GRAND-SLAM output and preprocess as usual.
+```{r}
+suppressPackageStartupMessages({library(grandR)})
+d <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+d <- FilterGenes(d)
+d <- Normalize(d)
+```
+
+Now we fit the kinetics using the nlls approach:
+```{r fig.width=8,fig.height=4}
+SetParallel()
+d <- FitKinetics(d,name="nlls",type="nlls",steady.state=list(Mock=TRUE,SARS=FALSE))
+d <- FitKinetics(d,name="lm",type="lm")
+df <- GetAnalysisTable(d,columns="Half-life")
+PlotScatter(df,x=`nlls.Mock.Half-life`,y=`nlls.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline() |
+  PlotScatter(df,x=`lm.Mock.Half-life`,y=`lm.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline()
+PlotScatter(df,x=`nlls.Mock.Half-life`,y=`lm.Mock.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline() |
+  PlotScatter(df,x=`nlls.SARS.Half-life`,y=`lm.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline()
+```
+
+
+
+
+```{r fig.width=4,fig.height=4}
+m <- subset(d,columns=Condition(d)=="Mock")
+m <- DropAnalysis(m)
+m<- FitKinetics(m,type="nlls",compute.residuals=TRUE,return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
+df <- melt(GetAnalysisTable(m,columns = "Residuals", gene.info = FALSE)[,-1], id.vars=c(),variable.name = "Sample", value.name = "Residual")
+df$Sample=revalue(df$Sample,setNames(sub("kinetics.Mock.Residuals.","",levels(df$Sample)),levels(df$Sample)))
+ggplot(df,aes(Sample,Residual,fill=Sample))+
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot()+
+  scale_fill_brewer(palette="Reds",guide="none")+
+  coord_cartesian(ylim=c(-1,1))+
+  scale_y_continuous("Relative residual",labels = scales::percent_format(1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  xlab(NULL)
+```
+
+```{r fig.width=4,fig.height=4}
+d <- CalibrateEffectiveLabelingTime(d,steady.state=list(Mock=TRUE,SARS=FALSE),verbose = TRUE)
+m <- subset(d,columns=Condition(d)=="Mock")
+m <- DropAnalysis(m)
+m<- FitKinetics(m,type="nlls",time="calibrated_time",compute.residuals=TRUE,return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
+df <- melt(GetAnalysisTable(m,columns = "Residuals", gene.info = FALSE)[,-1], id.vars=c(),variable.name = "Sample", value.name = "Residual")
+df$Sample=revalue(df$Sample,setNames(sub("kinetics.Mock.Residuals.","",levels(df$Sample)),levels(df$Sample)))
+ggplot(df,aes(Sample,Residual,fill=Sample))+
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot()+
+  scale_fill_brewer(palette="Reds",guide="none")+
+  coord_cartesian(ylim=c(-1,1))+
+  scale_y_continuous("Relative residual",labels = scales::percent_format(1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  xlab(NULL)
+```
+
+
+```{r fig.width=8,fig.height=4}
+SetParallel()
+d <- FitKinetics(d,name="nlls",type="nlls",steady.state=list(Mock=TRUE,SARS=FALSE))
+d <- FitKinetics(d,name="cnlls",type="nlls",steady.state=list(Mock=TRUE,SARS=FALSE),time="calibrated_time")
+d <- FitKinetics(d,name="lm",type="lm")
+df <- GetAnalysisTable(d,columns="Half-life")
+PlotScatter(df,x=`nlls.Mock.Half-life`,y=`nlls.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline() |
+  PlotScatter(df,x=`cnlls.Mock.Half-life`,y=`cnlls.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline() |
+  PlotScatter(df,x=`lm.Mock.Half-life`,y=`lm.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline()
+PlotScatter(df,x=`nlls.Mock.Half-life`,y=`lm.Mock.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline() |
+  PlotScatter(df,x=`nlls.SARS.Half-life`,y=`lm.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline()
+PlotScatter(df,x=`cnlls.Mock.Half-life`,y=`lm.Mock.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline() |
+  PlotScatter(df,x=`cnlls.SARS.Half-life`,y=`lm.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline()
+```

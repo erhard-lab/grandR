@@ -1,0 +1,88 @@
+---
+title: "Kinetic modeling"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Kinetic modeling}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+One of the main applications of metabolic RNA labeling is to model the kinetics of RNA expression levels [[1]](https://doi.org/10.1093/bioinformatics/bty256)[[2]](https://doi.org/10.1016/j.molcel.2021.06.016). The most natural and widely used model is to describe the change of RNA levels $a(t)$ at time $t$ is via first order reactions by the differential equation:
+
+$$
+\frac{da}{dt}=\sigma - \delta \cdot a(t)
+$$
+
+Here $\sigma$ is the net synthesis rate of RNA and $\delta$ is the degradation rate. This differential equation can be solved analytically (see e.g. [[1]](https://doi.org/10.1093/bioinformatics/bty256)). Based on this, there are four ways implemented in grandR to estimate both $\sigma$ and $\delta$:
+(i) simple linear regression[[3]](https://www.nature.com/articles/s41586-021-03610-3)`type` = "lm"
+(ii) using non-linear regression on the estimated new and old RNA levels [[2]](https://doi.org/10.1016/j.molcel.2021.06.016) `type` = "nlls"
+(iii) pulseR `type` = "pulseR"[[4]](https://doi.org/10.3390/genes9120619)
+(iv) maximum likelihood approach using the posterior distribution of the (new to total RNA ratio) NTR values transformed to degradation rates  [[1]](https://doi.org/10.1093/bioinformatics/bty256)  `type` = "ntr"
+
+All approaches make use of multiple time points (labeling durations) and are able to estimate both $\sigma$ and $\delta$. Whereas (i)-(iii) strictly depend on accurate normalization across individual samples, the maximum likelihood approach (iv) can only be applied under steady state assumptions.
+
+To perform an analysis of the RNA dynamics for data from [Finkel et al, Nature 2021] [[3]] (https://www.nature.com/articles/s41586-021-03610-3), we first load the grandR package and the read the GRAND-SLAM output table directly from zenodo. For more details on how to load data have a look into the loading-data vignette.
+
+```{r}
+suppressPackageStartupMessages({library(grandR)})
+sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
+                  design=c("Condition",Design$dur.4sU,Design$Replicate))
+```
+
+
+First, we filter to only include genes that have at least 100 reads in at least 6 samples:
+```{r}
+sars <- FilterGenes(sars,minval = 100, mincol = 6) # as 100 reads and half of the sample is the default, this is identical to sars <- FilterGenes(sars)
+```
+
+
+As pointed out above, for the approaches (i)-(iii) it is important to normalize the data:
+```{r}
+sars<-Normalize(sars)
+```
+
+Before we estimate kinetic parameters globally, we inspect an example:
+```{r,fig.height=3.5,fig.width=5}
+PlotGeneKinetics(sars,"SRSF6")
+```
+
+The curves represent the fitted model for this gene. As pointed out above, there are two ways to estimate the RNA kinetics in grandR. The default is the regression approach (ii). The other approaches can be used by supplying the `type` parameter. It is also possible to exclude samples from the fit, and to drop the assumption of steady state for the virus infected samples:
+```{r,fig.height=4.5,fig.width=7}
+(PlotGeneKinetics(sars,"SRSF6",bare.plot=T) |
+   PlotGeneKinetics(sars,"SRSF6",type = "ntr",bare.plot=T))  /
+  (PlotGeneKinetics(sars,"SRSF6",use.old=Coldata(sars)$Name!="SARS.no4sU.A",bare.plot=T) |
+     PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
+```
+
+In order to estimate kinetic parameters globally we use the `FitKinetics` function. The default is the regression approach (ii). The other approaches can be used by supplying the `type` parameter. The `name` parameter is the analysis name to store the results.
+```{r}
+SetParallel()
+sars<-FitKinetics(sars,name ="kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
+Analyses(sars)
+```
+
+The results of the kinetic fitting can be further analyzed using the analysis table. For more details on how to use it have a look into the getting data vignette (link).
+
+```{r,fig.height=3.5,fig.width=5}
+df<-GetAnalysisTable(sars)
+PlotScatter(df,"kinetics.Mock.Half-life","kinetics.SARS.Half-life",log=T)+geom_abline()
+```
+Plot comparing estimated Half-lifes in uninfected vs. infected samples for all genes.
+
+Since active 4sU is not immediately available after culturing the cells in 4sU media, for earlier timepoints the effective labeling time is usually shorter than the nominal labeling time. This results in systematically deviatated NTRs. The `CalibrateEffectiveLabelingTime` function computes labeling durations without systematic deviations.
+ 
+
+```{r,fig.height=3.5,fig.width=8}
+SetParallel()
+sars<-CalibrateEffectiveLabelingTime(sars,steady.state = c(Mock=T,SARS=F))
+head(Coldata(sars))
+```
+
+```{r,fig.height=3.5,fig.width=8}
+PlotGeneKinetics(sars,"MYC",steady.state = c(Mock=T,SARS=F)) | PlotGeneKinetics(sars,"MYC",time = "calibrated_time",steady.state = c(Mock=T,SARS=F))
+sars<-FitKinetics(sars,name="norm_kinetics",slot="norm",time="calibrated_time",steady.state = c(Mock=T,SARS=F))
+df<-cbind(GetAnalysisTable(sars,c("kinetics.Mock"),regex=FALSE,columns="rmse",gene.info = FALSE),GetAnalysisTable(sars,c("norm_kinetics.Mock"),regex=FALSE,columns="rmse",gene.info = FALSE))
+PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()
+```
+
+Plot comparing estimated Half-lifes with uncalibrated vs. calibrated labeling times for all genes.
