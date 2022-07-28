@@ -814,8 +814,8 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
 
 #' Fit kinetic models to all genes.
 #'
-#' Fit the standard mass action kinetics model of gene expression by different means. Depending on which method is used, either steady state must be assumed,
-#' or data must be properly normalized. The parameters are fit per \link{Condition}.
+#' Fit the standard mass action kinetics model of gene expression by different methods. Some methods require steady state assumptions, for others
+#' data must be properly normalized. The parameters are fit per \link{Condition}.
 #'
 #' @param data A grandR object
 #' @param name the user defined analysis name to store the results
@@ -1028,7 +1028,7 @@ FitKineticsSnapshot=function(data,gene,columns,
                              return.points=FALSE,
                              N=10000,N.max=N*10,
                              conf.int=0.95) {
-    if (is.matrix(reference.columns)) reference.columns=apply(reference.columns[,Columns(data,columns)]==1,1,any)
+    if (is.matrix(reference.columns)) reference.columns=apply(reference.columns[,Columns(data,columns),drop=FALSE]==1,1,any)
 
     alpha=GetData(data,mode.slot="alpha",genes=gene,columns = columns)
     if (!is.numeric(time.labeling) && length(unique(alpha[[time.labeling]]))!=1) stop("A has to refer to a unique labeling duration!")
@@ -1373,12 +1373,12 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
 
     g=ggplot(df,aes(time,Value,color=Type))
     if (show.CI) g=g+geom_errorbar(mapping=aes(ymin=lower,ymax=upper),width=0.1)
-    g=g+geom_point()+
-        geom_line(data=df.median[df.median$Type=="Total",])+
+    g=g+geom_point(size=2)+
+        geom_line(data=df.median[df.median$Type=="Total",],size=1)+
         scale_x_continuous(if (bare.plot) NULL else "4sU labeling",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks)),suffix="h"),breaks=breaks)+
-        scale_color_manual("RNA",values=c(Total="gray",New="red",Old="blue"),guide=if (bare.plot) "none" else "legend")+
+        scale_color_manual("RNA",values=c(Total="gray",New="#e34a33",Old="#2b8cbe"),guide=if (bare.plot) "none" else "legend")+
         ylab(if (bare.plot) NULL else "Expression")+
-        geom_line(data=fitted,aes(ymin=NULL,ymax=NULL),linetype=2)
+        geom_line(data=fitted,aes(ymin=NULL,ymax=NULL),linetype=2,size=1)
     if (!is.null(Coldata(data)$Condition)) g=g+facet_wrap(~Condition,nrow=1)
     if (!bare.plot) g=g+ggtitle(title)
     if (return.tables) list(gg=g,df=df,df.median=df.median,fitted=fitted) else g

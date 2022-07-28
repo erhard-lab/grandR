@@ -247,7 +247,7 @@ EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSl
     A=contrasts[[n]]==1
     B=contrasts[[n]]==-1
 
-    ss=if (is.matrix(reference.columns)) list(A=apply(reference.columns[,Columns(data,A)]==1,1,any),B=apply(reference.columns[,Columns(data,B)]==1,1,any))
+    ss=if (is.matrix(reference.columns)) list(A=apply(reference.columns[,Columns(data,A),drop=FALSE]==1,1,any),B=apply(reference.columns[,Columns(data,B),drop=FALSE]==1,1,any))
     dispersion.A = if (sum(ss$A)==1) rep(0.1,nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$A))
     dispersion.B = if (sum(ss$B)==1) rep(0.1,nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$B))
 

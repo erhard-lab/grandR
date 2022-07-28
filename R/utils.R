@@ -20,6 +20,61 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=TRUE,...) {
 }
 
 
+#' Defer calling a function
+#'
+#' This generates a function with one mandatory parameter (and additional optional parameters)
+#' that, when called, (i) also receives the parameters given when calling \code{Defer}, and (ii)
+#' after calling it each element of the \code{add} list is appended by \code{+}. When no optional parameters
+#' are given, the result is cached.
+#'
+#' @param FUN the function to be deferred
+#' @param ... additional parameters to be used when the deferred function is called
+#' @param add list containing additional elements to be added \code{+} to the result of the deferred function
+#' @param cache use caching mechanism
+#'
+#' @return a function that can be called
+#' @export
+#'
+#' @details The following expressions are very similar: \code{f <- function(d) Heavy.function(d)} and \code{f <- Defer(Heavy.function)}. In
+#' both cases, you get a function \code{f} that you can call for some \code{d}, which in turn calls \code{Heavy.function}. The only
+#' difference is that in the second case, the result is cached: \code{Heavy.function} is called only once when first calling \code{f},
+#' if \code{f} is called a second time, the previous result is returned. This makes sense if the parameter \code{d} is constant (like a grandR object)
+#' and if \code{Heavy.function} is deterministic.
+#'
+#' @details If additional parameters are provided to \code{f}, caching is disabled. Be careful if \code{Heavy.function} is not deterministic (see examples).
+#'
+#' @details Use case scenario: You want to produce a heatmap from a grandR object to be used as \code{plot.static} in the shiny web interface.
+#' \code{\link{PlotHeatmap}} takes some time, and the resulting object is pretty large in memory. Saving the heatmap object to disk is very
+#' inefficient (the Rdata file will be huge, especially with many heatmaps). Deferring the call without caching also is bad, because whenever
+#' the user clicks onto the heatmap, it is regenerated.
+#'
+#' @examples
+#' Heavy.function <- function(data) rnorm(5,mean=data())
+#' f1=Defer(Heavy.function)
+#' f2=function(d) Heavy.function(d)
+#' f2(4)
+#' f2(4) # these are not equal, as rnorm is called twice
+#' f1(4)
+#' f1(4) # these are equal, as the result of rnorm is cached
+Defer=function(FUN,...,add=NULL, cache=TRUE) {
+  param=list(...)
+  value=NULL
+  function(data,...) {
+    pp=list(...)
+    if (length(pp)>0) {
+      re=do.call(FUN,c(list(data),param,pp))
+      if (!is.null(add)) for (e in if (class(add)=="list") add else list(add)) re=re+e
+      return(re)
+    }
+
+    if (is.null(value)) {
+      value<<-do.call(FUN,c(list(data),param))
+      if (!is.null(add)) for (e in if (class(add)=="list") add else list(add)) value<<-value+e
+    }
+    value
+  }
+}
+
 
 #' Convert a structure into a vector
 #'

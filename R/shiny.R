@@ -1,19 +1,22 @@
 
-ServeData=function(data,
-                   df=GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q"),
+ServeGrandR=function(data,
+                   df=GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q",gene.info = FALSE),
                    df.set=df,
                    sizes=NA,height=400,
-                   plot.single=list(), plot.set=list(), plot.static=list(),
+                   plot.gene=list(), plot.global=list(), plot.static=list(),
                    df.identifier="Symbol",
                    title=Title(data),
                    show.sessionInfo=FALSE,
                    help=list(".Q: multiple testing corrected p values",".LFC: log2 fold changes") ) {
 
 
-  if (length(plot.single)==0) plot.single=list(PlotGeneOldVsNew)
-  if (length(sizes)==1 & is.na(sizes)) sizes=rep(floor(12/min(4,length(plot.single))),length(plot.single))
-  if (length(sizes)!=length(plot.single)) stop("sizes need to be length 1 or same length as plots!")
+  if (!is.list(plot.gene)) plot.gene=list(plot.gene)
+  if (length(plot.gene)==0) plot.gene=list(PlotGeneOldVsNew)
+  if (length(sizes)==1 & is.na(sizes)) sizes=rep(floor(12/min(4,length(plot.gene))),length(plot.gene))
+  if (length(sizes)!=length(plot.gene)) stop("sizes need to be length 1 or same length as plots!")
   sizes=c(sizes,rep(1,8))
+
+  if (!df.identifier %in% names(df) && !is.null(rownames(df))) df=cbind(setNames(data.frame(rownames(df),stringsAsFactors = FALSE),df.identifier),df,stringsAsFactors = FALSE)
 
 #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
 
@@ -27,6 +30,7 @@ ServeData=function(data,
 	                      filter = "top",
 	                      options = list(
 	                        pageLength = 10,
+	                        lengthMenu =list(c(5, 10, 25, 50, 100,-1),c(5, 10, 25, 50, 100,"All")),
 	                        dom = '<"#buttons">lfrtip'
 	                      ))
 	  dttab=DT::formatRound(dttab,names(df)[sapply(df,class)=="numeric"], 2)
@@ -46,7 +50,7 @@ ServeData=function(data,
 	  )
 	  output$clip <- renderUI({
 	    nn=if(.row_names_info(df)<0) df[input$tab_rows_all,1] else rownames(df)[input$tab_rows_all]
-	    rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), icon("clipboard"))
+	    rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), modal=TRUE,icon("clipboard"))
 	  })
 	  observeEvent(input$clipbtn, {showNotification(
 	    sprintf("Copied %d names",length(input$tab_rows_all)),
@@ -55,14 +59,14 @@ ServeData=function(data,
 	  )})
 
 
-	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.single[[1]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=2) plot.single[[2]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=3) plot.single[[3]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot4=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=4) plot.single[[4]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot5=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=5) plot.single[[5]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot6=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=6) plot.single[[6]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=7) plot.single[[7]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.single)>=8) plot.single[[8]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.gene[[1]](data=data,gene=df[[df.identifier]][input$tab_rows_selected]) })
+	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=2) plot.gene[[2]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=3) plot.gene[[3]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot4=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=4) plot.gene[[4]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot5=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=5) plot.gene[[5]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot6=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=6) plot.gene[[6]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=7) plot.gene[[7]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=8) plot.gene[[8]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
 	  output$helpText=renderText({ if (length(input$tab_rows_selected)==0 && !is.null(help)) help  })
 
 	  for (n in names(plot.static)) {
@@ -84,25 +88,25 @@ ServeData=function(data,
 	    output[[paste0(n,"plot")]]=create(n)
 	  }
 
-	  for (n in names(plot.set)) {
+	  for (n in names(plot.global)) {
 	    create=function(n) {
 	      env=new.env()
 	      env$n=n
 	      getwidth=function() {
-	        w=attr(plot.set[[n]],"width")
+	        w=attr(plot.global[[n]],"width")
 	        if (is.null(w)) w=7*100
 	        w
 	      }
 	      getheight=function() {
-	        w=attr(plot.set[[n]],"height")
+	        w=attr(plot.global[[n]],"height")
 	        if (is.null(w)) w=7*100
 	        w
 	      }
-	      renderPlot({plot.set[[n]](df.set)},width=getwidth,height=getheight,env=env)
+	      renderPlot({plot.global[[n]](df.set)},width=getwidth,height=getheight,env=env)
 	    }
 	    output[[make.names(paste0(n,"plotset"))]]=create(n)
 	    e=new.env()
-	    e$ddf=attr(plot.set[[n]](df.set),"df")
+	    e$ddf=attr(plot.global[[n]](df.set),"df")
 	    e$n=n
 
 	    observe({
@@ -131,17 +135,17 @@ ServeData=function(data,
 	  plot.static.ui=do.call(shiny::"navbarMenu",plist)
 	}
 
-	plot.set.ui=NULL
-	if (length(plot.set)>0) {
+	plot.global.ui=NULL
+	if (length(plot.global)>0) {
 
-	  plist=c(lapply(names(plot.set),function(n) shiny::tabPanel(n,
+	  plist=c(lapply(names(plot.global),function(n) shiny::tabPanel(n,
 	                                                       shiny::fluidRow(
 	                                                         shiny::column(8,shiny::plotOutput(make.names(paste0(n,"plotset")),brush = shiny::brushOpts(id = make.names(paste0(n,"plotsetbrush"))))),
 	                                                         shiny::column(4,shiny::textAreaInput(make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40))
 	                                                      )
 	  )),list(title="Global level"))
 
-	  plot.set.ui=do.call(shiny::"navbarMenu",plist)
+	  plot.global.ui=do.call(shiny::"navbarMenu",plist)
 	}
 
 	more=NULL
@@ -198,7 +202,7 @@ ServeData=function(data,
         	  #do.call("fluidRow",lapply(1:length(plot.funs),function(i) column(sizes[i],plotOutput(paste0("plot.funs",i),height=height))))
         	)),
 
-        	plot.set.ui,
+        	plot.global.ui,
         	plot.static.ui,
 
         	more,

@@ -274,8 +274,10 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
   rho=round(cor(df$covar,df$lfc,method="spearman"),digits = 2)
   p=cor.test(df$covar,df$lfc,method="spearman")$p.value
   p=if (p<2.2E-16) p = bquote("<"~2.2 %*% 10^-16) else p = sprintf("= %.2g",p)
+  df$lfc=ifelse(df$lfc<ylim[1],-Inf,df$lfc)
+  df$lfc=ifelse(df$lfc>ylim[2],+Inf,df$lfc)
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
-    scale_color_viridis_c(name = "Density",guide=FALSE)+
+    scale_color_viridis_c(name = "Density",guide='none')+
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+
     #geom_smooth(method="loess",formula=y~x)+

@@ -215,6 +215,9 @@ PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
 PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
                      log.y=log, color=NA, remove.outlier=1.5, size=0.3,
                      xlim=NULL, ylim=NULL, highlight=NULL, label=NULL, columns=NULL, density.margin = 'n', density.n = 100) {
+  if (is.grandR(df)) {
+    df=cbind(GetAnalysisTable(df,gene.info = FALSE),GetTable(df,type=DefaultSlot(df)))
+  }
   df=as.data.frame(df)
   if (!is.data.frame(df)) stop("df must be a data frame (or at least coercable into a data frame)")
   adaptInf=function(df,rx,ry) {
@@ -648,24 +651,4 @@ Plot=function(fun=NULL,...,gg=NULL) {
   }
 }
 
-
-# Caching will work as long as it is the same data object that is used!
-DPlot=function(FUN,...,height=7,width=7,add=NULL) {
-  param=list(...)
-  value=NULL
-  function(data,...) {
-    pp=list(...)
-    if (length(pp)>0) {
-      re=do.call(FUN,c(list(data),param,pp))
-      if (!is.null(add)) for (e in if (class(add)=="list") add else list(add)) re=re+e
-      return(re)
-    }
-
-    if (is.null(value)) {
-      value<<-do.call(FUN,c(list(data),param))
-      if (!is.null(add)) for (e in if (class(add)=="list") add else list(add)) value<<-value+e
-    }
-    value
-  }
-}
 
