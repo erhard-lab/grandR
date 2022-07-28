@@ -122,7 +122,9 @@ df.old <- data.frame(cbind(lfc.perturbed.d.vs.control.old, lfc.unperturbed.vs.co
 
 # Use PlotScatter
 # Fig4A
-PlotScatter(df.old, remove.outlier = 999) + xlab("LFC(old RNA): perturbed delta vs control") + ylab("LFC(old RNA): unperturbed vs control")
+# perturbed delta vs control in the title
+# square, smaller, same range in both axes, add main diagonal
+PlotScatter(df.old, remove.outlier = 999) + xlab("log FC half-life (truth)") + ylab("log FC old RNA") + ggtitle("Perturbed degradation rate vs control") + geom_abline()
 ```
 
 We can see there is no linear correlation, which is expected 
@@ -166,7 +168,7 @@ rownames(df.new) <- rownames(anal.table) # add gene names to data frame
 # PlotScatter, new RNA unpertubed vs pertubed delta LFC
 # Fig4B
 # Change highlight color so it's not red and green?
-PlotScatter(df.new, highlight = short.lived.genes, remove.outlier = 999) + xlab("LFC(new RNA): perturbed delta vs control") + ylab("LFC(new RNA): unperturbed vs control")
+PlotScatter(df.new, highlight = short.lived.genes, remove.outlier = 999) + xlab("log FC degradation rate (truth)") + ylab("log FC new RNA") + ggtitle("Perturbed degradation rate vs control")
 ```
 
 We can see there are significant LFCs for short-lived genes when delta
@@ -215,57 +217,15 @@ unbiased:
 
 ```{r}
 # Fig4C
-PlotScatter(df.hl, remove.outlier = 999) + geom_abline() + xlab("True LFC(half-life)") + ylab("MAP estimate of LFC(half-life)")
+PlotScatter(df.hl, remove.outlier = 999) + geom_abline() + xlab("log FC half-life (truth)") + ylab("log FC half-life (MAP estimate)")
+ + ggtitle("Perturbed degradation rate vs control")
 ```
 
 ```{r}
 # Fig4D
-PlotScatter(df.s, remove.outlier = 999) + geom_abline() + xlab("True LFC(synthesis rate)") + ylab("MAP estimate of LFC(synthesis rate)")
+PlotScatter(df.s, remove.outlier = 999) + geom_abline() + xlab("log FC synthesis rate (truth)") + ylab("log FC synthesis rate (MAP estimate)") + ggtitle("Perturbed synthesis rate vs control")
 ```
 
-(This part until approx.l 261 can probably be deleted.)
-It is interesting to explore how these plots change if we only maintain
-highly expressed genes. We can set different thresholds for expression by
-using the FilterGenes command and playing with the number of reads and samples.
-As an example, we show how the plots are affected if we keep reads that have
-at least 4000 reads in at least half of the samples. These thresholds maintain
-3020 genes.
-
-```{r}
-m2 <- FilterGenes(m, type = "count", minval = 4000)
-nrow(GeneInfo(m2))
-```
-We repeat the dataframe-making steps for the m2 object:
-
-```{r}
-# Get new analysis table and take a look at the columns
-anal.table2 <- GetAnalysisTable(m2)
-
-# PlotScatter on estimates vs true sigma/delta; slope should be 1, meaning no bias
-
-true.s.lfc.filtered <- log2(GeneInfo(m2)$true_s.perturbed.s/GeneInfo(m2)$true_s)
-est.s.lfc.filtered <- anal.table2$`Regulation.s vs control.s.log2FC`
-
-true.hl.lfc.filtered <- -log2(GeneInfo(m2)$true_d.perturbed.d/GeneInfo(m2)$true_d)
-est.hl.lfc.filtered <- anal.table2$`Regulation.HL vs control.HL.log2FC`
-
-df.hl2 <- data.frame(cbind(true.hl.lfc.filtered, est.hl.lfc.filtered))
-df.s2 <- data.frame(cbind(true.s.lfc.filtered, est.s.lfc.filtered))
-```
-
-Then we remake the plots for half-life:
-
-```{r}
-PlotScatter(df.hl2, label = (paste0("slope==", coef(lm(df.hl2$est.hl.lfc.filtered~df.hl2$true.hl.lfc.filtered))))) # unsuccessful attempt to include slope in plot
-```
-
-(It's just similar but less dense)
-
-And sigma:
-
-```{r}
-PlotScatter(df.s2, label = (paste0("slope==", coef(lm(df.s2$est.s.lfc.filtered~df.s2$true.s.lfc.filtered))))) # unsuccessful attempt to include slope in plot
-```
 We also observe that sigma and delta are small for the unperturbed simulations, and that the variance for delta is substantially larger than the variance for sigma:
 
 ```{r}
@@ -278,50 +238,31 @@ box.hl <- data.frame(unperturbed.vs.control = anal.table$`Regulation.unperturbed
 box.hl.molten <- melt(box.hl)
 
 # Fig4E (distribution of changes in delta)
-ggplot(box.hl.molten, aes(x = variable, y = value)) + xlab("simulation") + ylab("delta") + geom_boxplot() + scale_x_discrete(labels = c("unperturbed vs control", "perturbed delta vs control", "perturbed sigma vs control"))
+# rotate x labels 90 degrees
+# make square (aspect ratio equals 1)
+ggplot(box.hl.molten, aes(x = variable, y = value)) + xlab("simulation") + ylab("log FC half-life (MAP estimate)") + geom_boxplot() + scale_x_discrete(labels = c("unperturbed vs control", "perturbed degradation rate vs control", "perturbed synthesis rate vs control")) + theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1), aspect.ratio = 1)
+
+# Okay but this looks silly
 ```
+```{r}
+# Here's an attempt with angle of 20 degrees and no squaring:
+ggplot(box.hl.molten, aes(x = variable, y = value)) + xlab("simulation") + ylab("log FC half-life (MAP estimate)") + geom_boxplot() + scale_x_discrete(labels = c("unperturbed vs control", "perturbed degradation rate vs control", "perturbed synthesis rate vs control")) + theme(axis.text.x = element_text(angle = 20, vjust = 1, hjust = 1))
+```
+
 Sigma: 
 
 ```{r}
 box.s <- data.frame(unperturbed.vs.control = anal.table$`Regulation.unperturbed vs control.s.log2FC`,
                      hl.vs.control = anal.table$`Regulation.HL vs control.s.log2FC`,
-                     s.vs.control = anal.table$`Regulation.s vs control.s.log2FC`)
+                     s.vs.control = anal.table$`Regulation.s vs control.s.log2FC`) 
 
 box.s.molten <- melt(box.s)
 
 # Fig4E (sigma)
-ggplot(box.s.molten, aes(x = variable, y = value)) + xlab("simulation") + ylab("sigma") + geom_boxplot() + scale_x_discrete(labels = c("unperturbed vs control", "perturbed delta vs control", "perturbed sigma vs control"))
-```
-Once again, we can explore how these plots are affected by gene filtering.
-(Probably can also be deleted: up to approx l 330)
-
-Half-life:
-
-```{r}
-box.hl.filtered <- data.frame(unperturbed.vs.control = anal.table2$`Regulation.unperturbed vs control.HL.log2FC`,
-                     hl.vs.control = anal.table2$`Regulation.HL vs control.HL.log2FC`,
-                     s.vs.control = anal.table2$`Regulation.s vs control.HL.log2FC`)
-
-box.hl.molten.filtered <- melt(box.hl.filtered)
-
-ggplot(box.hl.molten.filtered, aes(x = variable, y = value)) + geom_boxplot() 
+ggplot(box.s.molten, aes(x = variable, y = value)) + xlab("simulation") + ylab("log FC sigma") + geom_boxplot() + scale_x_discrete(labels = c("unperturbed vs control", "perturbed degradation rate vs control", "perturbed synthesis rate vs control")) + theme(axis.text.x = element_text(angle = 20, vjust = 1, hjust = 1))
 ```
 
-Sigma:
-
-```{r}
-box.s.filtered <- data.frame(unperturbed.vs.control = anal.table2$`Regulation.unperturbed vs control.s.log2FC`,
-                     hl.vs.control = anal.table2$`Regulation.HL vs control.s.log2FC`,
-                     s.vs.control = anal.table2$`Regulation.s vs control.s.log2FC`)
-
-box.s.molten.filtered <- melt(box.s.filtered)
-
-ggplot(box.s.molten.filtered, aes(x = variable, y = value)) +
-  geom_boxplot()
-```
-
-# Filter based on half-life (in control). Expectation: too short and too long
-# are both bad.
+# Short- and long-lived genes
 
 It is also of interest to explore how the plots change if we keep only
 short-lived or only long-lived genes. To test this, we will first get 
@@ -498,55 +439,20 @@ lower.s <- anal.table$`Regulation.s vs control.s.cred.lower`
 upper.d <- anal.table$`Regulation.HL vs control.HL.cred.upper`
 lower.d <- anal.table$`Regulation.HL vs control.HL.cred.lower`
 
-# Instead of for loop
+# Count genes whose values fall within credible intervals
+# Still not sure what's up with the signs...
 sum(values.s < upper.s & values.s > lower.s) # 10827
-sum(values.s < max(upper.s, lower.s) & values.s > min(lower.s, upper.s)) # 10835, why?
-
-count.s <- 0
-for (i in 1:length(values.s)) {
-  value.s.i <- values.s[i]
-  # this because upper.s has at least some negative values where lower.s has positive ones
-  max.s.i <- max(upper.s[i], lower.s[i])
-  min.s.i <- min(upper.s[i], lower.s[i])
-  if (value.s.i < max(max.s.i, min.s.i) & value.s.i > min(max.s.i, min.s.i)) {
-    count.s <- count.s + 1
-  }
-}
-
-# Instead of for loop
-# What's going on with the signs?
 sum(values.d > upper.d & values.d < lower.d) # 10815
 
-count.d <- 0
-for (i in 1:length(values.d)) {
-  value.d.i <- values.d[i]
-  # this because upper.s has at least some negative values where lower.s has positive ones
-  max.d.i <- max(upper.d[i], lower.d[i])
-  min.d.i <- min(upper.d[i], lower.d[i])
-  if (value.d.i < max(max.d.i, min.d.i) & value.d.i > min(max.d.i, min.d.i)) {
-    count.d <- count.d + 1
-  }
-}
-count.s # 10827 
-count.d # 10815
-
 # Most values are indeed within the boundaries
-# As expected, d is harder to estimate: around 8000 out of 11000 genes
-# were estimated correctly, as opposed to around 10000 for synthesis rate
 # Credible intervals are too big, more than 95% of genes fulfil the condition
 # upper and lower are switched
-# omit fig4f, write results as percentage values
 ```
 
 This allows us to perform ROPE analysis [reference] to quantify significant
 changes in sigma and delta, and compare the results to those of the frequentist approach as implemented in DESeq2.
 
 ```{r}
-# EstimateRegulation already gave ROPE output, let's do DESeq
-# compute deseq2 values for new rna perturbed.s vs control
-# ground truth for roc: log2(GeneInfo(m)$true_s.perturbed.s/GeneInfo(m)$true_s.control)
-# if this is smaller than -0.25 or higher than 0.25, it's true
-# vector with true/false + vector with numbers that define an ordering
 m <- PairwiseDESeq2(m, "new", GetContrasts(m, contrast = c("Condition","control")), mode = "new",verbose=T)
 m <- PairwiseDESeq2(m, "old", GetContrasts(m, contrast = c("Condition","control")), mode="old",verbose=T)
 saveRDS(m, "regulation.step3.rds")
@@ -568,7 +474,7 @@ roc.rope.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d))
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
 roc.deseq.old.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`old.HL vs control.P`) 
-ggroc(list("ROPE" = roc.rope.old.d, "DESeq2" = roc.deseq.old.d), legacy.axes = TRUE) + ggtitle("Estimate of delta - old RNA")
+ggroc(list("ROPE" = roc.rope.old.d, "DESeq2" = roc.deseq.old.d), legacy.axes = TRUE) + ggtitle("Estimate of degradation rate - old RNA")
 ```
 
 New RNA, estimate of d
@@ -579,7 +485,7 @@ roc.rope.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d))
                anal.table$`Regulation.HL vs control.HL.ROPE`) 
 roc.deseq.new.d <- roc(abs(log2(anal.table$true_d/anal.table$true_d.perturbed.d)) >= 0.25, 
                anal.table$`new.HL vs control.P`) 
-ggroc(list("ROPE" = roc.rope.new.d, "DESEq2" = roc.deseq.new.d), legacy.axes = TRUE) + ggtitle("New RNA - estimate of delta")
+ggroc(list("ROPE" = roc.rope.new.d, "DESEq2" = roc.deseq.new.d), legacy.axes = TRUE) + ggtitle("Estimate of degradation rate - new RNA")
 ```
 
 Old RNA, estimate of s
@@ -590,7 +496,7 @@ roc.rope.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s))
                anal.table$`Regulation.s vs control.s.ROPE`) 
 roc.deseq.old.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`old.s vs control.P`) 
-ggroc(list("ROPE" = roc.rope.old.s, "DESeq2" = roc.deseq.old.s), legacy.axes = TRUE) + ggtitle("Old RNA - estimate of sigma")
+ggroc(list("ROPE" = roc.rope.old.s, "DESeq2" = roc.deseq.old.s), legacy.axes = TRUE) + ggtitle("Estimate of synthesis rate - old RNA")
 ```
 
 New RNA, estimate of s
@@ -601,74 +507,95 @@ roc.rope.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s))
                anal.table$`Regulation.s vs control.s.ROPE`) 
 roc.deseq.new.s <- roc(abs(log2(anal.table$true_s/anal.table$true_s.perturbed.s)) >= 0.25, 
                anal.table$`new.s vs control.P`) 
-ggroc(list("ROPE" = roc.rope.new.s, "DESeq2" = roc.deseq.new.s), legacy.axes = TRUE) + ggtitle("New RNA - estimate of sigma")
-
-# is abs(log2(true_d/true_d.perturbed.d)) > 0.25 LFC -> is regulated
-# predictor (rope): regulation.HL vs control.HL.ROPE
-# predictor (deseq): p-value (old.d.vs.control.P)
-# the package will calculate the confusion matrix :p
-# (same for s)
-# (same for new rna)
-# (same analysis for the other perturbation)
+ggroc(list("ROPE" = roc.rope.new.s, "DESeq2" = roc.deseq.new.s), legacy.axes = TRUE) + ggtitle("Estimate of synthesis rate - new RNA")
 ```
 
 # Comparison of degradation rate changes: full time course versus snapshot
 
 We compare delta between a snapshot from a single time point (2h) versus a
-full time course.
-
+full time course. We will use the real data set as the time course.
 ```{r}
-# Code. Same as before, but for a full time course.
-# Using many time points proves the point more strongly.
-seed = 1337
-f0 <- GetAnalysisTable(sars)$kinetics.Mock.Synthesis/log(2)*GetAnalysisTable(sars)$`kinetics.Mock.Half-life`
-control.full <- SimulateTimeCourse("control", GeneInfo(sars),
-                           s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
-                           d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
-                           dispersion = estimate.dispersion(GetTable(sars,type="count")),
-                           f0 = f0,
-                           s.variation = 1.05,
-                           d.variation = 1.05,
-                           timepoints = c(0, 0, 0, 1, 1, 1, 2, 2, 2, 4, 4, 4, 6, 
-                                          6, 6, 8, 8, 8),
-                           beta.approx = TRUE, num.reads = 5E7, seed = seed)
-unperturbed.full <- SimulateTimeCourse("unperturbed", GeneInfo(sars),
-                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
-                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
-                                 dispersion=estimate.dispersion(GetTable(sars,type="count")),
-                                 f0 = f0,s.variation = 1.05,d.variation = 1.05,timepoints = c(0, 0, 0, 1, 1, 1, 2, 2, 2, 4, 4, 4, 6, 6, 6, 8, 8, 8),
-                                 beta.approx = TRUE,
-                                 num.reads=5E7,
-                                 seed=seed*13)
-perturbed.d.full <- SimulateTimeCourse("HL", GeneInfo(sars),
-                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis,
-                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life` *2^rnorm(nrow(sars),0,1) ,
-                                 dispersion = estimate.dispersion(GetTable(sars,type="count")),
-                                 f0 = f0, s.variation = 1.05, d.variation = 1.05,
-                                 timepoints = c(0, 0, 0, 1, 1, 1, 2, 2, 2, 4, 4, 4, 6, 
-                                          6, 6, 8, 8, 8), beta.approx = TRUE,
-                                 num.reads=5E7, seed = seed*13*13)
-perturbed.s.full <- SimulateTimeCourse("s", GeneInfo(sars),
-                                 s = GetAnalysisTable(sars)$kinetics.Mock.Synthesis *2^rnorm(nrow(sars),0,1) ,
-                                 d = log(2)/GetAnalysisTable(sars)$`kinetics.Mock.Half-life`,
-                                 dispersion = estimate.dispersion(GetTable(sars,type="count")),
-                                 f0 = f0, s.variation = 1.05, d.variation = 1.05,
-                                 timepoints = c(0, 0, 0, 1, 1, 1, 2, 2, 2, 4, 4, 4, 6, 
-                                          6, 6, 8, 8, 8),
-                                 beta.approx = TRUE, num.reads = 5E7,
-                                 seed=seed*13*13*13)
-
-saveRDS(control.full, "reg.control.full.rds")
-saveRDS(unperturbed.full, "reg.unperturbed.full.rds")
-saveRDS(perturbed.s.full, "reg.perturbed.s.full.rds")
-saveRDS(perturbed.d.full, "reg.perturbed.d.full.rds")
-
-m.full <- merge(control = control.full, unperturbed = unperturbed.full, perturbed.d = perturbed.d.full, perturbed.s = perturbed.s.full)
-# In GeneInfo, they will be called true_d.name, true_s.name
-saveRDS(m.full, "regulation.full.timecourse.rds")
+# Load sars
+sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
+                  design=c("Condition",Design$dur.4sU,Design$Replicate))
+sars <- FilterGenes(sars) # gene filtering before subsetting to ensure they have the same genes
+# 9162 genes remain, rather than 10835 as before.
 ```
 
-They're basically the same (fig5).
+Subset the 2h time point:
+```{r}
+sars.2h <- subset(sars, columns = c("Mock.2h.A", "Mock.2h.B", "SARS.2h.A", "SARS.2h.B"))
+```
 
-I think the point is to focus on the d and s values of the d and s pertubations and compare those to the d and s values to those of the
-corresponding simulations from the snapshot.
+Normalize both:
+```{r}
+sars <- Normalize(sars)
+sars.2h <- Normalize(sars.2h)
+```
+
+Estimate regulation in the 2h snapshot:
+```{r}
+SetParallel()
+sars.2h <- EstimateRegulation(data = sars, name = "Regulation", contrasts = GetContrasts(sars, contrast = c("Condition","Mock")), reference.columns = FindReferences(sars, Condition == "Mock"), verbose = TRUE,
+                              sample.f0.in.ss = TRUE)
+```
+
+But the counts are not zero:
+
+```{r}
+View(head(GetData(sars.2h, mode.slot = "count")))
+```
+
+Estimate regulation in the full time course:
+
+```{r}
+SetParallel()
+sars <- EstimateRegulation(data = sars, name = "Regulation", contrasts = GetContrasts(sars, contrast = c("Condition","Mock"), group = "duration.4sU"), reference.columns = FindReferences(sars, Condition == "Mock", group = "duration.4sU"), verbose = TRUE, sample.f0.in.ss = TRUE)
+saveRDS(sars, "regulation.full.timecourse.rds")
+```
+Make the x and y axis for synthesis and degradation rate:
+(Do we need synthesis rates? The manuscript only mentions degradation
+for plotting, but maybe we need synthesis for commentary.)
+
+```{r}
+anal.table.sars <- GetAnalysisTable(sars)
+
+all(rownames(anal.table.sars) %in% rownames(anal.table)) # FALSE
+
+use.genes <- intersect(rownames(anal.table), rownames(anal.table.sars))
+
+# Subset both tables based on use.genes
+anal.table <- subset(anal.table, rownames(anal.table) %in% use.genes)
+anal.table.sars <- subset(anal.table.sars, rownames(anal.table.sars) %in% use.genes)
+
+all(rownames(anal.table) == rownames(anal.table.sars)) # TRUE
+
+# Let's say x axis is full time course and y axis is snapshot
+# Full time course
+sigma.x <- anal.table.sars$`Regulation.SARS vs Mock.2.s.log2FC`
+delta.x <- anal.table.sars$`Regulation.SARS vs Mock.2.HL.log2FC`
+
+# If I'm using the 2h simulation
+sigma.y <- anal.table$`Regulation.s vs control.s.log2FC`
+delta.y <- anal.table$`Regulation.HL vs control.HL.log2FC`
+
+# If I'm using the 2h subset of the real data
+# Something similarly named
+```
+
+Fig5:
+
+Plot for synthesis rates:
+
+```{r}
+df.sigma <- cbind(sigma.x, sigma.y)
+PlotScatter(df.sigma)
+```
+
+Plot for degradation rates:
+
+```{r}
+df.delta <- cbind(delta.x, delta.y)
+PlotScatter(df.delta)
+```
+
