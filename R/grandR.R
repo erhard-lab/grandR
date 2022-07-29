@@ -922,13 +922,13 @@ GetSignificantGenes=function(data,analyses=NULL,regex=TRUE,q.cutoff=0.05,LFC.cut
 #'
 #' @export
 #'
-FindReferences=function(data,reference=NULL, reference.function=NULL,group="Condition", as.list=FALSE,columns=NULL) {
+FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL, as.list=FALSE,columns=NULL) {
   if (!is.grandR(data)) stop("Data is not a grandR object!")
   if (!is.null(group) && !group %in% names(Coldata(data))) stop(sprintf("No %s in Coldata!",group))
 
   df=Coldata(data)
   if (!is.null(columns)) df=df[columns,]
-  df$group=as.character(if(is.null(group)) 1 else interaction(df[group],drop=FALSE,sep="."))
+  df$group=as.character(if(is.null(group)) "GROUP" else interaction(df[group],drop=FALSE,sep="."))
   ef=substitute(reference.function)
   if (!is.null(reference.function)) {
     setColnames=function(m,n) {colnames(m)=n; m}
@@ -942,6 +942,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group="Cond
   } else {
     e=substitute(reference)
     map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
+    print(map)
     pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
   }
   if (as.list) return(pairs)

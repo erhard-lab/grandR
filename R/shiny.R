@@ -23,7 +23,7 @@ ServeGrandR=function(data,
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
 	server=function(input, output,session) {
 	  dttab=DT::datatable(df,
-	                      callback = DT::JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
+	                      callback = DT::JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#downloadraw')); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
 	                      selection = 'single',
 	                      rownames = FALSE,
 	                      escape=-1,
@@ -40,7 +40,7 @@ ServeGrandR=function(data,
 	  if (any(grepl("\\.Half-life$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Half-life$",names(df))], 2)
 	  if (any(grepl("\\.Synthesis$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Synthesis$",names(df))], 2)
 	  output$tab <- DT::renderDataTable(dttab)
-	  output$download1 <- downloadHandler(
+	  output$download1 <- shiny::downloadHandler(
 	    filename = function() {
 	      paste0(title,"-", Sys.Date(), ".tsv")
 	    },
@@ -48,9 +48,33 @@ ServeGrandR=function(data,
 	      write.table(df[input$tab_rows_all,], file,row.names=F,col.names=T,quote=F,sep="\t")
 	    }
 	  )
+
+	  mods=list(`Raw data`=unlist(lapply(Slots(data),function(sl) if(sl %in% c("ntr","alpha","beta")) sl else paste0(c("","new.","old."),sl))),Analyses=Analyses(data))
+	  observeEvent(input$downloadraw, {
+	    shiny::showModal(shiny::modalDialog(
+	      shiny::selectInput("datamodality","Data modality",choices=mods,selected=DefaultSlot(data),selectize = FALSE),
+
+	      title="Download data",easyClose=TRUE,footer=tagList(
+	        modalButton("Cancel"),
+	        shiny::downloadButton("downloadrawdoit", "OK")
+	      )
+	    ))
+	  })
+	  output$downloadrawdoit <- shiny::downloadHandler(
+	    filename = function() {
+	      paste0(title,"-", Sys.Date(), ".tsv.gz")
+	    },
+	    content = function(file) {
+	      on.exit(removeModal())
+	      ggg=as.character(df[input$tab_rows_all,1])
+	      tab=GetTable(data,type=input$datamodality,ntr.na = FALSE,gene.info = TRUE,genes = ggg)
+	      write.table(tab, gzfile(file),row.names=F,col.names=T,quote=F,sep="\t")
+	    }
+	  )
+
 	  output$clip <- renderUI({
 	    nn=if(.row_names_info(df)<0) df[input$tab_rows_all,1] else rownames(df)[input$tab_rows_all]
-	    rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), modal=TRUE,icon("clipboard"))
+	    rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), modal=TRUE,shiny::icon("clipboard"))
 	  })
 	  observeEvent(input$clipbtn, {showNotification(
 	    sprintf("Copied %d names",length(input$tab_rows_all)),
@@ -161,7 +185,8 @@ ServeGrandR=function(data,
 	                    shiny::fluidRow(
         	    rclipboard::rclipboardSetup(),
         	    shiny::uiOutput("clip"),
-        	    shiny::downloadButton("download1","Download"),
+        	    shiny::downloadButton("download1","Table"),
+        	    shiny::actionButton("downloadraw","Data",icon = shiny::icon("download")),
         	    shiny::column(12, DT::dataTableOutput('tab'))
         	  ),
         	  shiny::conditionalPanel(
