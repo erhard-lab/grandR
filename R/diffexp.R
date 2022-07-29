@@ -248,6 +248,7 @@ EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSl
     B=contrasts[[n]]==-1
 
     ss=if (is.matrix(reference.columns)) list(A=apply(reference.columns[,Columns(data,A),drop=FALSE]==1,1,any),B=apply(reference.columns[,Columns(data,B),drop=FALSE]==1,1,any))
+    if (length(Columns(data,ss$A))==0 || length(Columns(data,ss$B))==0) stop("No reference columns found; check your reference.columns parameter!")
     dispersion.A = if (sum(ss$A)==1) rep(0.1,nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$A))
     dispersion.B = if (sum(ss$B)==1) rep(0.1,nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$B))
 

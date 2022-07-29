@@ -535,8 +535,8 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
              Synthesis=unname(par['s']),
              Degradation=unname(par['d']),
              `Half-life`=log(2)/unname(par['d']),  # FIXME
-             conf.lower=c(Synthesis=unname(conf.p[1,1]),Degradation=unname(conf.p[2,1]),`Half-life`=unname(log(2)/conf.p[2,2])),
-             conf.upper=c(Synthesis=unname(conf.p[1,2]),Degradation=unname(conf.p[2,2]),`Half-life`=unname(log(2)/conf.p[2,1])),
+             conf.lower=c(Synthesis=unname(conf.p[1,1]),Degradation=unname(conf.p[2,2]),`Half-life`=unname(log(2)/conf.p[2,1])),
+             conf.upper=c(Synthesis=unname(conf.p[1,2]),Degradation=unname(conf.p[2,1]),`Half-life`=unname(log(2)/conf.p[2,2])),
              f0=unname(par['s']/par['d']),
              logLik=logLik(fit),
              rmse=sqrt(mean(fit$residuals^2)),
