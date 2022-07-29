@@ -1,0 +1,300 @@
+---
+title: "Figure 3"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r grandR, echo = FALSE}
+suppressPackageStartupMessages({library(grandR)
+  library(dplyr)})
+```
+Load default setting data (in that case: 3 replicates, 1,2,4,8 h, 20M reads) 
+
+```{r load data,echo = FALSE}
+data_default= readRDS('~/grandR/grandR.simulations/Mock.default.all.methods.rds')
+```
+
+```{r plot function, echo=FALSE}
+plot_dist <- function(RDS,state = 'ss',cols = 'Half-life',border=0.1){
+tab = GetAnalysisTable(RDS,columns=cols)
+if (border == 1) tab = tab
+if (border < 1) {
+border1 = quantile(rowSums(GetTable(RDS,type='count')),border)
+genes = rownames(GetTable(RDS,type = 'count')[rowSums(GetTable(RDS,type='count')<= border1),])
+tab = tab[genes,] }
+tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+            measure.vars =c(paste0('ntr.',state,'.',cols),
+                            paste0('entr.',state,'.',cols),
+                            paste0('nlls.',state,'.',cols),
+                            paste0('lm.',state,'.',cols),
+            paste0('pulseR.',state,'.',cols))
+            )
+if (cols == 'Half-life')  tabm$Y = (log(2)/tabm$true_d)
+if (cols == 'Synthesis')  tabm$Y = tabm$true_s
+tabm$diff_relative = log2((tabm$Y/tabm$value))
+names(tabm)[names(tabm) == 'variable'] <- 'method'
+ggplot(tabm, aes(x=diff_relative, color=method, linetype = method)) + 
+   stat_ecdf(geom = "line")+ coord_cartesian(xlim=c(-1,1)) + xlab('log2 fold change') + ylab('cumulative frequency') + geom_vline(xintercept = 0)+
+  scale_color_discrete(name = "method",labels = c("ntr", "entr","nlls","lm",'pulseR'))+
+  scale_linetype_discrete(name = "method", labels = c("ntr", "entr","nlls","lm",'pulseR'))
+}
+```
+
+```{r plot function CI, echo=FALSE,message=FALSE}
+confidence_ok <- function(method,RDS,state = 'ss',cols='Half-life'){
+  tab = GetAnalysisTable(RDS,columns=cols)
+  if (cols == 'Half-life')  Y = (log(2)/tab$true_d)
+  if (cols == 'Synthesis')  Y = tab$true_s
+  x = ((Y >= tab[[paste0(method,'.',state,'.',cols,'.lower')]] )& (Y <= tab[[paste0(method,'.',state,'.',cols,'.upper')]]))
+  return(x)
+}
+
+plot_CI <- function(RDS,state = 'ss',cols = 'Half-life'){
+  tab = GetAnalysisTable(RDS,columns=cols)
+  
+  tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+            measure.vars =c(paste0('ntr.',state,'.',cols),
+                            paste0('entr.',state,'.',cols),
+                            paste0('nlls.',state,'.',cols),
+                            paste0('lm.',state,'.',cols)))
+                           # paste0('pulseR.',state,'.',cols)))
+if (cols == 'Half-life')  tabm$Y = (log(2)/tabm$true_d)
+if (cols == 'Synthesis')  tabm$Y = tabm$true_s
+borders = c(quantile(tabm$Y,1/3),quantile(tabm$Y,2/3),quantile(tabm$Y,3/3))
+tabm$HL <- sapply(tabm$Y, FUN = function(x) if(x<=borders[1]) 'short' else if ((x>=borders[1])&(x<=borders[2])) 'medium' else 'long')
+tabm$ok = c('ntr'= confidence_ok(method='ntr',RDS=RDS,state = state,cols=cols),
+           'entr'=confidence_ok(method='entr',RDS=RDS,state = state,cols=cols),
+           'nlls'=confidence_ok(method='nlls',RDS=RDS,state = state,cols=cols),
+           'lm'= confidence_ok(method='lm',RDS=RDS,state = state,cols=cols))
+           #'pulseR'= confidence_ok(method='pulseR',RDS=RDS,state = state,cols=cols))
+tabm$ok = as.numeric(tabm$ok)
+names(tabm)[names(tabm) == 'variable'] <- 'method'
+#aggregate(tabm$ok, by=list(tabm$method,tabm$HL), FUN=sum)
+
+tab2 = tabm %>% 
+      group_by(method, HL) %>%
+      summarise(ok = sum(na.omit(ok))/length(ok))
+tab2$method = sub('\\..*', '',tab2$method)
+tab2$HL = factor(tab2$HL,levels=c('short','medium','long'))
+ggplot(data=tab2,aes(x=method,y=ok,fill=HL))+geom_bar(aes(fill=HL),stat = 'identity',position='dodge2')+geom_text(aes(label=round(ok,digits=3)),hjust=0.5,vjust=-0.5,position = position_dodge(width = 1))+ geom_vline(xintercept = 0)+
+  ylab('Proportion of values inside CI') + xlab ('method') +theme_cowplot(12)
+}
+
+```
+Plots showing the relative deviation of inferred HLs from ground truth as cumulative distribution. (First Plot is steady state, Second Plot is non steady state)
+
+```{r plots, warning=FALSE,echo=FALSE, message=FALSE}
+plot_dist(data_default, state = 'ss', cols = 'Half-life',border=0.1)
+plot_dist(data_default,state = 'noss',border=0.1)
+plot_dist(data_default, state = 'ss', cols = 'Half-life',border=1)
+plot_dist(data_default,state = 'noss',border=1)
+```
+
+Barplots displaying the amount of estimated HLs inside the confidence intervals.To define short, medium and long half-lifes I calculated the bottom 3rd of the true HL etc. (First Plot is steady state, Second Plot is non steady state)
+
+```{r plots CI, warning=FALSE,echo=FALSE, message=FALSE}
+plot_CI(data_default,state = 'ss')
+plot_CI(data_default,state = 'noss')
+```
+
+Plots showing the relative deviation of estimated HLs from ground truth as cumulative distribution for different amounts of reads.(First Plot is steady state, Second Plot is non steady state)
+```{r}
+reads = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.timepoints.all_reads.rds')
+create_tab<- function(RDS,state='ss',cols='Half-life',border = 0.1){
+  reads = c('5E5','1E6','1E7','2E7','4E7','5E7')
+  tab = GetAnalysisTable(RDS,columns=cols)
+  if (border == 1) tab = tab
+  else { border1 = quantile(rowSums(GetTable(RDS,type='count')),border)
+  genes = rownames(GetTable(RDS,type = 'count')[rowSums(GetTable(RDS,type='count')<= border1),])
+  tab = tab[genes,] }
+  tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+              measure.vars = paste0(reads,".nlls.",state,".Half-life"))
+  tabm$reads = sapply(c(1:length(tabm$Gene)), function(i)(strsplit(as.character(tabm$variable[[i]]),'[.]')[[1]][1]))
+  tabm$reads <- factor(tabm$reads, levels = reads)
+  if (cols == 'Half-life')  tabm$Y = (log(2)/tabm$true_d)
+  if (cols == 'Synthesis')  tabm$Y = tabm$true_s
+  tabm$diff_relative = log2(tabm$Y/tabm$value)
+  names(tabm)[names(tabm) == 'variable'] <- 'method'
+  return(tabm)
+}
+
+plot_dist_reads <- function(table){
+ggplot(table, aes(x=diff_relative, color=reads, linetype = reads)) + 
+   stat_ecdf(geom = "line")+ xlim(-1,1) + xlab('log2 fold change') + ylab('cumulative frequency')+
+      geom_vline(xintercept = 0)
+}
+
+plot_dist_reads(create_tab(reads, state = 'ss',border = 1))
+plot_dist_reads(create_tab(reads, state = 'noss',border = 1))
+```
+
+
+Plots showing the relative deviation of estimated HLs from ground truth as cumulative distribution for different amounts of replicates.(First Plot is steady state, Second Plot is non steady state)
+```{r, echo =FALSE, warning=FALSE, message=FALSE}
+
+reps1 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.replicates1.rds')
+reps2 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.replicates2.rds')
+reps3 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.replicates3.rds')
+reps4 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.replicates4.rds')
+
+create_tab<- function(RDS,state='ss',cols='Half-life',border = 0.1){
+  tab = GetAnalysisTable(RDS,columns=cols)
+  if (border == 1) tab = tab
+  else { border1 = quantile(rowSums(GetTable(RDS,type='count')),border)
+  genes = rownames(GetTable(RDS,type = 'count')[rowSums(GetTable(RDS,type='count')<= border1),])
+  tab = tab[genes,] }
+  tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+              measure.vars =c(paste0('nlls.',state,'.',cols)))
+  tabm$reps = rep(deparse(substitute(RDS)),length(tabm$Gene))
+  if (cols == 'Half-life')  tabm$Y = (log(2)/tabm$true_d)
+  if (cols == 'Synthesis')  tabm$Y = tabm$true_s
+  tabm$diff_aboulte = tabm$value - tabm$Y
+  tabm$diff_relative = log2(tabm$Y/tabm$value)
+  names(tabm)[names(tabm) == 'variable'] <- 'method'
+  return(tabm)
+}
+plot_dist_reps <- function(table,state = 'ss',cols = 'Half-life'){
+numreps <- c(2,3,4,5)
+ggplot(table, aes(x=diff_relative, color=reps)) + 
+   stat_ecdf(geom = "line")+ xlab('log2 fold change') + ylab('cumulative frequency')+
+      geom_vline(xintercept = 0) + coord_cartesian(xlim=c(-1,1))+
+scale_linetype_discrete(name = "replicates", labels = numreps)+ scale_color_discrete(name = "replicates", labels = numreps)
+}
+state = 'ss'
+border = 0.1
+data <- dplyr::bind_rows(list(reps1=create_tab(reps1, state = state, border =border ),reps2=create_tab(reps2, state = state, border =border  ), reps3=create_tab(reps3, state = state , border =border ), reps4=create_tab(reps4, state = state , border =border )), .id = 'source')
+plot_dist_reps(data)
+state = 'ss'
+border = 1
+data <- dplyr::bind_rows(list(reps1=create_tab(reps1, state = state, border =border ),reps2=create_tab(reps2, state = state, border =border  ), reps3=create_tab(reps3, state = state , border =border ), reps4=create_tab(reps4, state = state , border =border )), .id = 'source')
+plot_dist_reps(data)
+```
+
+```{r, echo =FALSE, warning=FALSE, message=FALSE}
+state = 'noss'
+border = 0.1
+data <- dplyr::bind_rows(list(reps1=create_tab(reps1, state = state, border =border ),reps2=create_tab(reps2, state = state, border =border  ), reps3=create_tab(reps3, state = state , border =border ), reps4=create_tab(reps4, state = state , border =border )), .id = 'source')
+plot_dist_reps(data,state=state)
+border = 1
+data <- dplyr::bind_rows(list(reps1=create_tab(reps1, state = state, border =border ),reps2=create_tab(reps2, state = state, border =border  ), reps3=create_tab(reps3, state = state , border =border ), reps4=create_tab(reps4, state = state , border =border )), .id = 'source')
+plot_dist_reps(data,state=state)
+```
+Plots showing the relative deviation of estimated HLs from ground truth as cumulative distribution for different amounts of timepoints.(First Plot is steady state, Second Plot is non steady state)
+```{r, echo =FALSE, warning=FALSE, message=FALSE}
+tp.2 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.timepoints1.rds')
+tp.3 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.timepoints2.rds')
+tp.4 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.timepoints3.rds')
+tp.5 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.timepoints4.rds')
+tp.6 = readRDS('~/grandR/grandR.simulations/kinetics.nlls.nondefault/default.reads.timepoints5.rds')
+timepoints =  list(c(0,2), c(0,1), c(0,2,4), c(0,2,4,8), c(0,1,2,4,8))
+
+create_tab<- function(RDS,state='ss',cols='Half-life',border = 0.1){
+  tab = GetAnalysisTable(RDS,columns=cols)
+  if (border == 1) tab = tab
+  else { border1 = quantile(rowSums(GetTable(RDS,type='count')),border)
+  genes = rownames(GetTable(RDS,type = 'count')[rowSums(GetTable(RDS,type='count')<= border1),])
+  tab = tab[genes,] }
+  tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+              measure.vars =c(paste0('nlls.',state,'.',cols)))
+  tabm$reads = rep(deparse(substitute(RDS)),length(tabm$Gene))
+  if (cols == 'Half-life')  tabm$Y = (log(2)/tabm$true_d)
+  if (cols == 'Synthesis')  tabm$Y = tabm$true_s
+  tabm$diff_aboulte = tabm$value - tabm$Y
+  tabm$diff_relative = log2(tabm$Y/tabm$value)
+  names(tabm)[names(tabm) == 'variable'] <- 'method'
+  return(tabm)
+}
+plot_dist_tp <- function(table,state = 'ss',cols = 'Half-life'){
+timepoints =  list(c(0,2), c(0,1), c(0,2,4), c(0,2,4,8), c(0,1,2,4,8))
+
+timepoints =  as.character(timepoints)
+#timepoints = sapply(timepoints, function(i) as.character(i))
+ggplot(table, aes(x=diff_relative, color=reads, linetype = reads)) + geom_vline(xintercept = 0)+
+   stat_ecdf(geom = "line")+ xlim(-1,1) + xlab('log2 fold change') + ylab('cumulative frequency')  + scale_linetype_discrete(name = "timepoints", labels = timepoints )+ scale_color_discrete(name = "timepoints", labels = timepoints)
+}
+
+border = 1
+df1 = create_tab(tp.2,border = border)
+df2 = create_tab(tp.3,border = border)
+df3 = create_tab(tp.4,border = border)
+df4 = create_tab(tp.5,border = border)
+df5 = create_tab(tp.6,border = border)
+data <- dplyr::bind_rows(list(tp.2=df1, tp.3=df2, tp.4=df3, tp.5=df4, tp.6=df5), .id = 'source')
+plot_dist_tp(data)
+border = 0.1
+df1 = create_tab(tp.2,border = border)
+df2 = create_tab(tp.3,border = border)
+df3 = create_tab(tp.4,border = border)
+df4 = create_tab(tp.5,border = border)
+df5 = create_tab(tp.6,border = border)
+data <- dplyr::bind_rows(list(tp.2=df1, tp.3=df2, tp.4=df3, tp.5=df4, tp.6=df5), .id = 'source')
+plot_dist_tp(data)
+```
+```{r, echo =FALSE, warning=FALSE, message=FALSE}
+border = 1
+df1 = create_tab(tp.2,state='noss',border = border)
+df2 = create_tab(tp.3,state='noss',border = border)
+df3 = create_tab(tp.4,state='noss',border = border)
+df4 = create_tab(tp.5,state='noss',border = border)
+df5 = create_tab(tp.6,state='noss',border = border)
+data <- dplyr::bind_rows(list(tp.2=df1, tp.3=df2, tp.4=df3, tp.5=df4, tp.6=df5), .id = 'source')
+plot_dist_tp(data,state='noss')
+border = 0.1
+df1 = create_tab(tp.2,state='noss',border = border)
+df2 = create_tab(tp.3,state='noss',border = border)
+df3 = create_tab(tp.4,state='noss',border = border)
+df4 = create_tab(tp.5,state='noss',border = border)
+df5 = create_tab(tp.6,state='noss',border = border)
+data <- dplyr::bind_rows(list(tp.2=df1, tp.3=df2, tp.4=df3, tp.5=df4, tp.6=df5), .id = 'source')
+plot_dist_tp(data,state='noss')
+```
+```{r}
+tab = GetAnalysisTable(data,columns=c('Half-life'),analyses='nlls.ss')
+tab = tab[,-grep('upper|lower',names(tab))]
+tab$`nlls.ss.Half-life` = NULL
+tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+            measure.vars = names(tab)[grep('Half-life',names(tab))])
+  if (cols == 'Half-life')  tabm$Y = (log(2)/tabm$true_d)
+  tabm$diff_relative = log2(tabm$Y/tabm$value)
+  names(tabm)[names(tabm) == 'variable'] <- 'method'
+  tabm$reps = parse_number(sapply(c(1:length(tabm$method)), function(i) strsplit(as.character(tabm$method[i]),'[.]')[[1]][1]))+1
+  tabm$tps = sapply(c(1:length(tabm$method)), function(i) strsplit(as.character(tabm$method[i]),'[.]')[[1]][2])
+  reps2=as.character(list(c(0,1,2,4,8)))
+  names(reps2) = c('tp1')
+  reps3=as.character(list(c(0,1,2,4),c(0,2,4,8),c(0,1,2,8),c(0,1,4,8)))
+  names(reps3) = paste0('tp',c(1:length(reps3)))
+  reps4=as.character(list(c(0,1,2),c(0,2,4),c(0,2,8),c(0,4,8),c(0,1,4),c(0,1,8),c(0,1),c(0,2),c(0,4)))
+  names(reps4)=paste0('t',c(1:length(reps4)))
+  for (i in c(1:length(reps2))) tabm$tps[(tabm$reps==2)&tabm$tps==paste0('t',i)] = reps2[i]
+  for (i in c(1:length(reps3))) tabm$tps[(tabm$reps==3)&tabm$tps==paste0('t',i)] = reps3[i]
+  for (i in c(1:length(reps4))) tabm$tps[(tabm$reps==4)&tabm$tps==paste0('t',i)] = reps4[i]
+  ggplot(tabm, aes(x=diff_relative, color=tps)) +
+    stat_ecdf(geom = "line")+ xlim(-0.5,0.8) + xlab('log2 fold change') + ylab('cumulative frequency')+geom_vline(xintercept = 0)  + facet_wrap(~reps)
+```
+
+
+```{r}
+tab = GetAnalysisTable(data,columns=c('Half-life'),analyses='nlls.ss')
+tab = tab[,-grep('upper|lower',names(tab))]
+tab$`nlls.ss.Half-life` = NULL
+tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+            measure.vars = names(tab)[grep('Half-life',names(tab))])
+  if (cols == 'Half-life')  tabm$Y = (log(2)/tabm$true_d)
+  tabm$diff_relative = log2(tabm$Y/tabm$value)
+  names(tabm)[names(tabm) == 'variable'] <- 'method'
+  tabm$reps = parse_number(sapply(c(1:length(tabm$method)), function(i) strsplit(as.character(tabm$method[i]),'[.]')[[1]][1]))+1
+  tabm$tps = sapply(c(1:length(tabm$method)), function(i) strsplit(as.character(tabm$method[i]),'[.]')[[1]][2])
+  reps2=as.character(list(c(0,1,2,4,8)))
+  names(reps2) = c('tp1')
+  reps3=as.character(list(c(0,1,2,4),c(0,2,4,8),c(0,1,2,8),c(0,1,4,8)))
+  names(reps3) = paste0('tp',c(1:length(reps3)))
+  reps4=as.character(list(c(0,1,2),c(0,2,4),c(0,2,8),c(0,4,8),c(0,1,4),c(0,1,8),c(0,1),c(0,2),c(0,4)))
+  names(reps4)=paste0('t',c(1:length(reps4)))
+  for (i in c(1:length(reps2))) tabm$tps[(tabm$reps==2)&tabm$tps==paste0('t',i)] = reps2[i]
+  for (i in c(1:length(reps3))) tabm$tps[(tabm$reps==3)&tabm$tps==paste0('t',i)] = reps3[i]
+  for (i in c(1:length(reps4))) tabm$tps[(tabm$reps==4)&tabm$tps==paste0('t',i)] = reps4[i]
+  tabm = tabm[tabm$Y<1,]
+  ggplot(tabm, aes(x=diff_relative, color=tps)) +
+    stat_ecdf(geom = "line")+ xlim(-0.5,0.8) + xlab('log2 fold change') + ylab('cumulative frequency')+geom_vline(xintercept = 0)  + facet_wrap(~reps)
+```

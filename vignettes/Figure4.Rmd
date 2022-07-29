@@ -1,5 +1,5 @@
 ---
-title: "Figure 3"
+title: "Figure 4"
 output: 
   html_document:
     dev: "svg"
@@ -76,3 +76,82 @@ PlotScatter(df,x=`nlls.Mock.Half-life`,y=`lm.Mock.Half-life`,log=TRUE,xlim=c(0.3
 PlotScatter(df,x=`cnlls.Mock.Half-life`,y=`lm.Mock.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline() |
   PlotScatter(df,x=`cnlls.SARS.Half-life`,y=`lm.SARS.Half-life`,log=TRUE,xlim=c(0.3,50),ylim=c(0.3,30))+geom_abline()
 ```
+
+```{r fig.width=8,fig.height=4}}
+SetParallel()
+sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+sars=subset(sars,Condition=='Mock')
+SetParallel()
+sars = FilterGenes(sars)
+sars = Normalize(sars)
+
+df = readRDS('~/Dokumente/CalibratedTimes_changed1.rds')
+df = DropAnalysis(df)
+spike=(abs(log2(GeneInfo(df)$true_f0.noss/rowMeans(GetTable(sars,type="norm"))))<0.0045)
+df=Normalize(df,genes=spike)
+df2 = readRDS('~/Dokumente/CalibratedTimes_changed2.rds')
+df2 = DropAnalysis(df2)
+spike=(abs(log2(GeneInfo(df2)$true_f0.noss/rowMeans(GetTable(sars,type="norm"))))<0.0045)
+df2=Normalize(df2,genes=spike)
+df3 = readRDS('~/Dokumente/CalibratedTimes_changed3.rds')
+df3 = DropAnalysis(df3)
+spike=(abs(log2(GeneInfo(df3)$true_f0.noss/rowMeans(GetTable(sars,type="norm"))))<0.0045)
+df3=Normalize(df3,genes=spike)
+
+tab = data.frame('uncalibrated'=Coldata(df,'duration.4sU.original'),Replicate=Coldata(df,'Replicate'),Condition=Coldata(df,'Condition'),'calibrated 30'=Coldata(df,'calibrated_time'),'calibrated 35'=Coldata(df2,'calibrated_time'),'calibrated 25'=Coldata(df3,'calibrated_time'))
+tabm = melt(tab, id.vars = c('uncalibrated','Replicate','Condition'))
+
+ggplot(tabm,aes(uncalibrated,value,color= variable, group = Replicate))+geom_point(position = position_dodge(width=0.7)) + facet_wrap(~Condition) + theme_minimal_hgrid()+ scale_color_manual(name = '',c('calibrated 30','calibrated 35','calibrated 25'),values = c("#B2DF8A","#FB9A99","#A6CEE3"))+ylab('calibrated time')
+
+
+```
+
+```{r, fig.width=6,fig.height=4}
+
+
+lookup.table = paste0(colnames(df),'.30')
+names(lookup.table) = colnames(df)
+df = RenameColumns(df, map = lookup.table)
+df<-FitKinetics(df,name="kinetics.calibrated.30",type="nlls",time="calibrated_time",steady.state = c(Mock=T,SARS=F))
+df<-FitKinetics(df,name="kinetics.uncalibrated.30",type="nlls",time="duration.4sU",steady.state = c(Mock=T,SARS=F))
+lookup.table = paste0(colnames(df2),'.35')
+names(lookup.table) = colnames(df2)
+df2 = RenameColumns(df2, map = lookup.table)
+df2<-FitKinetics(df2,name="kinetics.calibrated.35",type="nlls",time="calibrated_time",steady.state = c(Mock=T,SARS=F))
+df2<-FitKinetics(df2,name="kinetics.uncalibrated.35",type="nlls",time="duration.4sU",steady.state = c(Mock=T,SARS=F))
+
+lookup.table = paste0(colnames(df3),'.25')
+names(lookup.table) = colnames(df3)
+df3 = RenameColumns(df3, map = lookup.table)
+df3<-FitKinetics(df3,name="kinetics.calibrated.25",type="nlls",time="calibrated_time",steady.state = c(Mock=T,SARS=F))
+df3<-FitKinetics(df3,name="kinetics.uncalibrated.25",type="nlls",time="duration.4sU",steady.state = c(Mock=T,SARS=F))
+
+df_all = merge(df,df2,df3)
+
+
+tab = GetAnalysisTable(df_all,columns=c('Half-life'))
+tab = tab[,-grep('noss',names(tab))]
+tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+            measure.vars = names(tab)[grep('Half-life',names(tab))])
+tabm$Y = (log(2)/tabm$true_d)
+tabm$diff_relative = log2(tabm$Y)- log2(tabm$value)
+names(tabm)[names(tabm) == 'variable'] <- 'method'
+tabm$state = sapply(c(1:length(tabm$method)), function(i) paste(strsplit(as.character(tabm$method[i]),'[.]')[[1]][2], strsplit(as.character(tabm$method[i]),'[.]')[[1]][3]))
+tabm$state= factor(as.character(tabm$state), levels = c('calibrated 25','uncalibrated 25','calibrated 30','uncalibrated 30','calibrated 35','uncalibrated 35'))
+ggplot(tabm, aes(x=diff_relative, color=state)) + stat_ecdf(geom = "line")+ coord_cartesian(xlim=c(-0.5,0.8)) + xlab('log2 fold change') + ylab('cumulative frequency') + geom_vline(xintercept = 0)+ scale_color_brewer(name = '',palette='Paired')
+
+```
+```{r}
+
+tab = GetAnalysisTable(df_all,c('noss'),columns=c('Half-life'))
+tabm = melt(tab, id.vars =c('Gene','Symbol','true_d','true_s'),
+            measure.vars = names(tab)[grep('Half-life',names(tab))])
+tabm$Y = (log(2)/tabm$true_d)
+tabm$diff_relative = log2(tabm$Y)- log2(tabm$value)
+names(tabm)[names(tabm) == 'variable'] <- 'method'
+tabm$state = sapply(c(1:length(tabm$method)), function(i) paste(strsplit(as.character(tabm$method[i]),'[.]')[[1]][2], strsplit(as.character(tabm$method[i]),'[.]')[[1]][3]))
+tabm$state= factor(as.character(tabm$state), levels = c('calibrated 25','uncalibrated 25','calibrated 30','uncalibrated 30','calibrated 35','uncalibrated 35'))
+ggplot(tabm, aes(x=diff_relative, color=state)) + stat_ecdf(geom = "line")+ coord_cartesian(xlim=c(-1.5,2.5)) + xlab('log2 fold change') + ylab('cumulative frequency') + geom_vline(xintercept = 0)+ scale_color_brewer(name = '',palette='Paired')
+```
+
+

@@ -57,7 +57,8 @@ The curves represent the fitted model for this gene. As pointed out above, there
 In order to estimate kinetic parameters globally we use the `FitKinetics` function. The default is the regression approach (ii). The other approaches can be used by supplying the `type` parameter. The `name` parameter is the analysis name to store the results.
 ```{r}
 SetParallel()
-sars<-FitKinetics(sars,name ="kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
+sars<-FitKinetics(sars,name ="nlls.kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
+sars<-FitKinetics(sars, type = 'ntr',name ="ntr.kinetics")
 Analyses(sars)
 ```
 
@@ -65,7 +66,7 @@ The results of the kinetic fitting can be further analyzed using the analysis ta
 
 ```{r,fig.height=3.5,fig.width=5}
 df<-GetAnalysisTable(sars)
-PlotScatter(df,"kinetics.Mock.Half-life","kinetics.SARS.Half-life",log=T)+geom_abline()
+PlotScatter(df,"nlls.kinetics.Mock.Half-life","nlls.kinetics.SARS.Half-life",log=T)+geom_abline()
 ```
 Plot comparing estimated Half-lifes in uninfected vs. infected samples for all genes.
 
