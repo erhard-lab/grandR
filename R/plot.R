@@ -213,12 +213,13 @@ PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
 #' @examples
 #' @export
 PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
-                     log.y=log, color=NA, remove.outlier=1.5, size=0.3,
+                     log.y=log, color=NA, remove.outlier=1.5, size=0.3, layers.below=NULL,
                      xlim=NULL, ylim=NULL, highlight=NULL, label=NULL, columns=NULL, density.margin = 'n', density.n = 100) {
   if (is.grandR(df)) {
-    df=cbind(GetAnalysisTable(df,gene.info = FALSE),GetTable(df,type=DefaultSlot(df)))
+    df=cbind(GetAnalysisTable(df,gene.info = FALSE),GetTable(df,type=DefaultSlot(df)),GeneInfo(df))
   }
   df=as.data.frame(df)
+
   if (!is.data.frame(df)) stop("df must be a data frame (or at least coercable into a data frame)")
   adaptInf=function(df,rx,ry) {
     # workaround to also "brush" infinity points at the border of the plane
@@ -249,7 +250,6 @@ PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
   B=if (is.null(y)) df[,ycol] else {
     eval(y,df,parent.frame())
   }
-
   dfnames[1]=if (is.null(x)) names(df[,xcol,drop=F]) else deparse(x)
   dfnames[2]=if (is.null(y)) names(df[,ycol,drop=F]) else deparse(y)
 
@@ -285,19 +285,17 @@ PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
     ylim=range(df$B[!is.infinite(df$B)])
   }
   if (is.na(color)) {
-    if (nrow(df)>1000) {
       df$color=density2d(df$A.trans, df$B.trans, n = density.n,margin = density.margin)
       colorscale=scale_color_viridis_c(name = "Density",guide="none")
-    } else {
-      df$color=rep(1,nrow(df))
-      colorscale=scale_color_manual(values="black",guide="none")
-    }
   } else {
     df$color=color
     cmap=setNames(unique(color),unique(color))
     colorscale=scale_color_manual(name = NULL,values=cmap)
   }
-  g=ggplot(df,aes(A,B,color=color))+
+
+  g=ggplot(df,aes(A,B,color=color))
+  if (!is.null(layers.below)) for (e in layers.below) g=g+e
+  g=g+
     geom_point(size=size)+
     colorscale+
     xlab(dfnames[1])+ylab(dfnames[2])
@@ -583,8 +581,8 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
 #' @examples
 #' @export
 
-PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE) {
-  df=GetData(data,genes=gene,mode.slot=paste0(c("new.","old."),slot),melt=T,coldata=T,ntr.na = FALSE)
+PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,...) {
+  df=GetData(data,genes=gene,mode.slot=paste0(c("new.","old."),slot),melt=T,coldata=T,ntr.na = FALSE,...)
   g=ggplot(df,aes(Name,Value,fill=Type))+
     geom_bar(stat="identity",position=position_stack())+
     scale_fill_manual(NULL,values = c('red','gray'))+
@@ -592,7 +590,7 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE) {
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),melt=F,coldata=T,ntr.na = FALSE)
+    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),melt=F,coldata=T,ntr.na = FALSE,...)
     g=g+geom_errorbar(data=df2,mapping=aes_string(y=slot,fill=NULL,ymin=paste0("(1-upper)*",slot),ymax=paste0("(1-lower)*",slot)),width=0)
   }
   g

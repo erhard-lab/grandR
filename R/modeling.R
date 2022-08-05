@@ -997,6 +997,7 @@ TransformKineticParameters=function(old=NULL,new=NULL,total=NULL,ntr=NULL,t=2,s=
 #' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
 #' @param sample.f0.in.ss whether or not to sample f0 under steady state conditions
 #' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
+#' @param beta.prior The beta prior for the negative binomial used to sample counts
 #' @param return.samples return the posterior samples of the parameters?
 #' @param return.points return the point estimates per replicate as well?
 #' @param N the posterior sample size
@@ -1024,10 +1025,12 @@ FitKineticsSnapshot=function(data,gene,columns,
                              slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL,
                              sample.f0.in.ss=TRUE,
                              hierarchical=TRUE,
+                             beta.prior=c(shape1=1.37,shape2=8.64),
                              return.samples=FALSE,
                              return.points=FALSE,
                              N=10000,N.max=N*10,
-                             conf.int=0.95) {
+                             conf.int=0.95
+                             ) {
     if (is.matrix(reference.columns)) reference.columns=apply(reference.columns[,Columns(data,columns),drop=FALSE]==1,1,any)
 
     alpha=GetData(data,mode.slot="alpha",genes=gene,columns = columns)
@@ -1051,9 +1054,9 @@ FitKineticsSnapshot=function(data,gene,columns,
             d.conf.int=c(-Inf,Inf)
         )
         if (return.samples)
-            re$samples=data.frame(s=numeric(0),d=numeric(0))
+            re$samples=data.frame(s=numeric(0),d=numeric(0),ntr=numeric(0),total=numeric(0),t=numeric(0),t0=numeric(0),f0=numeric(0))
         if (return.points)
-            re$points=data.frame(s=numeric(0),d=numeric(0))
+            re$points=data.frame(s=numeric(0),d=numeric(0),ntr=numeric(0),total=numeric(0),t=numeric(0),t0=numeric(0),f0=numeric(0))
         return(re)
     }
 
@@ -1069,7 +1072,6 @@ FitKineticsSnapshot=function(data,gene,columns,
     t0=if (is.null(time.experiment)) t else unique(alpha[[time.experiment]])-unique(ss[[time.experiment]])
     is.steady.state=any(reference.columns & columns)
 
-
     if (return.points)
         points=as.data.frame(if (is.steady.state) TransformSnapshot(ntr=alpha$Value/(alpha$Value+beta$Value),total=total$Value,t=t) else TransformSnapshot(ntr=alpha$Value/(alpha$Value+beta$Value),total=total$Value,t=t,t0=t0,f0=mean(ss$Value)))
 
@@ -1083,14 +1085,9 @@ FitKineticsSnapshot=function(data,gene,columns,
             param=TransformSnapshot(ntr=ntr,total=mean(total$Value),t=t,t0=t0,f0=f0)
         }
 
-        re=list(
-            s=param['s'],
-            d=param['d'],
-            s.conf.int=c(-Inf,Inf),
-            d.conf.int=c(-Inf,Inf)
-        )
-        if (return.samples)
-            re$samples=data.frame(s=numeric(0),d=numeric(0))
+        re=emptyres()
+        re$s=param['s']
+        re$d=param['d']
         if (return.points)
             re$points=points
         return(re)
@@ -1102,24 +1099,31 @@ FitKineticsSnapshot=function(data,gene,columns,
         fit=beta.approximate.mixture(alpha$Value,beta$Value)
         mod=function(N) rbeta(N,fit$a,fit$b)
     }
-
+    #sample.counts=function(N,x) 0.1+rnbinom(N,size=1/dispersion,mu=mean(x))
+    #sample.counts=function(N,x) rgamma(N,shape=1/dispersion,scale=mean(x)*dispersion)
+    # the conjugate prior for the negative binomial p is the beta distribution, and the posterior after observing x_1,...,x_n, is Beta(a+n/dispersion,b+sum x_i)
+    # pl=function(n=10,disp=0.1,mu=100) {x=rnbinom(n,size=1/disp,prob=(1/disp)/((1/disp)+mu)); pp=rbeta(1000,1.37+length(x)*1/disp,8.636+sum(x)); pp=(1-pp)/(pp*disp); plot(ecdf(pp)); abline(v=mu)}
+    sample.counts=function(N,x) {
+      pp=rbeta(N,beta.prior[1]+length(x)*1/dispersion,beta.prior[2]+sum(x))
+      (1-pp)/(pp*dispersion)
+    }
     sample.ss.with.f0=function(N) {
-        f0=0.1+rnbinom(N,size=1/dispersion,mu=mean(total$Value))
+        f0=sample.counts(N,total$Value)
         ntr=mod(N)
-        total=0.1+rnbinom(N,size=1/dispersion,mu=mean(total$Value))
-        TransformSnapshot(ntr=ntr,total=total,t=t,f0=f0,t0=t)
+        total=sample.counts(N,total$Value)
+        TransformSnapshot(ntr=ntr,total=total,t=t,f0=f0,t0=t,full.return=return.samples)
     }
     sample.ss.without.f0=function(N) {
         ntr=mod(N)
-        total=0.1+rnbinom(N,size=1/dispersion,mu=mean(total$Value))
-        TransformSnapshot(ntr=ntr,total=total,t=t)
+        total=sample.counts(N,total$Value)
+        TransformSnapshot(ntr=ntr,total=total,t=t,full.return=return.samples)
     }
     sample.non.ss=function(N) {
         if (t0<=0) stop("Experimental time is not properly defined (the steady state sample must be prior to each of A and B)!")
-        f0=0.1+rnbinom(N,size=1/dispersion,mu=mean(ss$Value))
-        total=0.1+rnbinom(N,size=1/dispersion,mu=mean(total$Value))
+        f0=sample.counts(N,ss$Value)
+        total=sample.counts(N,total$Value)
         ntr=mod(N)
-        TransformSnapshot(ntr=ntr,total=total,t=t,t0=t0,f0=f0)
+        TransformSnapshot(ntr=ntr,total=total,t=t,t0=t0,f0=f0,full.return=return.samples)
     }
     resample=function(FUN) {
         mat=FUN(N)
@@ -1139,7 +1143,6 @@ FitKineticsSnapshot=function(data,gene,columns,
     }
 
     samp=if (!is.steady.state) sample.non.ss else if (sample.f0.in.ss) sample.ss.with.f0 else sample.ss.without.f0
-
     samp=resample(samp)
 
     N=nrow(samp)
@@ -1155,10 +1158,9 @@ FitKineticsSnapshot=function(data,gene,columns,
         d.conf.int=dc
     )
     if (return.samples)
-        re$samples=data.frame(s=samp[,'s'],d=samp[,'d'])
+        re$samples=as.data.frame(samp)
     if (return.points)
         re$points=points
-
     re
 }
 
@@ -1172,12 +1174,13 @@ FitKineticsSnapshot=function(data,gene,columns,
 #' @param t the labeling duration
 #' @param t0 time before measurement at which f0 is total level (only necessary under non-steady-state conditions)
 #' @param f0 total level at t0 (only necessary under non-steady-state conditions)
+#' @param full.return also return the provided parameters
 #'
 #' @return a named vector for s and d
 #'
 #' @export
 #'
-TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL) {
+TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
     if (is.null(f0)) {
         d=-1/t*log(1-ntr)
         s=total*d
@@ -1208,7 +1211,13 @@ TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL) {
             s=new*d/(1-exp(-t*d))
         }
     }
-    if (length(s)>1) cbind(s=unname(s),d=unname(d)) else c(s=unname(s),d=unname(d))
+    if (full.return) {
+      if (is.null(t0)) t0=t
+      if (is.null(f0)) f0=unname(s/d)
+      if (length(s)>1) cbind(s=unname(s),d=unname(d),ntr=ntr,total=total,t=t,t0=t0,f0=f0) else c(s=unname(s),d=unname(d),ntr=ntr,total=total,t=t,t0=t0,f0=f0)
+    } else {
+      if (length(s)>1) cbind(s=unname(s),d=unname(d)) else c(s=unname(s),d=unname(d))
+    }
 }
 
 

@@ -942,7 +942,6 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
   } else {
     e=substitute(reference)
     map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
-    print(map)
     pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
   }
   if (as.list) return(pairs)

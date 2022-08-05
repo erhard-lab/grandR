@@ -237,8 +237,7 @@ PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total"
 #'
 #'
 #' @export
-#'
-EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, hierarchical=TRUE, verbose=FALSE) {
+EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
 
@@ -249,9 +248,8 @@ EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSl
 
     ss=if (is.matrix(reference.columns)) list(A=apply(reference.columns[,Columns(data,A),drop=FALSE]==1,1,any),B=apply(reference.columns[,Columns(data,B),drop=FALSE]==1,1,any))
     if (length(Columns(data,ss$A))==0 || length(Columns(data,ss$B))==0) stop("No reference columns found; check your reference.columns parameter!")
-    dispersion.A = if (sum(ss$A)==1) rep(0.1,nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$A))
-    dispersion.B = if (sum(ss$B)==1) rep(0.1,nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$B))
-
+    dispersion.A = if (sum(ss$A)==1) rep(0.1,nrow(data)) else if (!is.null(dispersion)) rep(dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$A))
+    dispersion.B = if (sum(ss$B)==1) rep(0.1,nrow(data)) else if (!is.null(dispersion)) rep(dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$B))
     if (verbose) {
       if (any(ss$A & A)) {
         cat(sprintf("Sampling from steady state for %s...\n",paste(colnames(data)[A],collapse = ",")))
@@ -265,10 +263,29 @@ EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSl
       }
     }
 
+    # obtain prior from expression values
+    get.beta.prior=function(columns,dispersion) {
+      ex=rowMeans(GetTable(data,type = slot, columns = columns))
+      ex=1/dispersion/(1/dispersion+ex)
+      E.ex=mean(ex)
+      V.ex=var(ex)
+      c(
+        shape1=(E.ex*(1-E.ex)/V.ex-1)*E.ex,
+        shape2=(E.ex*(1-E.ex)/V.ex-1)*(1-E.ex)
+        )
+    }
+    beta.prior.A=get.beta.prior(A,dispersion.A)
+    beta.prior.B=get.beta.prior(B,dispersion.B)
+    if (verbose) cat(sprintf("Beta prior for %s: a=%.3f, b=%.3f\n",paste(colnames(data)[A],collapse = ","),beta.prior.A[1],beta.prior.A[2]))
+    if (verbose) cat(sprintf("Beta prior for %s: a=%.3f, b=%.3f\n",paste(colnames(data)[B],collapse = ","),beta.prior.B[1],beta.prior.B[2]))
+
+    #TODO: change the ROPE to choose the region to be a credible interval
+
+
     re=plapply(1:nrow(data),function(i) {
     #for (i in 1:nrow(data)) { print (i);
-      fit.A=FitKineticsSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int)
-      fit.B=FitKineticsSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int)
+      fit.A=FitKineticsSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int)
+      fit.B=FitKineticsSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int)
       samp.a=fit.A$samples
       samp.b=fit.B$samples
 
@@ -308,8 +325,8 @@ EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSl
         s.cred.upper=unname(sc[2]),
         s.ROPE=ROPE.LFC(lfc.s,ROPE.max.log2FC),
         HL.log2FC=mean(lfc.HL),
-        HL.cred.upper=unname(hc[1]),
-        HL.cred.lower=unname(hc[2]),
+        HL.cred.lower=unname(hc[1]),
+        HL.cred.upper=unname(hc[2]),
         HL.ROPE=ROPE.LFC(lfc.HL,ROPE.max.log2FC)
         )
         )
