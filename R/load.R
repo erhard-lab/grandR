@@ -99,6 +99,7 @@ Semantics.time=function(s,name) {
 
   no4sU=c("nos4U","no4sU","-")
   time[s %in% no4sU]=0
+  s=gsub("_",".",s)
 
   h=grepl("[0-9.]+h(p.)?",s)
   time[h]=as.numeric(gsub("([0-9.]+)h(p.)?","\\1",s[h]))

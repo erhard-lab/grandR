@@ -753,12 +753,12 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #' sars <- Normalize(sars)
 #' SetParallel()
-#' sars<-CalibrateEffectiveLabelingTime(sars,steady.state=list(Mock=TRUE,SARS=FALSE))
+#' sars<-CalibrateEffectiveLabelingTimeKineticFit(sars,steady.state=list(Mock=TRUE,SARS=FALSE))
 #' Coldata(sars)
 #'
 #' @export
 #'
-CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",conf.int=0.95,steady.state=NULL,n.estimate=1000, n.iter=1000, verbose=FALSE,...) {
+CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",conf.int=0.95,steady.state=NULL,n.estimate=1000, n.iter=10000, verbose=FALSE,...) {
 
     conds=Coldata(data)
     if (is.null(conds$Condition)) {
@@ -770,13 +770,15 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
         if (verbose) cat(sprintf("Calibrating %s...\n",cond))
         sub=subset(data,columns=conds$Condition==cond)
         Condition(sub)=NULL
+        sub=DropAnalysis(sub)
 
         # restrict to top n genes stratified by ntr
         totals=rowSums(GetTable(sub,type=slot))
-        ntrs=rowMeans(GetTable(sub,type="ntr"),na.rm=TRUE)
-        ntr.cat=cut(ntrs,unique(quantile(ntrs,seq(0,1,by=0.1))),include.lowest = TRUE)
-        fil=plyr::ddply(data.frame(Gene=Genes(sub),totals,ntr.cat),.(ntr.cat),function(s) {
-           threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/length(unique(ntr.cat))))]
+        sub=FitKinetics(sub,type='nlls',slot=slot,time=time,return.fields="Half-life")
+        HLs=GetAnalysisTable(sub,prefix.by.analysis = FALSE)$`Half-life`
+        HL.cat=cut(HLs,c(0,2,4,6,8,Inf),include.lowest = TRUE)
+        fil=plyr::ddply(data.frame(Gene=Genes(sub),totals,HL.cat),.(HL.cat),function(s) {
+           threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/length(unique(HL.cat))))]
            data.frame(Gene=s$Gene,use=s$totals>=threshold)
         })
 
@@ -811,6 +813,74 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
     data=Coldata(data,re)
     data
 }
+
+#' Calibrate the effective labeling time by matching half-lives to a .reference
+#'
+#' The NTRs of each sample might be systematically too small (or large). This function identifies such systematic
+#' deviations and computes labeling durations without systematic deviations.
+#'
+#' @param data A grandR object
+#' @param reference.halflives a vector of reference Half-lives named by genes
+#' @param reference.columns the reference column description
+#' @param slot The data slot to take expression values from
+#' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
+#' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
+#' @param time.name The name in the column annotation table to put the calibrated labeling durations
+#' @param verbose verbose output
+#'
+#' @return
+#' A new grandR object containing the calibrated durations in the column data annotation
+#'
+#' @seealso \link{FitKineticsSnapshot}
+#'
+#'
+#' @export
+#'
+CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=NULL,reference.columns=NULL,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL,time.name="calibrated_time",verbose=FALSE) {
+
+  if (any(is.na(Genes(data,names(reference.halflives))))) stop("Not all names of reference.halflives are known gene names!")
+  names(reference.halflives)=Genes(data,names(reference.halflives))
+
+  fit.column=function(column) {
+    if (verbose) cat(sprintf("Starting %s...\n",column))
+    refcol=reference.columns
+    if (is.matrix(refcol)) refcol=apply(refcol[,Columns(data,column),drop=FALSE]==1,1,any)
+
+    df=data.frame(
+      ntr=GetTable(data,type ="ntr",columns = column,gene.info = FALSE)[,1],
+      total=GetTable(data,type=slot,columns = column,gene.info = FALSE)[,1],
+      ss=rowMeans(GetTable(data,type=slot,columns = refcol,gene.info = FALSE))
+    )
+    df$ref.HL=reference.halflives[rownames(df)]
+    df=df[is.finite(df$ref.HL),]
+
+    if (!is.null(time.experiment) && length(unique(Coldata(data)[refcol,time.experiment]))!=1) stop("Steady state has to refer to a unique experimental time!")
+
+    t=if (is.numeric(time.labeling)) time.labeling else Coldata(data)[column,time.labeling]
+    if (t==0) return(0)
+
+    t0=if (is.null(time.experiment)) t else Coldata(data)[column,time.experiment]-unique(Coldata(data)[refcol,time.experiment])
+    is.steady.state=refcol[Columns(data,column)]
+    if (is.steady.state) return(t)
+
+    hl=log(2)/TransformSnapshot(df$ntr,df$total,t,t0,f0=df$ss)[,'d']
+    use=hl<24 & df$ref.HL<24
+
+    fun=function(t) {
+      hl=log(2)/TransformSnapshot(df$ntr,df$total,t,t0,f0=df$ss)[,'d']
+      median(log2(hl/df$ref.HL)[use],na.rm=TRUE)
+    }
+    upper=t
+    while(fun(upper)<0) {upper=upper*2}
+    re=uniroot(fun,interval=c(0,upper))$root
+    if (verbose) cat(sprintf("Done  %s!\n",column))
+    re
+  }
+
+  ctimes=psapply(Columns(data),fit.column)
+  Coldata(data,time.name,ctimes)
+}
+
 
 #' Fit kinetic models to all genes.
 #'
@@ -863,9 +933,6 @@ CalibrateEffectiveLabelingTime=function(data,slot=DefaultSlot(data),time=Design$
 FitKinetics=function(data,name="kinetics",type=c("nlls","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,return.fields=c("Synthesis","Half-life","rmse"),return.extra=NULL,...) {
 
     fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nlls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
-    funs=switch(tolower(type[1]),ntr="FitKineticsGeneNtr",nlls="FitKineticsGeneLeastSquares",lm="FitKineticsGeneLogSpaceLinear")
-
-    if (funs=="FitKineticsGeneNtr" && !all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
 
     if (is.null(fun)) stop(sprintf("Type %s unknown!",type))
     result=plapply(Genes(data),
@@ -1057,6 +1124,7 @@ FitKineticsSnapshot=function(data,gene,columns,
             re$samples=data.frame(s=numeric(0),d=numeric(0),ntr=numeric(0),total=numeric(0),t=numeric(0),t0=numeric(0),f0=numeric(0))
         if (return.points)
             re$points=data.frame(s=numeric(0),d=numeric(0),ntr=numeric(0),total=numeric(0),t=numeric(0),t0=numeric(0),f0=numeric(0))
+        re$N=0
         return(re)
     }
 
@@ -1161,6 +1229,7 @@ FitKineticsSnapshot=function(data,gene,columns,
         re$samples=as.data.frame(samp)
     if (return.points)
         re$points=points
+    re$N=N
     re
 }
 

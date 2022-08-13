@@ -179,7 +179,7 @@ PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total"
     norm.mat=norm.mat[,!is.na(cond.vec)]
 
     cond.vec=cond.vec[!is.na(cond.vec)]
-    coldata=data.frame(comparisons=cond.vec)
+    coldata=data.frame(comparisons=factor(cond.vec,levels=as.character(1:length(groups))))
     mode.slot=get.mode.slot(data,mode.slot)
 
     dds <- DESeq2::DESeqDataSetFromMatrix(countData =cnt(mat),
@@ -237,7 +237,7 @@ PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total"
 #'
 #'
 #' @export
-EstimateRegulation=function(data,name,contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, verbose=FALSE) {
+EstimateRegulation=function(data,name="Regulation",contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
 

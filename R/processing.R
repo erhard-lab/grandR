@@ -56,10 +56,10 @@ ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name, max.HL=48, C
     lower=as.matrix(GetTable(data,type="lower",name.by = "Gene"))
     upper=as.matrix(GetTable(data,type="upper",name.by = "Gene"))
     hls = do.call(cbind,lapply(1:length(time),function(i) cbind(
-                                              pmin(comp.hl(p = upper[,i],time = time[i]),max.HL),
-                                              pmin(comp.hl(p = ntrs[,i],time = time[i]),max.HL),
-                                              pmin(comp.hl(p = lower[,i],time = time[i]),max.HL)
-                                              )))
+      pmin(comp.hl(p = upper[,i],time = time[i]),max.HL),
+      pmin(comp.hl(p = ntrs[,i],time = time[i]),max.HL),
+      pmin(comp.hl(p = lower[,i],time = time[i]),max.HL)
+    )))
     colnames(hls)=paste0(rep(c("lower.","tMAP.","upper."),ncol(ntrs)),rep(colnames(ntrs),each=3))
   }
   else {

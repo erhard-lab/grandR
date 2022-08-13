@@ -436,7 +436,11 @@ Columns=function(data,columns=NULL,analysis=NULL) {
 #' @export
 #'
 GeneInfo=function(data,column=NULL,value=NULL) {
-  if (is.null(column)) data$gene.info else {
+  if (is.null(column)) {
+    data$gene.info
+  } else if (is.null(value)) {
+    data$gene.info[[column]]
+  } else {
     data$gene.info[[colum]]=value
     data
   }
@@ -996,6 +1000,7 @@ Analyses=function(data) names(data$analysis)
 #' @export
 AddAnalysis=function(data,name,table,warn.present=TRUE) {
   if (!is.data.frame(table)) stop("Cannot add; analysis table must be a data frame!")
+  if (!all(Genes(data,rownames(table))==Genes(data))) stop("Analysis table must contain row names corresponding to all genes!")
   if (is.null(data$analysis)) data$analysis=list()
   if (is.null(data$analysis[[name]])) {
     data$analysis[[name]]=table

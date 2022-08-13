@@ -191,6 +191,23 @@ PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
 	plot(pl,main=name)
 }
 
+FormatCorrelation=function(method="pearson",coeff.format="%.2f",p.format="%.2g") {
+  function(x,y) {
+    if (length(x)!=length(y)) stop("Cannot compute correlation, unequal lengths!")
+    use=is.finite(x)&is.finite(y)
+    if (sum(use)<length(x)) warning(sprintf("Removed %d/%d non finite values while computing correlation!",sum(!use),length(x)))
+    x=x[use]
+    y=y[use]
+    cc=cor.test(x,y,method=method)
+    p.name=switch(method,pearson="R",spearman="\U03C1",kendall="\U03C4")
+    sprintf(
+      sprintf("%s=%s\np%s%s",p.name,coeff.format,if (cc$p.value<2.2e-16) "<" else "=",p.format),
+        cc$estimate,if (cc$p.value<2.2e-16) 2.2e-16 else cc$p.value
+    )
+  }
+}
+
+
 #' Make a scatter plot
 #' @param df the data frame that contains the data to be plotted
 #' @param xcol
@@ -210,11 +227,13 @@ PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
 #' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
 #' @param density.margin either 'n' (no renormalization), 'x' (the densities are normalized along the x axis) or 'y' (the densities are normalized along the y axis)
 #' @param density.n umber of grid points for density estimation
+#' @param correlation a function to format correlation statistics to be annotated (see details)
 #' @examples
 #' @export
 PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
                      log.y=log, color=NA, remove.outlier=1.5, size=0.3, layers.below=NULL,
-                     xlim=NULL, ylim=NULL, highlight=NULL, label=NULL, columns=NULL, density.margin = 'n', density.n = 100) {
+                     xlim=NULL, ylim=NULL, highlight=NULL, label=NULL, columns=NULL, density.margin = 'n', density.n = 100,
+                     correlation=NULL,correlation.x=-Inf,correlation.y=Inf,correlation.hjust=0.5,correlation.vjust=0.5) {
   if (is.grandR(df)) {
     df=cbind(GetAnalysisTable(df,gene.info = FALSE),GetTable(df,type=DefaultSlot(df)),GeneInfo(df))
   }
@@ -261,6 +280,8 @@ PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
 
   df$A.trans=if(log.x) log10(df$A) else df$A
   df$B.trans=if(log.y) log10(df$B) else df$B
+  df$A.trans.unclipped=df$A.trans
+  df$B.trans.unclipped=df$B.trans
 
   set.coord=remove.outlier!=FALSE || !is.null(xlim) || !is.null(ylim)
   if (set.coord) {
@@ -313,6 +334,17 @@ PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
     df2$label=""
     df2[label,"label"]=rownames(df2)[label]
     g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE)
+  }
+  if (!is.null(correlation)) {
+    if (correlation.x==-Inf) correlation.hjust=-0.1
+    if (correlation.x==Inf) correlation.hjust=1.1
+    if (correlation.y==-Inf) correlation.vjust=-0.5
+    if (correlation.y==Inf) correlation.vjust=1.5
+
+    if(log.x && correlation.x==-Inf) correlation.x=0
+    if(log.y && correlation.y==-Inf) correlation.y=0
+    cor.format=correlation(df$A.trans.unclipped,df$B.trans.unclipped)
+    g=g+annotate("text",x=correlation.x,y=correlation.y,label=cor.format,hjust=correlation.hjust,vjust=correlation.vjust)
   }
   if (set.coord) g=g+coord_cartesian(ylim=ylim,xlim=xlim)
   if (log.x) g=g+scale_x_log10()

@@ -120,7 +120,7 @@ SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,s.variation=1, d.vari
 
   num.reads=rep(num.reads,length(timepoints))
 
-  tt=gsub("0h","no4sU",paste0(timepoints,"h"))
+  tt=gsub("^h$","no4sU",gsub("[_0]+h$","h",gsub(".","_",sprintf("%.2fh",timepoints),fixed=TRUE)))
   names=as.character(plyr::ddply(data.frame(Name=factor(tt,levels=unique(tt))),.(Name),function(s) data.frame(Name=paste(condition,s$Name,LETTERS[1:length(s$Name)],sep=".")))$Name)
   coldata=MakeColdata(names,design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
   coldata$no4sU=timepoints==0
