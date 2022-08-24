@@ -5,29 +5,57 @@
 
 #' Build the type column for the gene info table.
 #'
-#' A list of functions. These are called one after the other by \code{\link{ReadGRAND}} or \code{\link{ReadGRAND3}} to build the \emph{Type} column in the \code{\link{GeneInfo}} table. The name of the first function returning TRUE for a row in the table is used as its \emph{type}.
+#' Returns a function to be used as \code{classify.genes} parameter for \code{\link{ReadGRAND}} and \code{\link{ReadGRAND3}}.
 #'
-#' @details This is by default given to the \emph{classify.genes} parameter of \code{\link{ReadGRAND}} and \code{\link{ReadGRAND3}}.
-#' It will assign the type \emph{mito} if the gene symbol starts with \emph{mt-}, \emph{ERCC} if it starts with \emph{ERCC} and \emph{Cellular} if the gene name starts with \emph{ENS}.
+#' @param use.default if TRUE, use the default type inference (priority after the user defined ones); see details
+#' @param drop.level if TRUE, drop unused types from the factor that is generated
+#' @param name.unknown the type to be used for all genes where no type was identified
+#' @param ... additional functions to define types (see details)
+#'
+#' @details This function returns a function. Usually, you do not use it ourself but \code{GeneType} is usually as \code{classify.genes} parameter
+#' for  \code{\link{ReadGRAND}} and \code{\link{ReadGRAND3}} to build the \emph{Type} column in the \code{\link{GeneInfo}} table. See the example
+#' to see how to use it directly.
+#'
+#' @details Each ... parameter must be a function that receives the gene info table and must return a logical vector, indicating for each row
+#' in the gene info table, whether it matches to a specific type. The name of the parameter is used as the type name.
+#'
+#' @details If a gene matches to multiple type, the first function returning TRUE for a row in the table is used.
+#'
+#' @details By default, this function will recognize mitochondrial genes (MT prefix of the gene symbol), ERCC spike-ins,
+#' and Ensembl gene identifiers (which it will call "cellular"). These three are the last functions to be checked (in case a user defined type via ...) also
+#' matches to, e.g., an Ensembl gene).
 #'
 #' @seealso \link{ReadGRAND}, \link{ReadGRAND3}
 #' @examples
-#' classi <- c(GeneType,
-#'            `SARS-CoV-2`=function(gene.info) gene.info$Symbol %in%
-#'                     c('ORF3a','E','M','ORF6','ORF7a','ORF7b','ORF8','N','ORF10','ORF1ab','S')
-#'            )
+#'
+#' viral.genes <- c('ORF3a','E','M','ORF6','ORF7a','ORF7b','ORF8','N','ORF10','ORF1ab','S')
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate),
-#'                   classify.genes=classi,
+#'                   classify.genes=GeneType(`SARS-CoV-2`=function(gene.info) gene.info$Symbol %in% viral.genes),
 #'                   verbose=TRUE)
 #' table(GeneInfo(sars)$Type)
 #'
+#' fun<-GeneType(viral=function(gene.info) gene.info$Symbol %in% viral.genes)
+#' table(fun(GeneInfo(sars)))
+#'
 #' @export
-GeneType=list(
-	mito=function(gene.info) grepl("^MT-",gene.info$Symbol,ignore.case=TRUE),
-	ERCC=function(gene.info) grepl("ERCC-[0-9]{5}",gene.info$Gene),
-	Cellular=function(gene.info) grepl("^ENS.*G\\d+$",gene.info$Gene)
-)
+GeneType=function(...,use.default=TRUE, drop.levels=TRUE, name.unknown="Unknown") {
+  ll=list(...)
+  ll=c(ll,list(
+  	mito=function(gene.info) grepl("^MT-",gene.info$Symbol,ignore.case=TRUE),
+  	ERCC=function(gene.info) grepl("ERCC-[0-9]{5}",gene.info$Gene),
+  	Cellular=function(gene.info) grepl("^ENS.*G\\d+$",gene.info$Gene)
+  ))
+  ll=c(ll,setNames(list(function(gene.info) rep(T,dim(gene.info)[1])),name.unknown))
+
+  function(gene.info) {
+    gene.info$Type=NA
+    for (i in length(ll):1) gene.info$Type[ll[[i]](gene.info)]=names(ll)[i]
+    re=factor(gene.info$Type,levels=names(ll))
+    if (drop.levels) droplevels(re) else re
+  }
+
+}
 
 
 
@@ -189,8 +217,7 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' if the RCurl package is installed, this can also be a URL
 #' @param design Either a design vector (see details), or a data.frame providing metadata for all columns (samples/cells),
 #' or a function that is called with the condition name vector and is supposed to return this data.frame.
-#' @param classify.genes A list of functions that is used to add the \emph{type} column to the gene annotation table
-#' @param Unknown If no function from \emph{classify.genes} to a row in the gene annotation table, this is used as the \emph{type}
+#' @param classify.genes A functions that is used to add the \emph{type} column to the gene annotation table
 #' @param read.percent.conv Should the percentage of conversions also be read?
 #' @param verbose Print status updates
 #' @param rename.sample function that is applied to each sample name before parsing (or NULL)
@@ -217,11 +244,6 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
 #' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
 #'
-#' @details The \link{classify.genes} list can be used to define gene types. Each element must be a function that returns
-#' either a logical or numeric vector that identifies genes (i.e. all entries that are TRUE, or numbers used as indices).
-#' The type of all identified genes then is the name of the list entry. If a gene receives multiple types, the first in
-#' the list is used!
-#'
 #' @seealso \link{GeneType},\link{MakeColdata},\link{Design.Semantics}
 #'
 #' @examples
@@ -229,11 +251,11 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #'
 #' @export
 #'
-ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType,Unknown=NA,read.percent.conv=FALSE, rename.sample=NULL, verbose=FALSE) {
+ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType(),read.percent.conv=FALSE, rename.sample=NULL, verbose=FALSE) {
   annotations=c("Gene","Symbol","Length")
   slots=c(`Readcount`="count",MAP="ntr",alpha="alpha",beta="beta")
   if (read.percent.conv) slots=c(slots,`Conversions`="conv",Coverage="cove")
-  re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,Unknown = Unknown,verbose = verbose,rename.sample = rename.sample)
+  re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,verbose = verbose,rename.sample = rename.sample)
   if (read.percent.conv) {
     re=AddSlot(re,"percent_conv",re$data$conv/re$data$cove)
     re=DropSlot(re,"conv|cove")
@@ -243,7 +265,7 @@ ReadGRAND=function(prefix, design=c(Design$Condition,Design$Replicate),classify.
 
 
 
-ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType,Unknown=NA,verbose=FALSE,sep="\t") {
+ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType(),verbose=FALSE,sep="\t") {
 
   tomat=function(m,names,cnames){
     m=as.matrix(m)
@@ -320,13 +342,9 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 
   coldata=MakeColdata(colnames(data)[firstnumeric:ncol(data)],design)
 
-  classify.genes=c(classify.genes,Unknown=function(gene.info) rep(T,dim(gene.info)[1]))
-  if (!is.na(Unknown)) names(classify.genes)[names(classify.genes)=="Unknown"]=Unknown
   gene.info = data.frame(Gene=as.character(data[[1]]),Symbol=as.character(data[[1]]),stringsAsFactors=FALSE)
   for (i in 1:(firstnumeric-1)) gene.info[[anno.names[i]]]=data[[i]]
-  gene.info$Type=NA
-  for (i in length(classify.genes):1) gene.info$Type[classify.genes[[i]](gene.info)]=names(classify.genes)[i]
-  gene.info$Type=factor(gene.info$Type,levels=names(classify.genes))
+  gene.info$Type=classify.genes(gene.info)
 
   re=list()
   re$count=tomat(data[,firstnumeric:ncol(data)],data$Gene,names(data)[firstnumeric:ncol(data)])
@@ -411,8 +429,8 @@ ReadGRAND3_sparse=function(prefix, design=c(Design$Library,Design$Sample,Design$
     rownames(beta)=gene.info$Gene
     re$beta=beta
   }
-  gene.info$Type=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
-  gene.info$Type=factor(gene.info$Type,levels=unique(gene.info$Type))
+  gene.info$Mode=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
+  gene.info$Mode=factor(gene.info$Mode,levels=unique(gene.info$Mode))
 
 
   # use make coldata instead. add no4sU column!
@@ -429,13 +447,13 @@ ReadGRAND3_sparse=function(prefix, design=c(Design$Library,Design$Sample,Design$
   re
 }
 
-ReadGRAND3_dense=function(prefix, design=c(Design$Condition,Design$Replicate), label="4sU",estimator="Binom",classify.genes=GeneType,Unknown=NA, rename.sample=NULL, verbose=FALSE) {
+ReadGRAND3_dense=function(prefix, design=c(Design$Condition,Design$Replicate), label="4sU",estimator="Binom",classify.genes=GeneType(), rename.sample=NULL, verbose=FALSE) {
   annotations=c("Gene","Symbol","Category","Length")
   slots=c("count","ntr","alpha","beta")
   names(slots)=c("Read count",sprintf("%s %s %s",label,estimator,c("NTR MAP","alpha","beta")))
   if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr")
 
-  re=read.grand.internal(description="GRAND-SLAM 3.0 dense data",prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,Unknown = Unknown,rename.sample = rename.sample,verbose = verbose)
+  re=read.grand.internal(description="GRAND-SLAM 3.0 dense data",prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,rename.sample = rename.sample,verbose = verbose)
   re
 }
 
@@ -490,7 +508,7 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
 }
 
 
-read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),slots, annotations,classify.genes=GeneType,Unknown=NA, rename.sample=NULL, verbose=FALSE, description="") {
+read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),slots, annotations,classify.genes=GeneType(), rename.sample=NULL, verbose=FALSE, description="") {
 
   if (!all(c("count","ntr") %in% slots) || !all(c("Gene","Symbol") %in% annotations)) stop("Invalid call to read.grand.internal!")
 
@@ -558,7 +576,9 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
 
   if (is.data.frame(design)) {
     if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(conds,collapse=", ")))
+    if (is.null(design$Name) || !all(design$Name==conds)) stop(paste0("Design parameter (table) must contain a Name column corresponding to the sample names!"))
     coldata=design
+    rownames(coldata)=coldata$Name
   } else if (is.function(design)) {
     coldata=design(conds)
     if (length(conds)!=nrow(coldata)) stop(paste0("Design parameter (function) is incompatible with input data: ",paste(conds,collapse=", ")))
@@ -600,13 +620,10 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   #cove = grepl("Coverage",names(data)) & !grepl("Double-Hit Coverage",names(data))
 
 
-  classify.genes=c(classify.genes,Unknown=function(gene.info) rep(T,dim(gene.info)[1]))
-  if (!is.na(Unknown)) names(classify.genes)[names(classify.genes)=="Unknown"]=Unknown
   gene.info = data.frame(Gene=as.character(data$Gene),Symbol=as.character(data$Symbol),stringsAsFactors=FALSE)
   for (a in setdiff(annotations,c("Gene","Symbol"))) gene.info[[a]]=data[[a]]
-  gene.info$Type=NA
-  for (i in length(classify.genes):1) gene.info$Type[classify.genes[[i]](gene.info)]=names(classify.genes)[i]
-  gene.info$Type=factor(gene.info$Type,levels=names(classify.genes))
+  gene.info$Type=classify.genes(gene.info)
+
 
   re=list()
   for (n in names(slots)) {

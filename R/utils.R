@@ -106,7 +106,7 @@ structure2vector=function(d,return.fields=NULL,return.extra=NULL) {
 #' @describeIn structure2vector Convert the output of the FitKinetics methods into a vector
 #' @param condition if the original grandR object had \code{\link{Condition}} set, which condition to extract (NULL otherwise)
 #' @export
-kinetics2vector=function(d,condition=NULL,return.fields=c("Synthesis","Half-life","rmse"),return.extra=NULL) structure2vector(if (is.null(condition)) d else d[[condition]],return.fields=return.fields,return.extra=return.extra)
+kinetics2vector=function(d,condition=NULL,return.fields=c("Synthesis","Half-life"),return.extra=NULL) structure2vector(if (is.null(condition)) d else d[[condition]],return.fields=return.fields,return.extra=return.extra)
 
 my.precision=function (x)
 {

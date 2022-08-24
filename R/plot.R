@@ -42,34 +42,37 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 
 #' Make a PCA plot
 #' @param data the grandr object that contains the data to plot
-#' @param type the type of data to plot; slot in the grandr object (eg "count")
+#' @param mode.slot the mode and slot of data to plot; slot in the grandr object (eg "count")
 #' @param ntop
-#' @aest parameter to set the visual attributes
+#' @param aest parameter to set the visual attributes
 #' @param x
 #' @param y
-#' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
+#' @param columns which columns (i.e. samples or cells) to perform PCA on (see details)
+#'
+#' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
+#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition="x").
+#'
 #' @return a PCA plot
 #' @examples
 #' @export
+PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=aes(color=Condition),x=1,y=2,columns=NULL) {
 
-PlotPCA=function(data, type="count", ntop=500,aest=aes(color=Condition),x=1,y=2,columns=NULL) {
+  columns=substitute(columns)
+  columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
+  columns=Columns(data,columns)
 
-  my.cbind=function(...) {
-    l=list(...)
-    l=lapply(1:length(l),function(i) as.matrix(setNames(l[[i]],paste0(type[i],".",names(l[[i]])))))
-    do.call("cbind",l)
-  }
+  mat=as.matrix(GetTable(data,type=mode.slot,columns=columns,ntr.na = FALSE))
 
-  mat=do.call("my.cbind",lapply(type,GetTable,data=data))
-	#mat=cnt(switch(type[1],Total=data$data$count,New=data$data$count*data$data$ntr,Old=data$data$count*(1-data$data$ntr)))
-	cd=do.call("rbind",lapply(1:length(type), function(i) cbind(data$coldata,data.frame(type=type[i]))))
+	cd=do.call("rbind",lapply(1:length(mode.slot), function(i) cbind(data$coldata,data.frame(type=mode.slot[i]))))
 
-	if (!is.null(columns)) {
-		mat=mat[,columns]
-		cd=cd[columns,]
-	}
+
+	mat=mat[,columns]
+	cd=cd[columns,]
+
 	rm.na=!apply(is.na(mat),2,sum)==nrow(mat)
 	mat=mat[,rm.na]
+	mat=cnt(mat)
 	cd=cd[rm.na,]
 	vsd <- DESeq2::vst(mat)
 
@@ -89,7 +92,7 @@ Transform=function(name,label=NULL) function(mat) {
   re
 }
 Transform.noop=function(label="Expression") function(m) {re=m; attr(re,"label")=label; re}
-Transform.Z=function(label="z score") function(m) {re=t(scale(t(m))); attr(re,"label")=label; re}
+Transform.Z=function(label="z score",center=TRUE,scale=TRUE) function(m) {re=t(scale(t(m),center=center,scale=scale)); attr(re,"label")=label; re}
 Transform.VST=function(label="VST") function(m) {re=vst(m); attr(re,"label")=label; re}
 Transform.logFC=function(LFC.fun=PsiLFC,lfc.reference=NULL, contrasts=NULL,...) {
   function(m) {
@@ -380,7 +383,8 @@ PlotScatter=function(df, xcol=1, ycol=2, x=NULL, y=NULL, log=FALSE, log.x=log,
 
 PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=PsiLFC,hl.quantile=0.8) {
 	w=GetTable(data,type="count",columns=w4sU)[,1]
-	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetTable(data,type="count",columns=no4sU)[,1]
+	nn=no4sU
+	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetTable(data,type="count",columns=nn)[,1]
 	use=!is.na(w+n)
 	w=w[use]
 	n=n[use]
@@ -526,14 +530,14 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,
                           aest=aes(color=Condition,shape=Replicate)) {
   new=paste0("new.",slot)
   old=paste0("old.",slot)
-  df=GetData(data,genes=gene,mode.slot=c(old,new),melt=F,coldata=T,ntr.na = FALSE)
+  df=GetData(data,genes=gene,mode.slot=c(old,new),by.rows=FALSE,coldata=T,ntr.na = FALSE)
   g=ggplot(df,modifyList(aes_string(old,new),aest))+
     geom_point(size=2)+
     scale_x_log10("Old RNA")+
     scale_y_log10("New RNA")
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper",slot),melt=F,coldata=T,ntr.na = FALSE)[,c("lower","upper",slot)])
+    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper",slot),by.rows=FALSE,coldata=T,ntr.na = FALSE)[,c("lower","upper",slot)])
     g=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)))
     g=g+geom_errorbarh(data=df,mapping=aes_string(xmin=paste0("(1-upper)*",slot),xmax=paste0("(1-lower)*",slot)))
   }
@@ -551,14 +555,14 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,
 
 PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,
                             aest=aes(color=Condition,shape=Replicate)) {
-  df=GetData(data,genes=gene,mode.slot=c("ntr",slot),melt=F,coldata=T,ntr.na = FALSE)
+  df=GetData(data,genes=gene,mode.slot=c("ntr",slot),by.rows=FALSE,coldata=T,ntr.na = FALSE)
   g=ggplot(df,modifyList(aes_string(slot,"ntr"),aest))+
     geom_point(size=2)+
     scale_x_log10("Total RNA")+
     scale_y_continuous("NTR")
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper"),melt=F,coldata=T,ntr.na = FALSE)[,c("lower","upper")])
+    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper"),by.rows=FALSE,coldata=T,ntr.na = FALSE)[,c("lower","upper")])
     g=g+geom_errorbar(data=df,mapping=aes(ymin=lower,ymax=upper))
   }
   g
@@ -580,7 +584,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
                               log=TRUE,
                               show.CI=FALSE,
                               aest=aes(color=Condition,shape=Replicate)) {
-  df=GetData(data,genes=gene,mode.slot=c(slot,"ntr"),melt=F,coldata=T,ntr.na = FALSE)
+  df=GetData(data,genes=gene,mode.slot=c(slot,"ntr"),by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
   df$value=switch(type[1],total=df[[slot]],new=df[[slot]]*df[["ntr"]],old=df[[slot]]*(1-df[["ntr"]]),stop(paste0(type," unknown!")))
   g=ggplot(df,modifyList(aes_string(group,"value"),aest))+
     geom_point(size=2,position=if(show.CI) position_dodge(width=0.4) else "identity")+
@@ -594,7 +598,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
 
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper"),melt=F,coldata=T,ntr.na = FALSE)[,c("lower","upper")])
+    df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper"),by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)[,c("lower","upper")])
     g=switch(type[1],
              total=g,
              new=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)),width=0,position=position_dodge(width=0.4)),
@@ -614,7 +618,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
 #' @export
 
 PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,...) {
-  df=GetData(data,genes=gene,mode.slot=paste0(c("new.","old."),slot),melt=T,coldata=T,ntr.na = FALSE,...)
+  df=GetData(data,genes=gene,mode.slot=paste0(c("new.","old."),slot),by.rows=TRUE,coldata=TRUE,ntr.na = FALSE,...)
   g=ggplot(df,aes(Name,Value,fill=Type))+
     geom_bar(stat="identity",position=position_stack())+
     scale_fill_manual(NULL,values = c('red','gray'))+
@@ -622,7 +626,7 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),show.CI=FALSE,...) 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),melt=F,coldata=T,ntr.na = FALSE,...)
+    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),by.rows=FALSE,coldata=TRUE,ntr.na = FALSE,...)
     g=g+geom_errorbar(data=df2,mapping=aes_string(y=slot,fill=NULL,ymin=paste0("(1-upper)*",slot),ymax=paste0("(1-lower)*",slot)),width=0)
   }
   g
@@ -646,7 +650,7 @@ PlotGeneTimeCourse=function(data,gene,group="Condition",time=Design$dur.4sU,
                             average.lines=TRUE,
                             log.y=TRUE,
                             show.CI=FALSE) {
-  df=GetData(data,genes=gene,mode.slot=slot,melt=F,coldata=T,ntr.na = FALSE)
+  df=GetData(data,genes=gene,mode.slot=slot,by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
   aes=modifyList(aes_string(time,"Value",group=group),aest)
   g=ggplot(df,mapping=aes)+
     geom_point(size=2)+
@@ -665,20 +669,24 @@ PlotGeneTimeCourse=function(data,gene,group="Condition",time=Design$dur.4sU,
   }
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),melt=F,coldata=T,ntr.na = FALSE)
+    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
     if (slot=="ntr") df2$ntr=1
     g=g+geom_errorbar(data=df2,mapping=aes_string(y=slot,fill=NULL,ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)),width=0)
   }
   g
 }
 
-Plot=function(fun=NULL,...,gg=NULL) {
-  function(data,gene) {
-    if (is.null(fun)) return(NULL)
-    re=fun(data=data,genes=gene,...)
-    if (!is.null(gg)) re=re+gg
-    re
-  }
-}
+#Plot=function(fun=NULL,...,gg=NULL) {
+#  function(data,gene) {
+#    if (is.null(fun)) return(NULL)
+#    re=fun(data=data,genes=gene,...)
+#    if (!is.null(gg)) re=re+gg
+#    re
+#  }
+#}
+
+
+RotatateAxisLabels=function(angle=90) theme(axis.text.x = element_text(angle = angle, vjust = if (abs(angle-90)<10) 0.5 else 1, hjust=1))
+
 
 

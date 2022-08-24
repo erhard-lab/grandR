@@ -47,7 +47,18 @@
 #' abline(0,1)
 #' # this should roughly be a uniform distibution, which means that the posterior distributions are properly approximated!
 #'
-SimulateReadsForSample=function(num.reads=2E7,rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),dispersion=0.05,beta.approx=FALSE,conversion.reads=FALSE,u.content=0.25,u.content.sd=0.05,read.length=75,p.old=1E-4,p.new=0.04, seed=NULL) {
+SimulateReadsForSample=function(num.reads=2E7,
+                                rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),
+                                ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),
+                                dispersion=0.05,
+                                beta.approx=FALSE,
+                                conversion.reads=FALSE,
+                                u.content=0.25,
+                                u.content.sd=0.05,
+                                read.length=75,
+                                p.old=1E-4,
+                                p.new=0.04,
+                                seed=NULL) {
 
   if(!is.null(seed)) set.seed(seed)
 

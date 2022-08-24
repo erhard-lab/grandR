@@ -230,7 +230,8 @@ DPlotToxicityTestLengthAll=function(data,pairs=NULL,TU.len="TU.len",...) {
 
 MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=PsiLFC,slot="count",correction=1,TU.len=NULL) {
   w=rowMeans(GetTable(data,type=slot,columns=w4sU))
-  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=no4sU))
+  col=no4sU
+  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=col))
   ntr=apply(GetTable(data,"ntr",columns=ntr),1,mean,rm.na=TRUE)
   use=!is.na(w+n+ntr)
   w=w[use]
@@ -266,7 +267,7 @@ PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr
 }
 
 PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",correction=1) {
-  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(v) rank(-v),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
+  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(v) rank(v),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
     ylim=c(-d,d)
@@ -281,7 +282,7 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+
     #geom_smooth(method="loess",formula=y~x)+
-    xlab("Half-life rank")+ylab("log FC 4sU/no4sU")+
+    xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
     coord_cartesian(ylim=ylim)+
     ggtitle(w4sU,subtitle = bquote(rho == .(rho) ~ "," ~ p ~ .(p)))
 }

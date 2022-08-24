@@ -54,9 +54,9 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
 
 #' Helper function to apply apply analysis methods to pairs of conditions
 #'
-#' @param data
+#' @param data the grandR object
 #' @param analysis
-#' @param name
+#' @param name.prefix the prefix of the new analysis name; a dot and the column names of the contrast matrix are appended
 #' @param contrasts
 #' @param mode.slot
 #' @param FUN
@@ -66,21 +66,21 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
 #' @export
 #'
 #' @examples
-ApplyContrasts=function(data,analysis,name,contrasts,mode.slot="count",verbose=FALSE,FUN,...) {
+ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot="count",verbose=FALSE,FUN,...) {
   mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
   mode.slot=get.mode.slot(data,mode.slot)
   for (n in names(contrasts)) {
     if (verbose) cat(sprintf("Computing %s for %s...\n",analysis,n))
     re.df=FUN(mat,contrasts[[n]]==1,contrasts[[n]]==-1,...)
-    data=AddAnalysis(data,name = paste0(name,".",n),table = re.df)
+    data=AddAnalysis(data,name = paste0(name.prefix,".",n),table = re.df)
   }
   data
 }
 
 #' Calculate the log fold changes between some data based on a contrast matrix
 #' Requires the LFC package
-#' @param data the grandR object that contains the data
-#' @param name
+#' @param data the grandR object
+#' @param name.prefix the prefix of the new analysis name; a dot and the column names of the contrast matrix are appended
 #' @param constrasts a contrast matrix that specifies where to compute LFC
 #' @param LFC.fun function to compute log fold change (default: psiLFC)
 #' @param mode one of "total"/"new"/"old"
@@ -89,14 +89,14 @@ ApplyContrasts=function(data,analysis,name,contrasts,mode.slot="count",verbose=F
 #' @param verbose
 #' @examples
 #' @export
-LFC=function(data, name = mode, contrasts, LFC.fun=PsiLFC, mode="total",
+LFC=function(data, name.prefix = mode, contrasts, LFC.fun=PsiLFC, mode="total",
              slot="count",
              normalization=NULL,
              verbose=FALSE,...) {
   mode.slot=paste0(mode,".",slot)
   if (!is.null(normalization))normalization=paste0(normalization,".",slot)
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
-  ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="LFC",FUN=function(mat,A,B) {
+  ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="LFC",FUN=function(mat,A,B) {
     if (!is.null(normalization)) {
       norm.mat=as.matrix(GetTable(data,type=normalization))
       nlfcs=LFC.fun(rowSums(norm.mat[,A,drop=FALSE]),rowSums(norm.mat[,B,drop=FALSE]),normalizeFun=function(i) i)
@@ -222,12 +222,13 @@ PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total"
 #' @param conf.int A number between 0 and 1 representing the size of the credible interval
 #' @param seed Seed for the random number generator
 #' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
+#' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
 #' @param verbose Vebose output
 #'
 #' @details The kinetic parameters s and d are computed using \link{TransformSnapshot}. For that, the sample either must be in steady state
 #' (this is the case if defined in the reference.columns matrix), or if the levels at a specific time point are known. This time point is
 #' defined by \code{time.experiment} (i.e. the difference between the steady state samples and the A or B samples themselves). If
-#' \code{time.experiment} is NULL, then the labeling time of the A or B samples is used (e.g. usefull if labeling was started concomitantly with
+#' \code{time.experiment} is NULL, then the labeling time of the A or B samples is used (e.g. useful if labeling was started concomitantly with
 #' the perturbation, and the steady state samples are unperturbed samples).
 #'
 #' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
@@ -237,7 +238,7 @@ PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total"
 #'
 #'
 #' @export
-EstimateRegulation=function(data,name="Regulation",contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, verbose=FALSE) {
+EstimateRegulation=function(data,name="Regulation",contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
 
@@ -284,8 +285,8 @@ EstimateRegulation=function(data,name="Regulation",contrasts,reference.columns,s
 
     re=plapply(1:nrow(data),function(i) {
     #for (i in 1:nrow(data)) { print (i);
-      fit.A=FitKineticsSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int)
-      fit.B=FitKineticsSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int)
+      fit.A=FitKineticsSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
+      fit.B=FitKineticsSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
       samp.a=fit.A$samples
       samp.b=fit.B$samples
 
@@ -333,6 +334,7 @@ EstimateRegulation=function(data,name="Regulation",contrasts,reference.columns,s
     },seed=seed)
 
     re.df=as.data.frame(t(simplify2array(re)))
+    rownames(re.df)=Genes(data)
 
     data=AddAnalysis(data,name = paste0(name,".",n),table = re.df)
   }
@@ -371,7 +373,7 @@ hierarchical.beta.posterior=function(a,b,
                   compute.grid=FALSE,
                   fak.below.max=1000,
                   res=100,
-                  plot=FALSE) {
+                  plot=FALSE,plot.prior=FALSE) {
   if (length(a)!=length(b)) stop("Unequal length of alpha and beta!")
  # if (length(a)<2) stop("<2 observations!")
   mu=a/(a+b)
@@ -380,6 +382,10 @@ hierarchical.beta.posterior=function(a,b,
    if (is.na(var.prior.min.sd) || var.prior.min.sd==0) var.prior.min.sd=sqrt(min(bvar(a,b)))
   max.size=mean(mu*(1-mu))/var.prior.min.sd^2
   f=function(x,o=max.size,s=max.size/100) log(1/(1+exp((x-o)/s))/s/log1p(exp(o/s)))
+  if (plot.prior) {
+    x=seq(0,max.size*1.3,length.out=1000)
+    plot(x,exp(f(x)),type='l',main=sd(a/(a+b)))
+  }
   lprior=function(pa,pb) f(pa+pb)
   lmarg.posterior=function(pa,pb) {
    # print(c(pa,pb,bmean(pa,pb),sqrt(bvar(pa,pb)),lprior(pa,pb),sum(lbeta(pa+a,pb+b)-lbeta(pa,pb))))
@@ -502,12 +508,16 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
 #'
 #' @param data A grandR object
 #' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
-#' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
+#' @param columns which columns (i.e. samples or cells) to return (see details)
 #' @param average matrix to compute the average (TRUE) or the sum (FALSE)
 #' @param v a named vector (the names indicate the sample names, the value the conditions to be summarized)
 #' @param subset logical vector of which elements of the vector v to use (or NULL: use all)
 #'
 #' @return A matrix to be multiplied with a count table
+#'
+#' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
+#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
 #' @details The method for grandR object simply calls the general method
 #'
@@ -521,8 +531,6 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
 #' head(as.matrix(GetTable(sars)) %*% GetSummarizeMatrix(sars))   # average by matrix multiplication
 #' head(GetTable(sars,summarize = TRUE))                          # shortcut, does the same
 #'
-#' GetSummarizeMatrix(c(A=1,B=1,C=2,D=3))
-#'
 #' @export
 #'
 GetSummarizeMatrix <- function (x, ...) {
@@ -532,7 +540,12 @@ GetSummarizeMatrix <- function (x, ...) {
 #' @export
 GetSummarizeMatrix.grandR=function(data,no4sU=FALSE,columns=NULL,average=TRUE) {
   if (is.null(Condition(data))) stop("Does not have conditions!")
-  columns=if (is.null(columns)) no4sU | !Coldata(data)$no4sU else columns&(no4sU | !Coldata(data)$no4sU)
+
+  columns=substitute(columns)
+  columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
+  columns=Columns(data,columns)
+  if (!no4sU) columns=setdiff(columns,Columns(data,no4sU))
+
   GetSummarizeMatrix.default(setNames(Condition(data),colnames(data)),subset=columns,average=average)
 }
 #' @rdname GetSummarizeMatrix

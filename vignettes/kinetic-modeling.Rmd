@@ -1,42 +1,47 @@
 ---
 title: "Kinetic modeling"
-output: rmarkdown::html_vignette
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    df_print: kable
+    fig_width: 7
+    fig_height: 6
+      
 vignette: >
   %\VignetteIndexEntry{Kinetic modeling}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+  
 ---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
+```
 
 One of the main applications of metabolic RNA labeling is to model the kinetics of RNA expression levels [[1]](https://doi.org/10.1093/bioinformatics/bty256)[[2]](https://doi.org/10.1016/j.molcel.2021.06.016). The most natural and widely used model is to describe the change of RNA levels $a(t)$ at time $t$ is via first order reactions by the differential equation:
 
 $$
 \frac{da}{dt}=\sigma - \delta \cdot a(t)
 $$
-Here $\sigma$ is the net synthesis rate of RNA and $\delta$ is the degradation rate. This differential equation can be solved analytically (see e.g. [[1]](https://doi.org/10.1093/bioinformatics/bty256)). Based on this, there are two ways implemented in grandR to estimate both $\sigma$ and $\delta$ by either using non-linear regression on the estimated new and old RNA levels [[2]](https://doi.org/10.1016/j.molcel.2021.06.016) or by a maximum likelihood approach using the posterior distribution of the (new to total RNA ratio) NTR values transformed to degradation rates [[1]](https://doi.org/10.1093/bioinformatics/bty256). Both approaches make use of multiple time points (labeling durations) and are able to estimate both $\sigma$ and $\delta$. The maximum likelihood approach can only be applied under steady state assumptions, whereas the regression approach strictly depends on accurate normalization across individal samples.
+Here $\sigma$ is the net synthesis rate of RNA and $\delta$ is the degradation rate. This differential equation can be solved analytically (see e.g. [[1]](https://doi.org/10.1093/bioinformatics/bty256)). Based on this, there are several ways implemented in grandR to estimate both $\sigma$ and $\delta$. Here, we will see how to fit this model using non-linear least squares (NLLS) regression on the estimated new and old RNA levels [[2]](https://doi.org/10.1016/j.molcel.2021.06.016).
 
 To perform an analysis of the RNA dynamics for data from [Finkel et al, Nature 2021](https://www.nature.com/articles/s41586-021-03610-3), we first load the grandR package and the read the GRAND-SLAM output table directly from zenodo:
 
 ```{r}
 suppressPackageStartupMessages({library(grandR)})
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
-                  design=c("Condition",Design$dur.4sU,Design$Replicate))
+                  design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
 ```
-
-Here it is important to specify the design vector. If we omit this parameter, we get the following error message:
-
-```{r error=TRUE}
-d <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz")
-```
-
-The most convenient way of getting sample annotation data in grandR is by making sure that the sample names follow a particular naming scheme: The names have to contain dots (.) to separate the fields for the column annotation table. E.g. the name \emph{Mock.no4sU.A} will be split into the fields \emph{Mock}, \emph{no4sU} and  \emph{A}. For such names, a design vector of length 3 has to be given to describe the meaning of each field. A reasonable design vector for the example would be `c("Cell","Time","Replicate")`. Some names are predefined in the list `Design` (as used above). The names given in the design vector might even have additional semantics: E.g. for the name `Design$dur.4sU` the values are interpreted (e.g. 4h is converted into the number 4, or 30min into 0.5, or no4sU into 0). Semantics can be user-defined (see the help page for `MakeColdata`). The sample annotation data can be accessed using:
+Refer to the [Loading data and working with grandR objects](loading-data.html) vignette to learn more about how to load data.
+Note that sample metadata has been automatically extracted from the sample names via the design parameter given to `ReadGRAND`:
 
 ```{r}
 Coldata(sars)
 ```
-Note that the labeling duration has indeed been interpreted, and the original values are also still available. This table describes the experimental setup: At 3h post infection, 4sU was added to the cells for 1,2,3 or 4h. The two no4sU samples are also 3h post infection. The infection time point can be added to this table via:
+
+At 3h post infection, 4sU was added to the cells for 1,2,3 or 4h. The two no4sU samples are also 3h post infection. The infection time point can be added to this table via:
 
 ```{r}
-Coldata(sars,"hpi")<-paste0(Coldata(sars)$duration.4sU+3,"hpi")
+Coldata(sars,"hpi")<-paste0(Coldata(sars,"duration.4sU")+3,"hpi")
 Coldata(sars)
 ```
 
@@ -50,73 +55,127 @@ Thus, we filter to only include genes that have at least 100 reads in at least 6
 sars <- FilterGenes(sars,minval = 100, mincol = 6) # as 100 reads and half of the sample is the default, this is identical to sars <- FilterGenes(sars)
 sars
 ```
-Note that the actual data is available in so-called 'slots'. `ReadGRAND` adds the read counts, new to total RNA ratios (NTRs) and information on the NTR posterior distribution (alpha,beta).
+The actual data is available in so-called "data slots". `ReadGRAND` adds the read counts, new to total RNA ratios (NTRs) and information on the NTR posterior distribution (alpha,beta).
 
 As a quick quality check, we can inspect a principal component analysis of all samples involved:
 ```{r,fig.width=7}
 PlotPCA(sars)
 ```
-Note that the samples are colored according to the \emph{Condition} annotation. \emph{Condition} has a special meaning in grandR, not only for `PlotPCA`, but also for other analyses (see below). The \emph{Condition} can be set conveniently using the `Condition` functions. For `PlotPCA`, the visual attributes can be adapted via a parameter:
+The samples are colored according to the \emph{Condition} annotation. \emph{Condition} has a special meaning in grandR, not only for `PlotPCA`, but also for other analyses (see below). The \emph{Condition} can be set conveniently using the `Condition` functions. For `PlotPCA`, the visual attributes can be adapted via a parameter:
 ```{r,fig.width=7}
 PlotPCA(sars,aest=aes(color=hpi,shape=Condition))
 ```
 There are no obvious problems with the samples, even though the virus infected 3hpi sample is the top-most whereas the other virus infected samples are ordered along infection time from bottom to top.
 
-As pointed out above, for the regression approach it is important to normalize the data:
+For the NNLS approach it is important to normalize the data:
 ```{r}
 sars<-Normalize(sars)
 sars
 ```
-Calling `Normalize` will add an additional slot which is set to be the default slot.
+Make sure that the normalization you use here is appropriate. Calling `Normalize` will add an additional slot which is set to be the default slot.
+
+Before we conduct any kinetic modeling, we inspect the toxicity plots:
+```{r warning=FALSE}
+PlotToxicityTestRankAll(subset(sars,Condition=="Mock"))
+```
+4sU labeling can have impact on transcription before cell viability suffers. Such an effect would be observable in these plots by a substantial negative correlation, i.e. genes with high NTR (which are to the right), should tend to be downregulated in the 4sU labeled sample vs an equivalent 4sU naive sample. It is important that these analyses are only done by comparing biologically equivalent samples (and not on the SARS infected samples here, as the no4sU sample is from 3h post infection, and all others are later). Here, there are such effects, but they are not very strong.
 
 Before we estimate kinetic parameters globally, we inspect an example:
 ```{r,fig.height=3.5,fig.width=5}
 PlotGeneKinetics(sars,"SRSF6")
 ```
 
-The curves represent the fitted model for this gene. As pointed out above, there are two ways to estimate the RNA kinetics in grandR. The default is the regression approach. The maximum likelihood approach can be used by supplying the `type` parameter. It is also possible to exclude samples from the fit, and to drop the assumption of steady state for the virus infected samples:
-```{r,fig.height=4.5,fig.width=7}
-(PlotGeneKinetics(sars,"SRSF6",bare.plot=T) |
-   PlotGeneKinetics(sars,"SRSF6",type = "ntr",bare.plot=T))  /
-  (PlotGeneKinetics(sars,"SRSF6",use.old=Coldata(sars)$Name!="SARS.no4sU.A",bare.plot=T) |
-     PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
+The curves represent the fitted model for this gene. The kinetic modeling by default makes the assumption of steady state gene expression, i.e. that as much RNA is transcribed per time unit as it is degraded. In mathematical terms, it is 
+$$
+ \frac{da}{dt}=\sigma - \delta \cdot a(t) \Leftrightarrow a(t)=\frac{\sigma}{\delta}
+$$
+For the virus infected samples ("SARS"), this is not the case. So we specify an additional parameter:
+```{r,fig.height=3.5,fig.width=5}
+PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
-
+Note that the fit actually changed. Now we are ready to fit the model for each gene. For that, we set `SetParallel()` which will set the number of worker threads to "number of cores"-2. We also specify the same `steady.state` parameter to `FitKinetics`:
 
 ```{r}
 SetParallel()
 sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
-df<-GetAnalysisTable(sars)
-PlotScatter(df,"kinetics.Mock.Half-life","kinetics.SARS.Half-life",log=T)+geom_abline()
 ```
 
-
-
-```{r,fig.height=3.5,fig.width=8}
-SetParallel()
-sars<-CalibrateEffectiveLabelingTime(sars,steady.state = c(Mock=T,SARS=F))
-PlotGeneKinetics(sars,"MYC",steady.state = c(Mock=T,SARS=F)) | PlotGeneKinetics(sars,"MYC",time = "calibrated_time",steady.state = c(Mock=T,SARS=F))
-
-sars<-FitKinetics(sars,name="norm_kinetics",slot="norm",time="calibrated_time",steady.state = c(Mock=T,SARS=F))
-sars<-FitKinetics(sars,name="ntr_kinetics",type="ntr")
-sars<-FitKinetics(sars,name="normntr_kinetics",type="ntr",time="calibrated_time")
-sars<-FitKinetics(sars,name="lm_kinetics",type="lm")
-
-df<-cbind(GetAnalysisTable(sars,c("kinetics.Mock"),regex=FALSE,columns="rmse",gene.info = FALSE),GetAnalysisTable(sars,c("norm_kinetics.Mock"),regex=FALSE,columns="rmse",gene.info = FALSE))
-PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()
+So far we do not see any results. The reason is that the result table has only been added to the grandR object:
+```{r}
+sars
 ```
+Note that there are apparently now two analyses tables. We can get more information using the `Analyses` function:
 
 ```{r}
-df<-cbind(
-  GetAnalysisTable(sars,c("kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE),
-  GetAnalysisTable(sars,c("norm_kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE),
-  GetAnalysisTable(sars,c("ntr_kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE),
-  GetAnalysisTable(sars,c("normntr_kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE),
-  GetAnalysisTable(sars,c("lm_kinetics.Mock"),columns="Half-life",regex=FALSE,gene.info = FALSE)
-  )
-PlotScatter(df,xcol=1,ycol=5,log=T)+geom_abline()
-(PlotScatter(df,xcol=1,ycol=2,log=T)+geom_abline()|
-PlotScatter(df,xcol=3,ycol=2,log=T)+geom_abline())/
-(PlotScatter(df,xcol=1,ycol=3,log=T)+geom_abline()|
-   PlotScatter(df,xcol=2,ycol=4,log=T)+geom_abline())
+Analyses(sars,description = TRUE)
+```
+This tells us that there are indeed two analysis tables, each having a Synthesis and a Half-life column. We can also retrieve the analysis results using the `GetAnalysisTable` function:
+```{r}
+df<-GetAnalysisTable(sars)
+head(df)
+```
+See the [Working with data matrices and analysis results](data-matrices-and-analysis-results.html) vignette for more information how to retrieve data from a grandR object. We can use the `PlotScatter` function to compare half-lives from Mock and SARS:
+
+```{r}
+PlotScatter(sars,x=`kinetics.Mock.Half-life`,y=`kinetics.SARS.Half-life`,log=TRUE)+geom_abline()
+```
+For more on `PlotScatter`, see the [plotting]{plotting.html} vignette. The `FitKinetics` function actually computes much more information per gene. To see this, let's fit a single gene:
+```{r}
+str(FitKineticsGeneLeastSquares(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE)))
+```
+To add additional statistics to the analysis table, we use the `return.fields` and `return.extra` parameters:
+```{r}
+small <- FilterGenes(sars,use=1:100)             # let's perform analyses on fewer genes, it's faster
+small<-FitKinetics(small,name = "with.loglik",steady.state=list(Mock=TRUE,SARS=FALSE),return.fields=c("Synthesis","Half-life","logLik"))
+Analyses(small,description = TRUE)
+```
+The logLik field could in principle be used to perform likelihood ratio test for significant changes in the kinetics between two or among more conditions. For values that are not 
+directly returned fields we use the `return.extra` parameter:
+
+```{r}
+small<-FitKinetics(small,name = "with.loglik",steady.state=list(Mock=TRUE,SARS=FALSE),return.extra=function(d) c(lower=d$conf.lower["Half-life"],upper=d$conf.upper["Half-life"]))
+Analyses(small,description = TRUE)
+```
+Here, not also that the analysis table were already present, and it just added the additional columns (in fact it replaced all columns except for logLik, as this was not part of the returned analysis table).
+
+We could also extract the relative residuals of new RNA from the model fit:
+```{r}
+sars<-FitKinetics(sars,"kinetics",steady.state=list(Mock=TRUE,SARS=FALSE),return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
+```
+Let's plot their distributions:
+```{r}
+df <- GetAnalysisTable(sars,columns = "Residuals",gene.info = FALSE,prefix.by.analysis = FALSE)
+df <- melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
+df$Sample=gsub("Residuals.","",df$Sample)
+ggplot(df,aes(Sample,`Relative residual`))+geom_boxplot()+RotatateAxisLabels()+geom_hline(yintercept = 0)+coord_cartesian(ylim=c(-1,1))
+```
+We see that the residuals from the 1h timepoints are systematically below 0. A canonical example of this is SMAD3:
+```{r}
+PlotGeneKinetics(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE))
+```
+For both Mock and SARS, we see that new RNA from 1h is well below the model fit, i.e. has negative residual. This indicates that the effective labeling time was much lower than the nominal labeling time of 1h for these samples, i.e. that actualy, these samples should move to the left. This can be rectified by temporal recalibration:
+
+```{r}
+sars <- CalibrateEffectiveLabelingTimeKineticFit(sars,steady.state=list(Mock=TRUE,SARS=FALSE))
+```
+This adds an additional column to the `Coldata` metadata table:
+```{r}
+Coldata(sars)
+```
+
+This recalibrated time can now be used to plot fitted models:
+```{r}
+PlotGeneKinetics(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE),time = "calibrated_time",exact.tics = FALSE)
+```
+... and also to fit the model to all genes:
+```{r}
+sars<-FitKinetics(sars,"corrected",time = "calibrated_time",steady.state=list(Mock=TRUE,SARS=FALSE),return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
+```
+
+This indeed corrected the residuals:
+```{r}
+df <- GetAnalysisTable(sars,analyses = "corrected", columns = "Residuals",gene.info = FALSE,prefix.by.analysis = FALSE)
+df <- melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
+df$Sample=gsub("Residuals.","",df$Sample)
+ggplot(df,aes(Sample,`Relative residual`))+geom_boxplot()+RotatateAxisLabels()+geom_hline(yintercept = 0)+coord_cartesian(ylim=c(-1,1))
 ```
