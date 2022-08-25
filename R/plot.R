@@ -58,7 +58,8 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #' @export
 PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,columns=NULL) {
 
-  if (is.null(aest) && !is.null(Condition(data))) aest=aes(color=Condition) else aest=aes()
+  if (is.null(aest) && !is.null(Condition(data))) aest=aes(color=Condition)
+  if (is.null(aest)) aest=aes()
 
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
