@@ -9,6 +9,9 @@ Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
   #map=dlply(df,.(group),function(s) as.character(s$Name[s$no4sU]))
   #pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
   if (discard.no4sU && "no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
+  if (any(sapply(pairs,function(a) length(a)>0))) warning("There were samples without corresponding no4sU sample!")
+  pairs=pairs[sapply(pairs,function(a) length(a)>0)]
+  if (length(pairs)==0) stop("No no4sU pairs found!")
   pairs
 }
 
@@ -200,15 +203,12 @@ EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC, t
 }
 
 PlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.len",...) {
-  if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
   setNames(lapply(names(pairs),function(n) PlotToxicityTestLength(data,n,pairs[[n]],TU.len = TU.len,...)),names(pairs))
 }
 PlotToxicityTestRankAll=function(data,pairs=Findno4sUPairs(data),...) {
-  if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
   setNames(lapply(names(pairs),function(n) PlotToxicityTestRank(data,n,pairs[[n]],...)),names(pairs))
 }
 PlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
-  if ("no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
   setNames(lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)),names(pairs))
 }
 

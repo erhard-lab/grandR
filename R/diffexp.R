@@ -1,7 +1,7 @@
 
 #' Compute a likelihood ratio test.
 #'
-#' The test is computed on any of total/old/new counts using DESeq2 based on two models
+#' The test is computed on any of total/old/new counts using DESeq2 based on two nested models
 #' specified using formulas.
 #'
 #' @param data A grandR object
@@ -47,7 +47,7 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
     Q=p.adjust(res.tot$pvalue,method="BH")
   )
 
-  AddAnalysis(data,name = paste0(name),table = df)
+  AddAnalysis(data,name = name,table = df)
 }
 
 
@@ -72,7 +72,7 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot="count",ve
   for (n in names(contrasts)) {
     if (verbose) cat(sprintf("Computing %s for %s...\n",analysis,n))
     re.df=FUN(mat,contrasts[[n]]==1,contrasts[[n]]==-1,...)
-    data=AddAnalysis(data,name = paste0(name.prefix,".",n),table = re.df)
+    data=AddAnalysis(data,name = if (is.null(name.prefix)) n else paste0(name.prefix,".",n),table = re.df)
   }
   data
 }
@@ -112,7 +112,7 @@ LFC=function(data, name.prefix = mode, contrasts, LFC.fun=PsiLFC, mode="total",
 #' Apply DESeq2 on pairs of data defined by a contrast matrix
 #' Requires the DESeq2 package
 #' @param data the grandR object that contains the data
-#' @param name
+#' @param name.prefix the prefix for the analysis name
 #' @param constrasts a contrast matrix
 #' @param separate
 #' @param mode one of "total"/"new"/"old"
@@ -121,7 +121,7 @@ LFC=function(data, name.prefix = mode, contrasts, LFC.fun=PsiLFC, mode="total",
 #' @param verbose
 #' @examples
 #' @export
-PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total",
+PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode="total",
                         normalization=mode, logFC=FALSE, verbose=FALSE) {
   mode.slot=paste0(mode,".count")
   normalization=paste0(normalization,".count")
@@ -199,7 +199,8 @@ PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total"
         Q=l$padj
       )
       if (logFC) re.df$LFC=l$log2FoldChange
-      data=AddAnalysis(data,name = paste0(name,".",n),table = re.df)
+      rownames(re.df)<-rownames(data)
+      data=AddAnalysis(data,name = if (is.null(name.prefix)) n else paste0(name.prefix,".",n),table = re.df)
     }
     return(data)
   }
@@ -208,7 +209,7 @@ PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total"
 #' Compute the posterior logFC distributions of RNA synthesis and degradation
 #'
 #' @param data the grandR object
-#' @param name the name of the analysis added to the grandR object
+#' @param name.prefix  the prefix for the analysis name
 #' @param contrasts A contrast matrix defining pairwise comparisons
 #' @param reference.columns either a reference matrix (\code{\link{FindReferences}}) to define reference samples for each sample in A and B, or a
 #' name list with names A and B containing logical vectors denoting the reference samples
@@ -238,7 +239,7 @@ PairwiseDESeq2=function(data, name=mode, contrasts, separate=FALSE, mode="total"
 #'
 #'
 #' @export
-EstimateRegulation=function(data,name="Regulation",contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
+EstimateRegulation=function(data,name.prefix="Regulation",contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
 
@@ -285,22 +286,22 @@ EstimateRegulation=function(data,name="Regulation",contrasts,reference.columns,s
 
     re=plapply(1:nrow(data),function(i) {
     #for (i in 1:nrow(data)) { print (i);
-      fit.A=FitKineticsSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
-      fit.B=FitKineticsSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
+      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
+      fit.B=FitKineticsGeneSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
       samp.a=fit.A$samples
       samp.b=fit.B$samples
 
       N=min(nrow(samp.a),nrow(samp.b))
-      if (N==0) return(c(
-        s.A=NA,
-        s.B=NA,
-        HL.A=NA,
-        HL.B=NA,
-        s.log2FC=NA,
+      if (N==0 || is.null(fit.A$samples)) return(c(
+        s.A=unname(fit.A$s),
+        s.B=unname(fit.B$s),
+        HL.A=log(2)/unname(fit.A$d),
+        HL.B=log(2)/unname(fit.A$d),
+        s.log2FC=unname(log2(fit.A$s/fit.B$s)),
         s.cred.lower=-Inf,
         s.cred.upper=-Inf,
         s.ROPE=NA,
-        HL.log2FC=NA,
+        HL.log2FC=unname(log2(fit.B$d/fit.A$d)),
         HL.cred.lower=-Inf,
         HL.cred.upper=Inf,
         HL.ROPE=NA
@@ -336,7 +337,7 @@ EstimateRegulation=function(data,name="Regulation",contrasts,reference.columns,s
     re.df=as.data.frame(t(simplify2array(re)))
     rownames(re.df)=Genes(data)
 
-    data=AddAnalysis(data,name = paste0(name,".",n),table = re.df)
+    data=AddAnalysis(data,name = if (is.null(name.prefix)) n else paste0(name.prefix,".",n),table = re.df)
   }
   data
 }
@@ -455,10 +456,27 @@ hierarchical.beta.posterior=function(a,b,
   re
 }
 
+ListGeneSets=function() {
+  descr=c(
+    H="Hallmark gene sets  are coherently expressed signatures derived by aggregating many MSigDB gene sets to represent well-defined biological states or processes.",
+    C1="Positional gene sets  for each human chromosome and cytogenetic band.",
+    C2="Curated gene sets  from online pathway databases, publications in PubMed, and knowledge of domain experts.",
+    C3="Regulatory target gene sets  based on gene target predictions for microRNA seed sequences and predicted transcription factor binding sites.",
+    C4="Computational gene sets  defined by mining large collections of cancer-oriented microarray data.",
+    C5="Ontology gene sets  consist of genes annotated by the same ontology term.",
+    C6="Oncogenic signature gene sets  defined directly from microarray gene expression data from cancer gene perturbations.",
+    C7="Immunologic signature gene sets  represent cell states and perturbations within the immune system.",
+    C8="Cell type signature gene sets  curated from cluster markers identified in single-cell sequencing studies of human tissue."
+  )
+  re=setNames(as.data.frame(msigdbr::msigdbr_collections()),c("category","subcategory","n"))
+  re$`category description` = descr[as.character(re$category)]
+  re
+}
+
 #' Perform gene-set enrichment and overrepresentation analysis for a specified
 #' set of genes
 #' @param data the grandR object that contains the data to analyze
-#' @param analysis the analysis to use (default: the first analysis)
+#' @param analysis the analysis to use (default: the first analysis) can be multiple, use . notation
 #' @param criteria
 #' @param species the species the genes belong to (eg "Homo sapiens")
 #' @param category
@@ -479,6 +497,10 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
   }
   if (is.null(species)) stop("Cannot recognize species! Specify one of msigdbr::msigdbr_species()$species_name")
 
+  if (is.null(category)) {
+    stop("You cannot perform gene set analyses on all available collections; use ListGeneSets() to see all available options for the category and subcategory parameter!")
+  }
+
   if (verbose) cat(sprintf("Querying msigdb for %s (%s) in %s ...\n",category,subcategory,species))
   gs = unique(as.data.frame(msigdbr::msigdbr(species = species, category = category, subcategory = subcategory)[,c('gs_name','ensembl_gene')]))
   if (verbose) cat(sprintf("Found %d gene sets!\n",length(unique(gs$gs_name))))
@@ -489,7 +511,7 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
     gs$gs_name=map[as.character(gs$gs_name)]
   }
 
-  genes=eval(substitute(GetSignificantGenes(data,analyses=analysis,criteria=criteria,as.table=TRUE,use.symbols=FALSE,gene.info=FALSE)),enclos = parent.frame()) # this is necessary to call the eval subs function!
+  genes=eval(substitute(GetSignificantGenes(data,analysis=analysis,criteria=criteria,as.table=TRUE,use.symbols=FALSE,gene.info=FALSE)),enclos = parent.frame()) # this is necessary to call the eval subs function!
   if (mode(genes[,1])=="numeric") {
     if (verbose) cat("Performing GSEA (using fgsea)...\n")
     clusterProfiler::GSEA(setNames(genes[,1],rownames(genes)),TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
@@ -544,7 +566,7 @@ GetSummarizeMatrix.grandR=function(data,no4sU=FALSE,columns=NULL,average=TRUE) {
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
   columns=Columns(data,columns)
-  if (!no4sU) columns=setdiff(columns,Columns(data,no4sU))
+  if (!no4sU) columns=setdiff(columns,Columns(data,Coldata(data,"no4sU")))
 
   GetSummarizeMatrix.default(setNames(Condition(data),colnames(data)),subset=columns,average=average)
 }
@@ -575,7 +597,7 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 #' @param coldata A column annotation table
 #' @param contrast A vector describing what should be contrasted
 #' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
-#' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
+#' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all); for grandR objects, see details
 #' @param group Split the samples or cells according to this column of the column annotation table (and adapt the of the output table)
 #' @param name.format Format string for generating the column from the contrast vector (see details)
 #'
@@ -596,10 +618,14 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 #' with the same \emph{group} factor level.
 #'
 #' @details The format string specifies the column name in the generated contrast matrix (which is used as the \emph{Analysis} name when calling
-#' \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}, etc.). The keywords \emph{$COL}, \emph{$A} and \emph{$B} are substituted
-#' by the respective elements of the contrast vector.
+#' \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}, etc.). The keywords \emph{$GRP}, \emph{$COL}, \emph{$A} and \emph{$B} are substituted
+#' by the respective elements of the contrast vector or the group this comparison refers to. By default, it is "$A vs $B" if group is NULL, and "$A vs $B.$GRP" otherwise.
 #'
 #' @details The method for grandR objects simply calls the general method
+#'
+#' @details For grandR objects, columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
+#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
 #' @seealso \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}
 #'
@@ -619,17 +645,27 @@ GetContrasts <- function (x, ...) {
 }
 #' @rdname GetContrasts
 #' @export
-GetContrasts.grandR=function(data,contrast="Condition",no4sU=FALSE,columns=NULL,group=NULL,name.format="$A vs $B") {
-  columns=if (is.null(columns)) no4sU | !Coldata(data)$no4sU else columns&(no4sU | !Coldata(data)$no4sU)
+GetContrasts.grandR=function(data,contrast="Condition",no4sU=FALSE,columns=NULL,group=NULL,name.format=NULL) {
+
+  columns=substitute(columns)
+  columns=if (is.null(columns)) Columns(data) else eval(columns,Coldata(data),parent.frame())
+  columns=Columns(data,columns)
+  if (!no4sU) columns=setdiff(columns,Columns(data,Coldata(data,"no4sU")))
+  columns=Columns(data) %in% columns
+
   GetContrasts.default(coldata=Coldata(data),contrast=contrast,group=group,columns=columns,name.format=name.format)
 }
 #' @rdname GetContrasts
 #' @export
-GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.format="$A vs $B") {
+GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.format=NULL) {
   if (!(length(contrast) %in% 1:3) || !contrast[1]%in%names(coldata) || (length(contrast)>1 && !all(contrast[2:length(contrast)] %in% coldata[,contrast[1]]))) stop("Illegal contrasts (either a name from design (all pairwise comparisons), a name and a reference level (all comparisons vs. the reference), or a name and two levels (exactly this comparison))")
 
-  make.name=function(contrast) gsub("$COL",contrast[1], gsub("$A",contrast[2], gsub("$B",contrast[3], name.format,fixed=TRUE),fixed=TRUE),fixed=TRUE)
-  make.col=function(contrast,use=TRUE) {
+  if (is.null(name.format)) {
+    name.format = if (is.null(group)) "$A vs $B" else "$A vs $B.$GRP"
+  }
+
+  make.name=function(contrast,group) gsub("$GRP",group,gsub("$COL",contrast[1], gsub("$A",contrast[2], gsub("$B",contrast[3], name.format,fixed=TRUE),fixed=TRUE),fixed=TRUE),fixed=TRUE)
+  make.col=function(contrast,group,use=TRUE) {
     re=rep(0,nrow(coldata))
     re[coldata[,contrast[1]]==contrast[2] & use]=1
     re[coldata[,contrast[1]]==contrast[3] & use]=-1
@@ -638,25 +674,25 @@ GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.form
       re=rep(0,nrow(coldata))
       re[columns]=save[columns]
     }
-    setNames(data.frame(re,check.names=FALSE),make.name(contrast))
+    setNames(data.frame(re,check.names=FALSE),make.name(contrast,group))
   }
 
   contr=if (length(contrast)==3) {
-    function(use=TRUE) make.col(contrast,use)
+    function(use=TRUE,group="") make.col(contrast,group,use)
   } else if (length(contrast)==2) {
-    function(use=TRUE) {
+    function(use=TRUE,group="") {
       if (is.null(columns)) columns=TRUE
       ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[columns,contrast[1]])) else unique(coldata[columns,contrast[1]])
       ll=setdiff(ll,contrast[2])
-      as.data.frame(lapply(ll,function(l) make.col(c(contrast[1],l,contrast[2]),use)),check.names=FALSE)
+      as.data.frame(lapply(ll,function(l) make.col(c(contrast[1],l,contrast[2]),group,use)),check.names=FALSE)
     }
   } else {
-    function(use=TRUE) {
+    function(use=TRUE,group="") {
       if (is.null(columns)) columns=TRUE
       ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[columns,contrast[1]])) else unique(coldata[columns,contrast[1]])
       if (length(ll)<2) stop("Less than 2 levels in contrast: ")
-      re=combn(ll,2,FUN=function(v) make.col(c(contrast,v),use)[,1])
-      colnames(re)=combn(ll,2,FUN=function(v) names(make.col(c(contrast,v),use))[1])
+      re=combn(ll,2,FUN=function(v) make.col(c(contrast,v),group,use)[,1])
+      colnames(re)=combn(ll,2,FUN=function(v) names(make.col(c(contrast,v),group,use))[1])
       as.data.frame(re,check.names=FALSE)
     }
   }
@@ -666,8 +702,7 @@ GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.form
     covvec=interaction(coldata[group],drop=FALSE,sep=".")
     names=levels(covvec)
     as.data.frame(lapply(levels(covvec),function(bin) {
-      r=contr(use=covvec==bin)
-      setNames(r,paste0(names(r),".",bin))
+      r=contr(use=covvec==bin,group=bin)
     }),check.names=FALSE)
   }
   re=re[,!apply(re==0,2,all),drop=FALSE]
@@ -702,3 +737,4 @@ NormalizeEffectiveLabeling=function(data,reference=colnames(data),slot="norm",ve
 
   data
 }
+

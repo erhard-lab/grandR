@@ -174,6 +174,85 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 
 
 
+#' Fit kinetic models to all genes.
+#'
+#' Fit the standard mass action kinetics model of gene expression by different methods. Some methods require steady state assumptions, for others
+#' data must be properly normalized. The parameters are fit per \link{Condition}.
+#'
+#' @param data A grandR object
+#' @param name.prefix the prefix of the analysis name to be stored in the grandR object
+#' @param type Which method to use (either one of "full","ntr","lm")
+#' @param slot The data slot to take expression values from
+#' @param time The column in the column annotation table representing the labeling duration
+#' @param conf.int A number between 0 and 1 representing the size of the confidence interval
+#' @param return.fields which statistics to return (see details)
+#' @param return.extra additional statistics to return (see details)
+#' @param ... forwarded to \code{\link{FitKineticsGeneNtr}}, \code{\link{FitKineticsGeneLeastSquares}} or \code{\link{FitKineticsGeneLogSpaceLinear}}
+#' @return
+#' A new grandR object with the fitted parameters as an analysis table
+#'
+#' @details The start of labeling for all samples should be the same experimental time point. The fit gets more precise with multiple samples from multiple
+#' labeling durations.
+#'
+#' @details The standard mass action kinetics model of gene expression arises from the following differential equation:
+#'
+#' @details \deqn{df/dt = s - d  f(t)}
+#'
+#' @details This model assumes constant synthesis and degradation rates. Based on this, there are different ways for fitting the parameters:
+#' \itemize{
+#'   \item{\link{FitKineticsGeneLeastSquares}: non-linear least squares fit on the full model; depends on proper normalization; can work without steady state; assumption of homoscedastic gaussian errors is theoretically not justified}
+#'   \item{\link{FitKineticsGeneLogSpaceLinear}: linear model fit on the old RNA; depends on proper normalization; assumes steady state for estimating the synthesis rate; assumption of homoscedastic gaussian errors in log space is problematic and theoretically not justified}
+#'   \item{\link{FitKineticsGeneNtr}: maximum a posteriori fit on the NTR posterior transformed to the degradation rate; as it is based on the NTR only, it is independent on proper normalization; assumes steady state; theoretically well justified}
+#' }
+#'
+#' @details This function is flexible in what to put in the analysis table. You can specifiy the statistics using return.fields and return.extra (see \code{\link{kinetics2vector}})
+#'
+#' @seealso \link{FitKineticsGeneNtr}, \link{FitKineticsGeneLeastSquares}, \link{FitKineticsGeneLogSpaceLinear}
+#'
+#' @examples
+#' SetParallel()
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#' sars <- subset(sars,Coldata(sars)$Cell=="Mock")
+#' sars<-FitKinetics(sars,name="kinetics.ntr",type='ntr')
+#' sars<-Normalize(sars)
+#' sars<-FitKinetics(sars,name="kinetics.nlls",type='full')
+#' sars<-FitKinetics(sars,name="kinetics.lm",type='lm')
+#' head(GetAnalysisTable(sars,columns="Half-life"))
+#'
+#' @export
+#'
+FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,return.fields=c("Synthesis","Half-life"),return.extra=NULL,...) {
+
+  fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nlls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
+
+  if (is.null(fun)) stop(sprintf("Type %s unknown!",type))
+  result=plapply(Genes(data),
+                 fun,
+                 data=data,
+                 slot=slot,time=time,conf.int=conf.int,
+                 ...)
+
+  adder=function(cond) {
+    tttr=function(re) {
+      if (is.matrix(re)) as.data.frame(t(re)) else setNames(data.frame(re),names(kinetics2vector(result[[1]],condition=cond,return.fields=return.fields,return.extra=return.extra)))
+    }
+    slam.param=tttr(sapply(result,kinetics2vector,condition=cond,return.fields=return.fields,return.extra=return.extra))
+    rownames(slam.param)=Genes(data,use.symbols = FALSE)
+    name=if (is.null(name.prefix)) cond else if(is.null(cond)) name else paste0(name,".",cond)
+    AddAnalysis(data,name=name,slam.param)
+  }
+
+  if (!is.null(Condition(data))) {
+    for (cond in levels(Condition(data))) data=adder(cond)
+  } else {
+    data=adder(NULL)
+  }
+  data
+}
+
+
+
 #' Fit a kinetic model according to non-linear least squares.
 #'
 #' Fit the standard mass action kinetics model of gene expression using least squares (i.e. assuming gaussian homoscedastic errors) for the given gene.
@@ -790,8 +869,8 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
             tt=init
             tt[use]=times
             Coldata(sub,Design$dur.4sU)=tt
-        #    fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]],...)
-            fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]])
+            fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]],...)
+        #    fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]])
             re=sum(GetAnalysisTable(fit,gene.info=FALSE)[,1])
         #    fit=FitKinetics(sub,return.fields='Half-life',compute.residuals=TRUE,slot=slot,steady.state=steady.state[[cond]],return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
           #  fit=FitKinetics(sub,return.fields='Half-life',compute.residuals=TRUE,slot=slot,steady.state=steady.state[[cond]],return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"],...)
@@ -804,6 +883,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
             #cat("\n")
             re
         }
+
         init=Coldata(sub)[[time]]
         init[init>0]=init[init>0]
         use=init>0 & init<max(init)
@@ -846,15 +926,25 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #' @return
 #' A new grandR object containing the calibrated durations in the column data annotation
 #'
-#' @seealso \link{FitKineticsSnapshot}
+#' @seealso \link{FitKineticsGeneSnapshot}
 #'
 #'
 #' @export
 #'
-CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=NULL,reference.columns=NULL,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL,time.name="calibrated_time",verbose=FALSE) {
+CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=NULL,reference.columns=NULL,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL,time.name="calibrated_time",n.estimate=1000,verbose=FALSE) {
 
   if (any(is.na(Genes(data,names(reference.halflives))))) stop("Not all names of reference.halflives are known gene names!")
-  names(reference.halflives)=Genes(data,names(reference.halflives))
+  genes=names(reference.halflives)
+
+  totals=rowSums(GetTable(data,type=slot,genes=genes))
+  HL.cat=cut(reference.halflives,c(0,2,4,6,8,Inf),include.lowest = TRUE)
+  fil=plyr::ddply(data.frame(Gene=genes,totals,HL.cat),.(HL.cat),function(s) {
+    threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/length(unique(HL.cat))))]
+    data.frame(Gene=s$Gene,use=s$totals>=threshold)
+  })
+
+  genes=as.character(fil$Gene[fil$use])
+  reference.halflives=reference.halflives[genes]
 
   fit.column=function(column) {
     if (verbose) cat(sprintf("Starting %s...\n",column))
@@ -862,12 +952,11 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
     if (is.matrix(refcol)) refcol=apply(refcol[,Columns(data,column),drop=FALSE]==1,1,any)
 
     df=data.frame(
-      ntr=GetTable(data,type ="ntr",columns = column,gene.info = FALSE)[,1],
-      total=GetTable(data,type=slot,columns = column,gene.info = FALSE)[,1],
-      ss=rowMeans(GetTable(data,type=slot,columns = refcol,gene.info = FALSE))
+      ntr=GetTable(data,type ="ntr",columns = column,gene.info = FALSE,genes=genes)[,1],
+      total=GetTable(data,type=slot,columns = column,gene.info = FALSE,genes=genes)[,1],
+      ss=rowMeans(GetTable(data,type=slot,columns = refcol,gene.info = FALSE,genes=genes)),
+      ref.HL=reference.halflives
     )
-    df$ref.HL=reference.halflives[rownames(df)]
-    df=df[is.finite(df$ref.HL),]
 
     if (!is.null(time.experiment) && length(unique(Coldata(data)[refcol,time.experiment]))!=1) stop("Steady state has to refer to a unique experimental time!")
 
@@ -878,12 +967,12 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
     is.steady.state=refcol[Columns(data,column)]
     if (is.steady.state) return(t)
 
-    hl=log(2)/TransformSnapshot(df$ntr,df$total,t,t0,f0=df$ss)[,'d']
-    use=hl<24 & df$ref.HL<24
 
     fun=function(t) {
       hl=log(2)/TransformSnapshot(df$ntr,df$total,t,t0,f0=df$ss)[,'d']
-      median(log2(hl/df$ref.HL)[use],na.rm=TRUE)
+      re=median(log2(hl/df$ref.HL),na.rm=TRUE)
+      #if (verbose) cat(sprintf("t=%.2f, mlfc=%.2f\n",t,re))
+      re
     }
     upper=t
     while(fun(upper)<0) {upper=upper*2}
@@ -897,170 +986,116 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 }
 
 
-#' Fit kinetic models to all genes.
+#' Fits RNA kinetics from snapshot experiments
 #'
-#' Fit the standard mass action kinetics model of gene expression by different methods. Some methods require steady state assumptions, for others
-#' data must be properly normalized. The parameters are fit per \link{Condition}.
+#' Compute the posterior distributions of RNA synthesis and degradation from snapshot experiments for each condition
 #'
-#' @param data A grandR object
-#' @param name the user defined analysis name to store the results
-#' @param type Which method to use (either one of "full","ntr","lm")
-#' @param slot The data slot to take expression values from
-#' @param time The column in the column annotation table representing the labeling duration
-#' @param conf.int A number between 0 and 1 representing the size of the confidence interval
-#' @param return.fields which statistics to return (see details)
-#' @param return.extra additional statistics to return (see details)
-#' @param ... forwarded to \code{\link{FitKineticsGeneNtr}}, \code{\link{FitKineticsGeneLeastSquares}} or \code{\link{FitKineticsGeneLogSpaceLinear}}
-#' @return
-#' A new grandR object with the fitted parameters as an analysis table
+#' @param data the grandR object
+#' @param name.prefix the prefix of the analysis name added to the grandR object
+#' @param reference.columns either a reference matrix (\code{\link{FindReferences}}) to define reference samples for each sample in A and B, or a
+#' name list with names A and B containing logical vectors denoting the reference samples
+#' @param slot the data slot to take f0 and totals from
+#' @param conditions character vector of all condition names to estimate kinetics for; can be NULL (i.e. all conditions)
+#' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
+#' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
+#' @param sample.f0.in.ss whether or not to sample f0 under steady state conditions
+#' @param N the sample size
+#' @param N.max the maximal number of samples (necessary if old RNA > f0); if more are necessary, a warning is generated
+#' @param conf.int A number between 0 and 1 representing the size of the credible interval
+#' @param seed Seed for the random number generator
+#' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
+#' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
+#' @param verbose Vebose output
 #'
-#' @details The start of labeling for all samples should be the same experimental time point. The fit gets more precise with multiple samples from multiple
-#' labeling durations.
+#' @details The kinetic parameters s and d are computed using \link{TransformSnapshot}. For that, the sample either must be in steady state
+#' (this is the case if defined in the reference.columns matrix), or if the levels at a specific time point are known. This time point is
+#' defined by \code{time.experiment} (i.e. the difference between the steady state samples and sample itself). If
+#' \code{time.experiment} is NULL, then the labeling time of the sample is used (e.g. useful if labeling was started concomitantly with
+#' the perturbation, and the steady state samples are unperturbed samples).
 #'
-#' @details The standard mass action kinetics model of gene expression arises from the following differential equation:
+#' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
+#' that approximates the mixture of betas from the replicate samples. (see \link{beta.approximate.mixture}).
 #'
-#' @details \deqn{df/dt = s - d  f(t)}
+#' @return a new grandR object containing an additional analysis
 #'
-#' @details This model assumes constant synthesis and degradation rates. Based on this, there are different ways for fitting the parameters:
-#' \itemize{
-#'   \item{\link{FitKineticsGeneLeastSquares}: non-linear least squares fit on the full model; depends on proper normalization; can work without steady state; assumption of homoscedastic gaussian errors is theoretically not justified}
-#'   \item{\link{FitKineticsGeneLogSpaceLinear}: linear model fit on the old RNA; depends on proper normalization; assumes steady state for estimating the synthesis rate; assumption of homoscedastic gaussian errors in log space is problematic and theoretically not justified}
-#'   \item{\link{FitKineticsGeneNtr}: maximum a posteriori fit on the NTR posterior transformed to the degradation rate; as it is based on the NTR only, it is independent on proper normalization; assumes steady state; theoretically well justified}
-#' }
-#'
-#' @details This function is flexible in what to put in the analysis table. You can specifiy the statistics using return.fields and return.extra (see \code{\link{kinetics2vector}})
-#'
-#' @seealso \link{FitKineticsGeneNtr}, \link{FitKineticsGeneLeastSquares}, \link{FitKineticsGeneLogSpaceLinear}
-#'
-#' @examples
-#' SetParallel()
-#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
-#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
-#' sars <- subset(sars,Coldata(sars)$Cell=="Mock")
-#' sars<-FitKinetics(sars,name="kinetics.ntr",type='ntr')
-#' sars<-Normalize(sars)
-#' sars<-FitKinetics(sars,name="kinetics.nlls",type='full')
-#' sars<-FitKinetics(sars,name="kinetics.lm",type='lm')
-#' head(GetAnalysisTable(sars,columns="Half-life"))
 #'
 #' @export
-#'
-FitKinetics=function(data,name="kinetics",type=c("nlls","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,return.fields=c("Synthesis","Half-life"),return.extra=NULL,...) {
+FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=DefaultSlot(data),conditions=NULL,time.labeling=Design$dur.4sU,time.experiment=NULL, sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
+  if (!check.slot(data,slot)) stop("Illegal slot definition!")
+  if(!is.null(seed)) set.seed(seed)
 
-    fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nlls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
+  if (is.null(Condition(data))) {
+    Condition(data)=""
+  }
 
-    if (is.null(fun)) stop(sprintf("Type %s unknown!",type))
-    result=plapply(Genes(data),
-                      fun,
-                      data=data,
-                      slot=slot,time=time,conf.int=conf.int,
-                      ...)
+  if (is.null(conditions)) conditions=levels(Condition(data))
 
-    adder=function(cond) {
-        tttr=function(re) {
-            if (is.matrix(re)) as.data.frame(t(re)) else setNames(data.frame(re),names(kinetics2vector(result[[1]],condition=cond,return.fields=return.fields,return.extra=return.extra)))
-        }
-        slam.param=tttr(sapply(result,kinetics2vector,condition=cond,return.fields=return.fields,return.extra=return.extra))
-        rownames(slam.param)=Genes(data,use.symbols = FALSE)
-        name=if(is.null(cond)) name else paste0(name,".",cond)
-        AddAnalysis(data,name=name,slam.param)
+  for (n in conditions) {
+    if (verbose) cat(sprintf("Computing snapshot kinetics for %s...\n",n))
+    A=Condition(data)==n
+
+    ss=if (is.matrix(reference.columns)) apply(reference.columns[,Columns(data,A),drop=FALSE]==1,1,any)
+    if (length(Columns(data,ss))==0) stop("No reference columns found; check your reference.columns parameter!")
+    dispersion = if (sum(ss)==1) rep(0.1,nrow(data)) else if (!is.null(dispersion)) rep(dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss))
+    if (verbose) {
+      if (any(ss & A)) {
+        cat(sprintf("Sampling from steady state for %s...\n",paste(colnames(data)[A],collapse = ",")))
+      } else {
+        cat(sprintf("Sampling from non-steady state for %s (reference: %s)...\n",paste(colnames(data)[A],collapse = ","),paste(colnames(data)[ss],collapse = ",")))
+      }
     }
 
-    if (!is.null(Condition(data))) {
-        for (cond in levels(Condition(data))) data=adder(cond)
-    } else {
-        data=adder(NULL)
+    # obtain prior from expression values
+    get.beta.prior=function(columns,dispersion) {
+      ex=rowMeans(GetTable(data,type = slot, columns = columns))
+      ex=1/dispersion/(1/dispersion+ex)
+      E.ex=mean(ex)
+      V.ex=var(ex)
+      c(
+        shape1=(E.ex*(1-E.ex)/V.ex-1)*E.ex,
+        shape2=(E.ex*(1-E.ex)/V.ex-1)*(1-E.ex)
+      )
     }
-    data
-}
+    beta.prior=get.beta.prior(A,dispersion)
+    if (verbose) cat(sprintf("Beta prior for %s: a=%.3f, b=%.3f\n",paste(colnames(data)[A],collapse = ","),beta.prior[1],beta.prior[2]))
 
+    re=plapply(1:nrow(data),function(i) {
+      #for (i in 1:nrow(data)) { print (i);
+      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
+      samp.a=fit.A$samples
 
-#' Compute each of the three kinetic parameters given old and new abundance and one parameter.
-#'
-#' The standard mass action kinetics model of gene expression arises from the differential equation
-#' \eqn{df/dt = s - d  f(t)}, with s being the constant synthesis rate, d the constant degradation rate and \eqn{f0=f(0)} (the abundance at time 0).
-#' This model dictates the time evolution of old and new RNA abundance after metabolic labeling starting at time t=0.
-#' This function computes two of the three parameters s, d or f0 given the one of them  for observed old and new RNA counts at time t.
-#'
-#' @param old the abundance of old RNA at time t
-#' @param new the abundance of new RNA at time t
-#' @param total the abundance of total RNA at time t
-#' @param ntr the new-to-total RNA ratio at time t
-#' @param t the time t
-#' @param s the synthesis rate
-#' @param d the degradation rate
-#' @param f0 the total abundance at time t=0
-#' @param name.prefix prepend this prefix to the column names of the output matrix (which are f0,s,d,t0)
-#'
-#' @return A matrix with columns f0,s,d and t0; the first three are the given or computed parameters, t0 is the time where the abundance was \eqn{f(t0)=0}
-#'
-#' @details Can either be parametrized using old and new, or using total and ntr
-#'
-#' @details Because old RNA cannot increase over time, and for \eqn{d>0} it has to decrease, it must be f0>old.
-#'
-#' @details \eqn{s \cdot t} would be the new RNA with d=0, i.e. it must be \eqn{s \cdot t>new}
-#'
-#' @details If \eqn{f0<s/d}, there must be a time t0 were \eqn{f(t0)=0}. t0 is also estimated.
-#'
-#' @export
-#'
-#' @examples
-#' d=log(2)/2  # a Half-life of 2h
-#' s=10*d      # a synthesis rate such that the steady-state abundance is 10
-#' f0=8        # we start below the steady-state
-#' t=2
-#'
-#' # compute old and new RNA
-#' old=f.old.nonequi(t,f0,s,d)
-#' new=f.new(t,s,d)
-#'
-#' # compare computed parameter to truth
-#' rbind(
-#'    c(f0=f0,s=s,d=d,t0=NA),
-#'    TransformKineticParameters(old,new,t,s=s),
-#'    TransformKineticParameters(old,new,t,d=d),
-#'    TransformKineticParameters(old,new,t,f0=f0)
-#'    )
-#'
-#'  # verify t0 (it has to be f.new(-t0)=f0)
-#'  t0=unname(TransformKineticParameters(old,new,t,s=s)[,'t0'])
-#'  f.new(-t0,s,d)
-#'
-TransformKineticParameters=function(old=NULL,new=NULL,total=NULL,ntr=NULL,t=2,s=NULL,d=NULL,f0=NULL,name.prefix=NULL) {
-    if (is.null(s) + is.null(d) + is.null(f0)!=2) stop("Exactly two of of s,d,f0 have to be NULL!")
+      N=nrow(samp.a)
+      if (N==0 || is.null(fit.A$samples)) return(c(
+        s=unname(fit.A$s),
+        HL=unname(log(2)/fit.A$d),
+        s.cred.lower=-Inf,
+        s.cred.upper=-Inf,
+        HL.cred.lower=-Inf,
+        HL.cred.upper=Inf
+      ))
+      samp.a=samp.a[1:N,,drop=FALSE]
 
-    total.ntr=!is.null(total) & !is.null(ntr)
-    old.new=!is.null(old) & !is.null(new)
+      sc=quantile(samp.a[,'s'],c(0.5-conf.int/2,0.5+conf.int/2))
+      hc=quantile(log(2)/samp.a[,'d'],c(0.5-conf.int/2,0.5+conf.int/2))
 
-    if (total.ntr+old.new!=1) stop("Must be parametrized either with old and new, or with total and ntr!")
-    if (total.ntr) {
-        new=total*ntr
-        old=total-new
-    }
+      return(
+        c(
+          s=mean(samp.a[,'s']),
+          HL=log(2)/mean(samp.a[,'d']),
+          s.cred.lower=unname(sc[1]),
+          s.cred.upper=unname(sc[2]),
+          HL.cred.lower=unname(hc[1]),
+          HL.cred.upper=unname(hc[2])
+        )
+      )
+    },seed=seed)
 
-    if (!is.null(f0)) {
-        if (any(f0<=old)) {
-            warning("It must be f0>old!")
-        }
-        F=old/f0
-        d=-1/t*log(F)
-        s=-1/t*new * ifelse(F>=1,-1,ifelse(is.infinite(F),0,log(F)/(1-F)))
-    } else if (!is.null(d)) {
-        f0=old/exp(-t*d)
-        s=new*d/(1-exp(-t*d))
-    } else {
-        if (any(s*t<=new)) {
-            warning("It must be s*t>new!")
-        }
-        d=pmax(0,lamW::lambertW0(-exp(-s*t/new)*s*t/new)/t+s/new)
-        f0=old/exp(-t*d)
-    }
+    re.df=as.data.frame(t(simplify2array(re)))
+    rownames(re.df)=Genes(data)
 
-    t0=t-ifelse(f0<s/d,-1/d*log(1-(old+new)*d/s),NA)
-
-    re=cbind(f0=f0,s=s,d=d,t0=t0)
-    if (!is.null(name.prefix)) colnames(re)=paste0(name.prefix,".",colnames(re))
-    re
+    data=AddAnalysis(data,name = if (is.null(name.prefix)) n else if (n=="") name.prefix else paste0(name.prefix,".",n),table = re.df)
+  }
+  data
 }
 
 
@@ -1098,10 +1133,13 @@ TransformKineticParameters=function(old=NULL,new=NULL,total=NULL,ntr=NULL,t=2,s=
 #' @return a list containing the posterior mean of s and s, its credible intervals and,
 #' if return.samples=TRUE a data frame containing all posterior samples
 #'
+#' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
+#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
 #' @export
 #'
-FitKineticsSnapshot=function(data,gene,columns,
+FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
                              reference.columns=NULL,
                              dispersion=NULL,
                              slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL,
@@ -1114,7 +1152,13 @@ FitKineticsSnapshot=function(data,gene,columns,
                              conf.int=0.95,
                              correct.labeling=FALSE
                              ) {
-    if (is.matrix(reference.columns)) reference.columns=apply(reference.columns[,Columns(data,columns),drop=FALSE]==1,1,any)
+
+  columns=substitute(columns)
+  columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
+  columns=Columns(data,columns)
+  columns=Columns(data) %in% columns
+
+  if (is.matrix(reference.columns)) reference.columns=apply(reference.columns[,Columns(data,columns),drop=FALSE]==1,1,any)
 
     alpha=GetData(data,mode.slot="alpha",genes=gene,columns = columns)
     if (correct.labeling) {
@@ -1329,78 +1373,6 @@ TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
 }
 
 
-#' Generate plots about potential kinetic parameters and their changes for observed abundance and ntr estimates
-#'
-#' The standard mass action kinetics model of gene expression arises from the differential equation
-#' \eqn{df/dt = s - d  f(t)}, with s being the constant synthesis rate, d the constant degradation rate and \eqn{f0=f(0)} (the abundance at time 0).
-#' The RNA half-life is directly related to d via \eqn{HL=log(2)/d}.
-#' This model dictates the time evolution of old and new RNA abundance after metabolic labeling starting at time t=0. However, the observed
-#' abundance and NTR values alone do not allow to infer s,d and f0 simultaneously. Also changes from one condition to another of these parameters cannot be
-#' estimated from the abundance and NTR value of both conditions. This function produces a plot showing the relation of these three parameters for given abundances and NTRs.
-#'
-#' @param total1 the total abundance of the RNA under condition 1 at time t
-#' @param total2 the total abundance of the RNA under condition 2 at time t
-#' @param ntr1 the new-to-total RNA ratio under condition 1 at time t
-#' @param ntr2 the new-to-total RNA ratio under condition 2 at time t
-#' @param f0.above.ss.factor the maximal value of f0 is computed according to total1 times this factor
-#' @param t the time t
-#' @param N the grid size to compute the heatmaps
-#'
-#' @return A patchworked set of ggplots
-#'
-#' @details f0 must be strictly greater than \eqn{total \cdot (1-ntr)} (as old RNA has to increase with d>0). If \eqn{f0>total}, the total RNA decreases.
-#' Thus, the f0 range considered therefore goes from \eqn{total \cdot (1-ntr)} to \eqn{total \codt f0.above.ss.factor}.
-#'
-#' @export
-#'
-#' @examples
-#' PlotSimpleKinetics(100,200,0.2,0.2)  # the total abundance increases with the ntr staying constant -> likely increase in synthesis
-#' PlotSimpleKinetics(100,200,0.2,0.1)  # the total abundance increases but the new RNA stays constant -> likely increase in stability
-#'
-#'
-PlotSimpleKinetics=function(total1,total2,ntr1,ntr2,f0.above.ss.factor=1,t=2,N=100) {
-    old1=total1*(1-ntr1)
-    old2=total2*(1-ntr2)
-    new1=total1*ntr1
-    new2=total2*ntr2
-
-    k1=as.data.frame(TransformKineticParameters(old=old1,new=new1,t=t,f0=seq(old1+0.01,total1*f0.above.ss.factor,length.out=N),name.prefix = "1"))
-    k2=as.data.frame(TransformKineticParameters(old=old2,new=new2,t=t,f0=seq(old2+0.01,total2*f0.above.ss.factor,length.out=N),name.prefix = "2"))
-    df=data.frame(i_1=rep(1:N,N),i_2=rep(1:N,each=N))
-    df=cbind(df,k1[df$i_1,])
-    df=cbind(df,k2[df$i_2,])
-
-
-    s_1=ggplot(k1,aes(f0_1,s_1))+geom_line()
-    s_2=ggplot(k2,aes(f0_2,s_2))+geom_line()
-    s_lfc=ggplot(df,aes(f0_1,f0_2,fill=log2(s_1/s_2)))+
-        geom_tile()+
-        scale_fill_viridis_c()
-
-    HL_1=ggplot(k1,aes(f0_1,log(2)/d_1))+
-        geom_line()+
-        ylab("HL_1")+
-        coord_cartesian(ylim=c(0,24))
-    HL_2=ggplot(k2,aes(f0_2,log(2)/d_2))+
-        geom_line()+
-        ylab("HL_2")+
-        coord_cartesian(ylim=c(0,24))
-    HL_lfc=ggplot(df,aes(f0_1,f0_2,fill=log2(d_2/d_1)))+
-        geom_tile()+
-        scale_fill_viridis_c("log2(HL_1/HL_2)")
-
-    t0_1=ggplot(k1,aes(f0_1,t0_1))+
-        geom_line()+
-        coord_cartesian(ylim=c(-24,0))
-    t0_2=ggplot(k2,aes(f0_2,t0_2))+
-        geom_line()+
-        coord_cartesian(ylim=c(-24,0))
-    t0_lfc=ggplot(df,aes(f0_1,f0_2,fill=log2(t0_1/t0_2)))+
-        geom_tile()+
-        scale_fill_viridis_c()
-
-    (s_1 |  s_2 | s_lfc)  / (HL_1 |  HL_2 | HL_lfc) / (t0_1 |  t0_2 | t0_lfc)
-}
 
 
 #' Plot the abundance of new and old RNA and the fitted model over time for a single gene.
@@ -1434,7 +1406,6 @@ PlotSimpleKinetics=function(total1,total2,ntr1,ntr2,f0.above.ss.factor=1,t=2,N=1
 #'   PlotGeneKinetics(sars,"SRSF6",type = "ntr",bare.plot=T))  /
 #'    (PlotGeneKinetics(sars,"SRSF6",use.old=Coldata(sars)$Name!="SARS.no4sU.A",bare.plot=T) |
 #'         PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
-#'         REVIEWED BY Lygeri: changed nlls to nlls
 PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=Genes(data,genes=gene), type=c("nlls","ntr","lm"), bare.plot=FALSE,exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
     if (length(ToIndex(data,gene))==0) return(NULL)
 

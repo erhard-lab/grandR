@@ -56,7 +56,9 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #' @return a PCA plot
 #' @examples
 #' @export
-PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=aes(color=Condition),x=1,y=2,columns=NULL) {
+PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,columns=NULL) {
+
+  if (is.null(aest) && !is.null(Condition(data))) aest=aes(color=Condition) else aest=aes()
 
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
@@ -455,7 +457,6 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
 #' @param repel
 #' @examples
 #' @export
-
 MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
                 lfc.cutoff=1,
                 label.numbers=TRUE,

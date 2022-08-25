@@ -25,5 +25,5 @@ Suggests: knitr,
     minpack.lm,
     parallel,
     lamW
-RoxygenNote: 7.2.0
+RoxygenNote: 7.2.1
 VignetteBuilder: knitr

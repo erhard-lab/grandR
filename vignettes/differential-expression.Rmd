@@ -1,0 +1,367 @@
+---
+title: "Differential expression"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    df_print: kable
+    fig_width: 7
+    fig_height: 6
+      
+vignette: >
+  %\VignetteIndexEntry{Differential expression}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+  
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
+```
+
+One of the main applications of metabolic RNA labeling is to identify differentially expressed genes upon some perturbation [Erhard et al., Nature 2019](https://www.nature.com/articles/s41586-019-1369-y). The main benefit of using metabolic RNA labeling is that short-term changes can be resolved much better as compared to standard RNA-seq, since any changes of transcription that indeed happened are masked to some extent by pre-existing RNA. 
+
+To perform differential analyses for data from [Grand et al, Nature 2021](https://www.nature.com/articles/s41586-021-03689-8). These are SLAM-seq data from multple time points (1h,2h,4h,6h and 20h) after acute depletion of BANP. BANP is a transcriptional activator that binds to unmethylated CGCG motifs in CpG island promoters. 
+
+# Loading data and QC
+
+We first load the grandR package and the read the GRAND-SLAM output table directly from zenodo:
+
+```{r}
+suppressPackageStartupMessages({library(grandR)})
+
+banp <- ReadGRAND("https://zenodo.org/record/6976391/files/BANP.tsv.gz",design=c("Cell","Experimental.time","Genotype",Design$dur.4sU,Design$has.4sU,Design$Replicate))
+```
+Refer to the [Loading data and working with grandR objects](loading-data.html) vignette to learn more about how to load data.
+Note that sample metadata has been automatically extracted from the sample names via the design parameter given to `ReadGRAND`:
+
+```{r}
+Coldata(banp)
+```
+
+The experimental time column indicates the period of time the sample was treated with the dTAG13 compound that induces acute depletion of BANP within 30 minutes.
+
+By default GRAND-SLAM will output all genes (with at least one mapped read), and `ReadGRAND` will read all these genes from the output:
+
+```{r}
+banp
+```
+Thus, we filter to only include genes that have at least 100 reads in at least 6 samples:
+```{r}
+banp <- FilterGenes(banp,minval = 100, mincol = 11) # as 100 reads and half of the sample is the default, this is identical to banp <- FilterGenes(banp)
+banp
+```
+
+The actual data is available in so-called "data slots". `ReadGRAND` adds the read counts, new to total RNA ratios (NTRs) and information on the NTR posterior distribution (alpha,beta).
+
+As a quick quality check, we can inspect a principal component analysis of all samples involved:
+```{r,fig.height=4}
+PlotPCA(banp)
+```
+By default, the samples are colored according to the `Condition` annotation. `Condition` has a special meaning in grandR, not only for `PlotPCA`, but also for other analyses (see below). We do not have a condition set (see the Coldata table above, there is no column named Condition). There are two ways how the condition can be set:
+
+1. Use the keyword "Condition" in the design parameter to `ReadGRAND`. Use this, if you have a useful condition as part of your sample names.
+2. Call the `Condition` function
+
+Here a useful condition is to combine the genotype, timepoint and 4sU status. We can set this like this (for more information, see the [Loading data vignette](loading-data.html)):
+
+```{r}
+Condition(banp) <- c("Genotype","Experimental.time.original","has.4sU")
+Coldata(banp)
+PlotPCA(banp)
+```
+
+We see that (i) 4sU treatment had an effect on total RNA levels (there is a clear difference between no4sU and 4sU for wt), and that (ii) inserting the degron tag also had an effect (there is a clear difference between wt and dTag.0h, the latter is a sample treated with 4sU for 2h, but was not treated with dTAG13). 
+
+Before we can investigate these effects, we need to learn how to performing pairwise differential expression analysis in grandR. Such pairwise analyses are based on contrast matrices, which can conveniently be constructed by using the `GetContrasts` function:
+
+```{r}
+GetContrasts(banp)
+```
+
+Each column of the contrast matrix defines a single pairwise comparison: Samples with 0 are left out, and samples with 1 are compared vs samples with -1 (e.g. if log2 fold change are computed, comparing A vs B means log2(A/B)). By default, no4sU samples are not considered at all, and all pairwise comparisons of the remaining conditions (here there are 7 conditions having 4sU, i.e. 21 pairwise comparisons) are generated. This behavior can be changed by the `contrasts` parameter.
+
+This parameter is a vector of length 1, 2 or 3. The first element always is a column in the Coldata table, the second and third (if given) need to be values of this column. If only the column is given, all pairwise comparisons are generated (i.e. this is the default behavior shown above, for columns "Condition"):
+
+```{r}
+GetContrasts(banp,contrast = c("Condition"))
+```
+
+If one value is given, this all pairwise comparisons with this as reference are created (i.e., if A is given, all X vs A for all other values X):
+
+```{r}
+GetContrasts(banp,contrast = c("Condition","dTag.0h.4sU"))
+```
+
+If two values are given, a single pairwise comparison is created:
+
+```{r}
+GetContrasts(banp,contrast = c("Condition","dTag.2h.4sU","dTag.0h.4sU"))
+```
+
+It is possible to restrict the samples to be used by defining the `columns` parameter (sample or cells, for single cell experiments are jointly called "columns" grandR):
+
+```{r}
+GetContrasts(banp,contrast = c("Condition","dTag.0h.4sU"),columns = Genotype=="dTag")
+# note that you can use names from the Coldata table here to build an expression
+```
+
+If you want to perform comparisons involving no4sU samples (which usually are control samples only), you can do this by setting the `no4sU` parameter to TRUE:
+
+```{r}
+GetContrasts(banp,contrast=c("has.4sU","4sU","no4sU"),columns=Genotype=="wt",no4sU = TRUE)
+```
+
+Sometimes, you want to perform comparisons only among samples from specific groups of samples. This is useful e.g. if you want to compare treatment vs control under different conditions (e.g. cell types), or perform paired pairwise tests (if replicates A, B and C were paired here):
+
+```{r}
+GetContrasts(banp,contrast=c("has.4sU","4sU","no4sU"),columns=Genotype=="wt",no4sU = TRUE,group="Replicate")
+```
+
+Finally, if you are not happy with the column names (which end up as the names for analysis tables), you can change this as well:
+
+```{r}
+GetContrasts(banp,contrast=c("has.4sU","4sU","no4sU"),columns=Genotype=="wt",no4sU = TRUE,group="Replicate",name.format = "$GRP")
+```
+
+
+# Differential analysis of 4sU treatment and dTag
+
+Now we can investigate the two unwanted effects mentioned above using differential analysis using the lfc package [Erhard, Bioinformatics 2018](https://academic.oup.com/bioinformatics/article/34/23/4054/5040306) and DESeq2:
+
+```{r}
+contrasts <- cbind(
+  GetContrasts(banp,contrast=c("has.4sU","4sU","no4sU"),
+               columns=Genotype=="wt",no4sU = TRUE,name.format = "4sU effect"), 
+  # set up the contrast matrix for compare wt.2h.4sU vs wt.2h.no4sU, as above
+  GetContrasts(banp,contrast=c("Genotype","dTag","wt"),
+               columns=Experimental.time==0,name.format="dTag effect") 
+  # set up the contrast matrix for compare dTag vs wt without dTAG13 treatment
+)
+banp <- LFC(banp,name.prefix = "QC",contrasts=contrasts)
+banp
+```
+
+As you see, now we have two analyses added to our grandR object. We can use `PlotScatter` to directly plot them:
+
+```{r}
+PlotScatter(banp,xlim=c(-2,2),ylim=c(-2,2))
+```
+
+This works, since there are only two analysis values overall that are stored in the object:
+```{r}
+Analyses(banp,description = TRUE)
+```
+We see that there are quite some effects for both pairwise comparison. 
+
+# Differential analysis of 4sU treatment
+
+To focus on the 4sU effect, we first create toxicity plots. 4sU labeling can have impact on transcription before cell viability suffers. Such an effect would be observable in these plots by a substantial negative correlation, i.e. genes with high NTR (which are to the right), should tend to be downregulated in the 4sU labeled sample vs an equivalent 4sU naive sample. It is important that these analyses are only done by comparing biologically equivalent samples (and not on the SARS infected samples here, as the no4sU sample is from 3h post infection, and all others are later). 
+
+
+```{r fig.height=4, warning=FALSE}
+Condition(banp)="Genotype"  # PlotToxicityTestRankAll will use all no4sU samples within the same Condition as reference
+PlotToxicityTestRankAll(banp)
+Condition(banp) <- c("Genotype","Experimental.time.original","has.4sU") # reset
+```
+
+Here, there is no negative correlation, so it is not a shutdown of transcription that results in the observed differences between the 4sU treated and 4sU naive samples. So, let's see whether observed changes are reproducible among replicates. For that we will compute the Wald test implemented in DESeq2 for all comparisons defined above (as we will need this also for the dTag effect).
+
+```{r}
+banp <- PairwiseDESeq2(banp,name.prefix = "QC",contrasts=contrasts)
+banp
+```
+This obviously did not add new analysis tables, but since the names matched, it added the new statistics computed by DESeq2 to the existing tables (if there were statistics with the same name as already existing, i.e. "LFC", we would get a warning).
+
+```{r}
+Analyses(banp,description = TRUE)
+```
+
+Now we can have a lock at a Vulcano plot for the 4sU effect:
+
+```{r fig.height=3, fig.width=3}
+VulcanoPlot(banp,analysis = "QC.4sU effect",lfc.cutoff = 0.5,ylim=c(-4,50))
+```
+We can also create an MA plot:
+```{r fig.height=3, fig.width=3}
+MAPlot(banp,analysis = "QC.4sU effect",lfc.cutoff = 1)
+```
+
+We see that there are indeed quite some genes with statistically significant changes. We can also retrieve the genes:
+
+```{r}
+GetSignificantGenes(banp,analysis = "QC.4sU effect",criteria = LFC< -1 & Q<0.05)
+GetSignificantGenes(banp,analysis = "QC.4sU effect",criteria = LFC>1 & Q<0.05)
+```
+The `criteria` parameter can be used to define which genes you want to have. The `criteria` must be an expression that either evaluates into a numeric or logical vector. In the first case, you will get all genes ordered according to the given criteria, in the latter case (as done above), you will get the genes meeting the criteria. The columns of the given analysis table (see above) can be used to build this expression.
+
+There are no obviuous (at least to us) biological functions for these genes. We therefore perform gene set enrichment analysis (GSEA) on MSigDB hallmark gene sets:
+
+```{r}
+gsea <- AnalyzeGeneSets(banp,analysis = "QC.4sU effect",category="H")
+clusterProfiler::ridgeplot(gsea)
+```
+  
+Thus, there are quite some pathways that are affected. 
+
+Technically, `AnalyzeGeneSets` provides a convenient wrapper to perform either GSEA and ORA (overrepresentation analyses) using the [clusterProfiler](https://bioconductor.org/packages/release/bioc/html/clusterProfiler.html) package on a lot of predefined gene sets from the [msigdbr](https://cran.r-project.org/web/packages/msigdbr/index.html) package. You can learn about the gene sets using the `ListGeneSets` function:
+
+```{r}
+ListGeneSets()
+```
+
+The values from the category and subcategory columns can be used to the corresponding parameters of `AnalyzeGeneSets`.
+
+The `criteria` parameter can be used to define how analyses are performed. The `criteria` must be an expression that either evaluates into a numeric or logical vector. In the first case, GSEA is performed, in the latter it is ORA. The columns of the given analysis table (see above) can be used to build this expression. Thus, to perform ORA for down-regulated genes:
+  
+```{r}
+AnalyzeGeneSets(banp,analysis = "QC.4sU effect",category="H",criteria = LFC<0.5 & Q<0.05)
+```
+# Differential analysis of dTag vs wt
+
+We next investigate whether there is anything peculiar about the expression differences between the dTag and wild-type cells:
+
+```{r fig.height=3, fig.width=3}
+VulcanoPlot(banp,analysis = "QC.dTag effect",ylim=c(-40,300))
+```
+There are a lot of genes that are substantially and statistically significantly downregulated.
+
+```{r}
+gsea <- AnalyzeGeneSets(banp,analysis = "QC.dTag effect",category="C5",subcategory = "GO:BP")
+clusterProfiler::ridgeplot(gsea)
+```
+Apparently, predominantly genes that have to do with transmembrane transport are downregulated.
+
+# Differential analysis of BANP depletion
+
+Before we continue, we add the information which genes are have BANP-ChIP-seq peaks in their promoters:
+
+```{r}
+tar <- readLines("https://zenodo.org/record/6976391/files/targets.genes")
+GeneInfo(banp,"BANP-Target")<-factor(ifelse(Genes(banp) %in% tar,"yes","no"),levels=c("yes","no"))
+table(GeneInfo(banp,"BANP-Target"))
+```
+
+We remove the "wt" samples and define contrasts:
+
+```{r}
+banp <- subset(banp,columns = Genotype=="dTag")
+contrasts <- GetContrasts(banp,contrast=c("Experimental.time.original","0h"))
+contrasts
+```
+
+Now we perform LFC and DESeq2 analyses. We will perform this on the level of both total an new RNA. Also for new RNA fold changes, we normalize with respect to total RNA (i.e. size factors are computed based on total RNA before performing differential analysis with new RNA).
+
+```{r}
+banp <- LFC(banp,name.prefix = "total",contrasts = contrasts)
+banp <- PairwiseDESeq2(banp,name.prefix = "total",contrasts = contrasts)
+banp <- LFC(banp,name.prefix = "new",contrasts = contrasts,mode="new", normalization = "total")
+banp <- PairwiseDESeq2(banp,name.prefix = "new",contrasts = contrasts,mode="new", normalization = "total")
+```
+
+Note that actually new RNA comparisons do not make sense at all for 1h and (maybe) 2h, since the labeling times for these samples were 30min and 90 min, respectively, whereas the labeling time for all other samples was 2h:
+
+```{r fig.height=3, fig.width=6, warning=FALSE}
+MAPlot(banp,analysis = "new.1h vs 0h")|
+  MAPlot(banp,analysis = "new.2h vs 0h")
+```
+
+The MA plots indicate that changes in new RNA are much more pronounced than changes in total RNA, even after 4h:
+
+```{r fig.height=3, fig.width=6}, warning=FALSE}
+MAPlot(banp,analysis = "total.4h vs 0h",highlight=GeneInfo(banp,"BANP-Target")=="yes")|
+  MAPlot(banp,analysis = "new.4h vs 0h",highlight=GeneInfo(banp,"BANP-Target")=="yes")
+```
+
+We compare this using boxplots:
+
+```{r fig.height=3, fig.width=5}
+df <- GetAnalysisTable(banp,analyses = "4h",by.rows = TRUE)
+ggplot(df,aes(Analysis,LFC,fill=`BANP-Target`))+
+  geom_hline(yintercept = 0)+
+  geom_boxplot()
+```
+Let's investigate this further. We first roughly estimate RNA half-lives from steady state samples using the method described in [Jürges et al, Bioinformatics 2018](https://doi.org/10.1093/bioinformatics/bty256), and add half-life classes as additional gene annotations:
+
+```{r}
+banp <- ComputeSteadyStateHalfLives(banp,name="HL",columns = Experimental.time==0)
+GeneInfo(banp,"HL simple") <- rowMeans(GetAnalysisTable(banp,analyses = "HL",gene.info = FALSE))
+GeneInfo(banp,"HL category") <- cut(GeneInfo(banp,"HL simple"),breaks=c(0,2,4,8,Inf),labels=c("0-2h","2-4h","4-8h",">8h"))
+table(GeneInfo(banp,"HL category"))
+```
+
+Now we can do the same comparison as above but differentiate between half-life classes:
+```{r}
+df <- GetAnalysisTable(banp,analyses = "4h vs 0h",by.rows = TRUE)
+df <- df[!is.na(df$`HL category`),]
+ggplot(df,aes(`HL category`,LFC,fill=`BANP-Target`))+
+  geom_hline(yintercept = 0)+
+  geom_boxplot()+
+  RotatateAxisLabels()+
+  facet_wrap(~Analysis)
+```  
+For genes with long RNA half-lives, down-regulation of BANP targets is masked by pre-existing RNA, when total RNA is analyzed. Analysis of new RNA does not suffer from this. This indicates that it indeed was important to use metabolic RNA labeling, because many change 
+
+# The real deal: Bayesian analysis of snapshot experiments
+
+As indicated above, the 1h and 2h samples are not directly comparable to the other samples, due to different labeling times. Thus, we will use grandR to model changes of RNA half-lives and synthesis rates from the given snapshot experiments. We first check, whether labeling times need to be recalibrated. Exact effective labeling times for important for modeling but are actually also important when you compare new RNA among samples using LFC and DESeq2 (see above).
+
+For checking, we fit our model per experimental time. We use `N=0` because we do not want to draw samples from the posterior, but we are happy with transforming the MAP estimates for this check:
+
+```{r}
+reference.columns=FindReferences(banp,reference.function=function(s) Experimental.time==max(c(0,Experimental.time[Experimental.time<s$Experimental.time])))
+
+SetParallel()
+Condition(banp) <- "Experimental.time.original"
+banp <- FitKineticsSnapshot(banp,name.prefix = "MAP",reference.columns=reference.columns,verbose=T,time.experiment = "Experimental.time",N=0)
+```
+Now we can obtain the analysis table and plot the distributions of half-live estimated from each timepoint:
+```{r}
+df <- GetAnalysisTable(banp,analyses = "^MAP",by.rows = TRUE)
+df$HL=pmin(df$HL,48)   # for 4h, there are extreme outliers, which mess up the computation of violins
+ggplot(df,aes(Analysis,HL))+
+  geom_boxplot()+
+  scale_y_log10()+
+  coord_cartesian(ylim=c(0.3,24))
+```
+
+Especially for 1h, the half-lives are strongly biased, indicating that the effective labeling time was different from the nominal labeling time. We recalibrate by finding effective labeling times such that the estimated half-lives for each sample match to our reference half-lives computed above. Note that `CalibrateEffectiveLabelingTimeMatchHalflives` will only do this on 1,000 genes selected by strong expression from each half-life class.
+
+```{r}
+banp <- Normalize(banp)
+banp <- CalibrateEffectiveLabelingTimeMatchHalflives(banp,
+                            reference.halflives = GeneInfo(banp,"HL simple"),
+                            reference.columns = reference.columns,verbose=TRUE)
+banp <- FitKineticsSnapshot(banp,name.prefix = "cMAP",reference.columns=reference.columns,
+                            time.experiment = "Experimental.time",verbose=TRUE,
+                            time.labeling = "calibrated_time",N=0,correct.labeling = TRUE)
+```
+
+Now we can obtain the analysis table after recalibration and plot the distributions of half-live estimated from each timepoint:
+
+```{r}
+df <- GetAnalysisTable(banp,analyses = "cMAP",by.rows = TRUE)
+ggplot(df,aes(Analysis,HL))+
+  geom_boxplot()+
+  scale_y_log10()+
+  coord_cartesian(ylim=c(0.3,24))
+```
+Now the distributions match much better. We can now go on and estimate log2 fold changes of synthesis and RNA half-lives. We again do not perform sampling from the posterior (N=0) which would take a long time:
+ 
+```{r} 
+banp <- EstimateRegulation(banp,"Regulation",
+                           contrasts=contrasts,
+                           reference.columns=reference.columns,
+                           time.labeling = "calibrated_time",verbose=T,
+                           time.experiment = "Experimental.time",correct.labeling=TRUE,
+                           N=0)
+
+```
+
+Now we can compare the estimated synthesis fold changes between the time points:
+
+```{r fig.height=7, fig.width=7}
+(PlotScatter(banp,x=`Regulation.1h vs 0h.s.log2FC`,y=`Regulation.2h vs 0h.s.log2FC`,xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+geom_abline()|
+  PlotScatter(banp,x=`Regulation.2h vs 0h.s.log2FC`,y=`Regulation.4h vs 0h.s.log2FC`,xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+geom_abline())/
+(PlotScatter(banp,x=`Regulation.4h vs 0h.s.log2FC`,y=`Regulation.6h vs 0h.s.log2FC`,xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+geom_abline()|
+  PlotScatter(banp,x=`Regulation.6h vs 0h.s.log2FC`,y=`Regulation.20h vs 0h.s.log2FC`,xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+geom_abline())
+```  
+Note that for the first comparison (1h vs 0h against 2h vs 0h) most genes do not scatter around the main diagonal, but the actual BANP targets do. This suggests that there is a lot of noise w.r.t. the x axis (which is not unexpected considering the short labeling time), but the the estimation of synthesis rate fold changes is unbiased for genes that actually change their synthesis rate.

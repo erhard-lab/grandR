@@ -384,7 +384,8 @@ Columns=function(data,columns=NULL) {
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
 
-  unname(setNames(rownames(Coldata(data)),rownames(Coldata(data)))[columns])
+  columns=unname(setNames(rownames(Coldata(data)),rownames(Coldata(data)))[columns])
+  rownames(Coldata(data))[ rownames(Coldata(data)) %in% columns]  # preserve order!
 }
 
 #' Get the gene annotation table or add additional columns to it
@@ -417,7 +418,7 @@ GeneInfo=function(data,column=NULL,value=NULL) {
   if (is.null(column)) {
     data$gene.info
   } else if (is.null(value)) {
-    data$gene.info[[column]]
+    setNames(data$gene.info[[column]],data$gene.info$Symbol)
   } else {
     data$gene.info[[column]]=value
     data
@@ -857,14 +858,14 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' @return a vector of gene names (or symbols)
 #' @export
 #'
-GetSignificantGenes=function(data,analyses=NULL,regex=TRUE,q.cutoff=0.05,LFC.cutoff=1,criteria=Q<q.cutoff & abs(LFC)>=LFC.cutoff,as.table=FALSE,use.symbols=TRUE,gene.info=TRUE) {
-  analyses=match.analyses(data,analyses,regex)
+GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,q.cutoff=0.05,LFC.cutoff=1,criteria=Q<q.cutoff & abs(LFC)>=LFC.cutoff,as.table=FALSE,use.symbols=TRUE,gene.info=TRUE) {
+  analysis=match.analyses(data,analysis,regex)
   criteria=substitute(criteria)
 
     re=GeneInfo(data)
   rownames(re)=if(use.symbols) re$Symbol else re$Gene
 
-  for (name in analyses) {
+  for (name in analysis) {
     tab=GetAnalysisTable(data,analyses=name,regex=FALSE,gene.info=FALSE,prefix.by.analysis=FALSE)
     use=eval(criteria,envir=tab,enclos = parent.frame())
     re[[name]]=use
@@ -1015,7 +1016,17 @@ AddAnalysis=function(data,name,table,warn.present=TRUE) {
   if (is.null(data$analysis[[name]])) {
     data$analysis[[name]]=table
   } else {
-    if (warn.present & any(names(table)%in%names(data$analysis[[name]]))) warning(sprintf("Analysis %s already present! Overwritting...",name))
+    if (warn.present & any(names(table)%in%names(data$analysis[[name]]))) {
+      ex=names(data$analysis[[name]])
+      nc=names(table)
+      add=paste(setdiff(nc,ex),collapse = ", ")
+      over=paste(intersect(nc,ex),collapse = ", ")
+      keep=paste(setdiff(ex,nc),collapse = ", ")
+      if (add=="") add="<none>"
+      if (over=="") over="<none>"
+      if (keep=="") keep="<none>"
+      warning(sprintf("Analysis %s already present! Adding: %s, Overwritting: %s, keeping: %s...",name,add,over,keep))
+    }
     for (n in names(table)) data$analysis[[name]][[n]]=table[[n]]
     ana = attr(data$analysis[[name]],"analysis")
   }
@@ -1082,6 +1093,8 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
 
   if (by.rows) prefix.by.analysis=FALSE
   rbind.save=function(a,b) {
+    if (length(unique(names(a)))!=length(names(a))) stop("Table names are not unique!")
+    if (length(unique(names(b)))!=length(names(b))) stop("Table names are not unique!")
     for (n in setdiff(names(a),names(b))) b[[n]]=NA
     for (n in setdiff(names(b),names(a))) a[[n]]=NA
     b=b[,names(a)]
@@ -1115,5 +1128,6 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
 
   if (is.logical(gene.info) && !gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re),drop=FALSE]
   if (is.character(gene.info)) re=re[,-which(!names(data$gene.info) %in% gene.info),drop=FALSE]
+  if (by.rows) re$Analysis=factor(re$Analysis,levels=analyses)
   re
 }

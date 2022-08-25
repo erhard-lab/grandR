@@ -79,6 +79,7 @@ ComputeNtrPosteriorUpper=function(data,CI.size=0.95,name="upper") ComputeNtrPost
 #' @param data the grandR object
 #' @param time either a number indicating the labeling time, or a name of the \link{Coldata} table
 #' @param name the name of the new slot/analysis to put half-life values in
+#' @param columns which columns (i.e. samples or cells) to return; sets as.analysis to TRUE (see details)
 #' @param max.HL all values above this will be set to this
 #' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param compute.CI it TRUE, credible intervals are computed, this also sets as.analysis to TRUE
@@ -88,31 +89,45 @@ ComputeNtrPosteriorUpper=function(data,CI.size=0.95,name="upper") ComputeNtrPost
 #' log(2)/(-1/t*log(1-p))
 #' This is described in our GRAND-SLAM paper (Juerges et al., Bioinformatics 2018).
 #'
+#' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
+#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition="x").
+#'
 #' @return a new grandR object with an additional slot or analysis
 #' @export
 #'
-ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name, max.HL=48, CI.size=0.95, compute.CI=FALSE, as.analysis=FALSE) {
-  if (is.character(time) && length(time)==1) time=data$coldata[[time]]
+ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name, columns=NULL, max.HL=48, CI.size=0.95, compute.CI=FALSE, as.analysis=FALSE) {
+  if (is.character(time) && length(time)==1) time=Coldata(data,time)
 
   ntrs=as.matrix(GetTable(data,type="ntr",name.by = "Gene"))
+
   if (length(time)==1) time=rep(time,ncol(ntrs))
   stopifnot(ncol(ntrs)==length(time))
+  time=setNames(time,colnames(ntrs))
+
+  columns=substitute(columns)
+  columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
+  columns=Columns(data,columns)
+
+  time=time[columns]
+
+  if (length(columns)!=ncol(data)) as.analysis=TRUE
 
   if (compute.CI) {
     as.analysis=TRUE
     data=ComputeNtrCI(data,CI.size = CI.size)
     lower=as.matrix(GetTable(data,type="lower",name.by = "Gene"))
     upper=as.matrix(GetTable(data,type="upper",name.by = "Gene"))
-    hls = do.call(cbind,lapply(1:length(time),function(i) cbind(
+    hls = do.call(cbind,lapply(columns,function(i) cbind(
       pmin(comp.hl(p = upper[,i],time = time[i]),max.HL),
       pmin(comp.hl(p = ntrs[,i],time = time[i]),max.HL),
       pmin(comp.hl(p = lower[,i],time = time[i]),max.HL)
     )))
-    colnames(hls)=paste0(rep(c("CI.lower.","Half-life","CI.upper."),ncol(ntrs)),rep(colnames(ntrs),each=3))
+    colnames(hls)=paste0(rep(c("CI.lower.","Half-life","CI.upper."),ncol(hls)),rep(columns,each=3))
   }
   else {
-    hls = sapply(1:length(time),function(i) comp.hl(p = ntrs[,i],time = time[i]))
-    colnames(hls)=colnames(ntrs)
+    hls = sapply(columns,function(i) comp.hl(p = ntrs[,i],time = time[i]))
+    colnames(hls)=columns
   }
 
   if (as.analysis) {

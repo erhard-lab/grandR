@@ -17,7 +17,8 @@ vignette: >
 knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
 ```
 
-One of the main applications of metabolic RNA labeling is to model the kinetics of RNA expression levels [[1]](https://doi.org/10.1093/bioinformatics/bty256)[[2]](https://doi.org/10.1016/j.molcel.2021.06.016). The most natural and widely used model is to describe the change of RNA levels $a(t)$ at time $t$ is via first order reactions by the differential equation:
+One of the main applications of metabolic RNA labeling is to model the kinetics of RNA expression levels [Jürges et al, Bioinformatics 2018](https://doi.org/10.1093/bioinformatics/bty256)[Narain et al., Mol Cell 2021](https://doi.org/10.1016/j.molcel.2021.06.016). The most natural and widely used model is to describe the change of RNA levels $a(t)$ at time $t$ is via first order reactions by the differential equation:
+
 
 $$
 \frac{da}{dt}=\sigma - \delta \cdot a(t)
@@ -58,16 +59,17 @@ sars
 The actual data is available in so-called "data slots". `ReadGRAND` adds the read counts, new to total RNA ratios (NTRs) and information on the NTR posterior distribution (alpha,beta).
 
 As a quick quality check, we can inspect a principal component analysis of all samples involved:
-```{r,fig.width=7}
+```{r,fig.height=4}
 PlotPCA(sars)
 ```
-The samples are colored according to the \emph{Condition} annotation. \emph{Condition} has a special meaning in grandR, not only for `PlotPCA`, but also for other analyses (see below). The \emph{Condition} can be set conveniently using the `Condition` functions. For `PlotPCA`, the visual attributes can be adapted via a parameter:
-```{r,fig.width=7}
+
+The samples are colored according to the `Condition` annotation (see above in the Coldata table). `Condition` has a special meaning in grandR, not only for `PlotPCA`, but also for other analyses (see below). The `Condition` can be set conveniently using the `Condition` function. For more information, see the [Loading data vignette](loading-data.html). For `PlotPCA`, the visual attributes can be adapted via a parameter (this is the mapping parameter to ggplot, and, thus, all names from the Coldata table can be used in expressions):
+```{r,fig.height=4}
 PlotPCA(sars,aest=aes(color=hpi,shape=Condition))
 ```
 There are no obvious problems with the samples, even though the virus infected 3hpi sample is the top-most whereas the other virus infected samples are ordered along infection time from bottom to top.
 
-For the NNLS approach it is important to normalize the data:
+For the NNLS approach it is important to normalize data:
 ```{r}
 sars<-Normalize(sars)
 sars
@@ -75,7 +77,7 @@ sars
 Make sure that the normalization you use here is appropriate. Calling `Normalize` will add an additional slot which is set to be the default slot.
 
 Before we conduct any kinetic modeling, we inspect the toxicity plots:
-```{r warning=FALSE}
+```{r fig.height=4, warning=FALSE}
 PlotToxicityTestRankAll(subset(sars,Condition=="Mock"))
 ```
 4sU labeling can have impact on transcription before cell viability suffers. Such an effect would be observable in these plots by a substantial negative correlation, i.e. genes with high NTR (which are to the right), should tend to be downregulated in the 4sU labeled sample vs an equivalent 4sU naive sample. It is important that these analyses are only done by comparing biologically equivalent samples (and not on the SARS infected samples here, as the no4sU sample is from 3h post infection, and all others are later). Here, there are such effects, but they are not very strong.
@@ -93,6 +95,7 @@ For the virus infected samples ("SARS"), this is not the case. So we specify an 
 ```{r,fig.height=3.5,fig.width=5}
 PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
+
 Note that the fit actually changed. Now we are ready to fit the model for each gene. For that, we set `SetParallel()` which will set the number of worker threads to "number of cores"-2. We also specify the same `steady.state` parameter to `FitKinetics`:
 
 ```{r}
@@ -100,46 +103,58 @@ SetParallel()
 sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 
-So far we do not see any results. The reason is that the result table has only been added to the grandR object:
+`FitKinetics` added its result table to the grandR object:
 ```{r}
 sars
 ```
+
 Note that there are apparently now two analyses tables. We can get more information using the `Analyses` function:
 
 ```{r}
 Analyses(sars,description = TRUE)
 ```
-This tells us that there are indeed two analysis tables, each having a Synthesis and a Half-life column. We can also retrieve the analysis results using the `GetAnalysisTable` function:
+This tells us that there are indeed two analysis tables, each having a Synthesis and a Half-life column. We can retrieve the analysis results using the `GetAnalysisTable` function:
 ```{r}
 df<-GetAnalysisTable(sars)
 head(df)
 ```
 See the [Working with data matrices and analysis results](data-matrices-and-analysis-results.html) vignette for more information how to retrieve data from a grandR object. We can use the `PlotScatter` function to compare half-lives from Mock and SARS:
 
-```{r}
+```{r warning=FALSE}
 PlotScatter(sars,x=`kinetics.Mock.Half-life`,y=`kinetics.SARS.Half-life`,log=TRUE)+geom_abline()
 ```
-For more on `PlotScatter`, see the [plotting]{plotting.html} vignette. The `FitKinetics` function actually computes much more information per gene. To see this, let's fit a single gene:
+
+For more on `PlotScatter`, see the [Plotting](plotting.html) vignette. The `FitKinetics` function actually computes much more information per gene. To see this, let's fit a single gene:
 ```{r}
 str(FitKineticsGeneLeastSquares(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE)))
 ```
+
 To add additional statistics to the analysis table, we use the `return.fields` and `return.extra` parameters:
 ```{r}
-small <- FilterGenes(sars,use=1:100)             # let's perform analyses on fewer genes, it's faster
-small<-FitKinetics(small,name = "with.loglik",steady.state=list(Mock=TRUE,SARS=FALSE),return.fields=c("Synthesis","Half-life","logLik"))
+# let's perform analyses on fewer genes, it's faster
+small <- FilterGenes(sars,use=1:100)             
+small<-FitKinetics(small,name = "with.loglik",
+                   steady.state=list(Mock=TRUE,SARS=FALSE),
+                   return.fields=c("Synthesis","Half-life","logLik"))
 Analyses(small,description = TRUE)
 ```
+
 The logLik field could in principle be used to perform likelihood ratio test for significant changes in the kinetics between two or among more conditions. For values that are not 
 directly returned fields we use the `return.extra` parameter:
 
-```{r}
-small<-FitKinetics(small,name = "with.loglik",steady.state=list(Mock=TRUE,SARS=FALSE),return.extra=function(d) c(lower=d$conf.lower["Half-life"],upper=d$conf.upper["Half-life"]))
+```{r warning=FALSE}
+small<-FitKinetics(small,name = "with.loglik",
+                   steady.state=list(Mock=TRUE,SARS=FALSE),
+                   return.extra=function(d) c(
+                       lower=d$conf.lower["Half-life"],
+                       upper=d$conf.upper["Half-life"]
+                       ))
 Analyses(small,description = TRUE)
 ```
 Here, not also that the analysis table were already present, and it just added the additional columns (in fact it replaced all columns except for logLik, as this was not part of the returned analysis table).
 
 We could also extract the relative residuals of new RNA from the model fit:
-```{r}
+```{r warning=FALSE}
 sars<-FitKinetics(sars,"kinetics",steady.state=list(Mock=TRUE,SARS=FALSE),return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
 ```
 Let's plot their distributions:
@@ -147,16 +162,23 @@ Let's plot their distributions:
 df <- GetAnalysisTable(sars,columns = "Residuals",gene.info = FALSE,prefix.by.analysis = FALSE)
 df <- melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
 df$Sample=gsub("Residuals.","",df$Sample)
-ggplot(df,aes(Sample,`Relative residual`))+geom_boxplot()+RotatateAxisLabels()+geom_hline(yintercept = 0)+coord_cartesian(ylim=c(-1,1))
+ggplot(df,aes(Sample,`Relative residual`))+
+  geom_hline(yintercept = 0)+
+  geom_boxplot()+
+  RotatateAxisLabels()+
+  coord_cartesian(ylim=c(-1,1))
 ```
-We see that the residuals from the 1h timepoints are systematically below 0. A canonical example of this is SMAD3:
+
+We see that the residuals from the 1h timepoints are systematically below zero. A canonical example of this is SMAD3:
 ```{r}
 PlotGeneKinetics(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 For both Mock and SARS, we see that new RNA from 1h is well below the model fit, i.e. has negative residual. This indicates that the effective labeling time was much lower than the nominal labeling time of 1h for these samples, i.e. that actualy, these samples should move to the left. This can be rectified by temporal recalibration:
 
 ```{r}
-sars <- CalibrateEffectiveLabelingTimeKineticFit(sars,steady.state=list(Mock=TRUE,SARS=FALSE))
+#sars <- CalibrateEffectiveLabelingTimeKineticFit(sars,steady.state=list(Mock=TRUE,SARS=FALSE),name.init = "init_time")
+# this takes a long time, we just use the optimized timepoint directly; feel free to uncomment and compare!
+Coldata(sars,"calibrated_time") <- c(0.0000000,0.2857464,1.6275374,1.4987246,2.5506585,4.0000000,0.0000000,0.3842279,2.0826150,1.8797744,2.9423108,4.0000000)
 ```
 This adds an additional column to the `Coldata` metadata table:
 ```{r}
@@ -165,8 +187,10 @@ Coldata(sars)
 
 This recalibrated time can now be used to plot fitted models:
 ```{r}
-PlotGeneKinetics(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE),time = "calibrated_time",exact.tics = FALSE)
+PlotGeneKinetics(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE),
+                 time = "calibrated_time",exact.tics = FALSE)
 ```
+
 ... and also to fit the model to all genes:
 ```{r}
 sars<-FitKinetics(sars,"corrected",time = "calibrated_time",steady.state=list(Mock=TRUE,SARS=FALSE),return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
