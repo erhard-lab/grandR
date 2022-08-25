@@ -239,7 +239,7 @@ FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=
     }
     slam.param=tttr(sapply(result,kinetics2vector,condition=cond,return.fields=return.fields,return.extra=return.extra))
     rownames(slam.param)=Genes(data,use.symbols = FALSE)
-    name=if (is.null(name.prefix)) cond else if(is.null(cond)) name else paste0(name,".",cond)
+    name=if (is.null(name.prefix)) cond else if(is.null(cond)) name.prefix else paste0(name.prefix,".",cond)
     AddAnalysis(data,name=name,slam.param)
   }
 
