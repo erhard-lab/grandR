@@ -1,19 +1,56 @@
 
 
 
+#' Find equivalent no4sU samples for 4sU samples
+#'
+#' Identify all no4sU samples in the same condition, and return everything as a list to be used in
+#' \link{PlotToxicityTest}, \link{PlotToxicityTestRank}, \link{PlotToxicityTestAll}, \link{PlotToxicityTestRankAll}
+#'
+#' @param data a grandR object
+#' @param paired.replicates pair replicates, i.e. only no4sU.A is found for 4sU.A
+#'
+#' @return a named list containing, for each 4sU sample, a vector of equivalent no4sU samples
+#' @export
+#'
+#' @seealso \link{PlotToxicityTest}, \link{PlotToxicityTestRank}, \link{PlotToxicityTestAll}, \link{PlotToxicityTestRankAll}
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
+#' Findno4sUPairs(sars)
+#'
 Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
   pairs=FindReferences(data,reference=no4sU,group = if(paired.replicates) c(Design$Replicate,Design$Condition) else Design$Condition, as.list=TRUE)
-  #stopifnot(is.grandR(data))
-  #df=data$coldata
-  #df$group=if (paired.replicates) interaction(df[[Design$Condition]],df[[Design$Replicate]]) else df[[Design$Condition]]
-  #map=dlply(df,.(group),function(s) as.character(s$Name[s$no4sU]))
-  #pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
-  if (discard.no4sU && "no4sU" %in% names(data$coldata)) pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
-  if (any(sapply(pairs,function(a) length(a)>0))) warning("There were samples without corresponding no4sU sample!")
+
+  pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
+  if (any(sapply(pairs,function(a) length(a)==0))) warning("There were samples without corresponding no4sU sample!")
   pairs=pairs[sapply(pairs,function(a) length(a)>0)]
   if (length(pairs)==0) stop("No no4sU pairs found!")
   pairs
 }
+
+MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=PsiLFC,slot="count",correction=1,TU.len=NULL) {
+  w=rowMeans(GetTable(data,type=slot,columns=w4sU))
+  col=no4sU
+  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=col))
+  ntr=apply(GetTable(data,"ntr",columns=ntr),1,mean,rm.na=TRUE)
+  use=!is.na(w+n+ntr)
+  w=w[use]
+  n=n[use]
+  ntr=ntr[use]
+
+  f1=1/correction-1
+  nw=w+f1*ntr*w
+  ntr=(ntr*w+f1*ntr*w)/nw
+  w=nw
+
+  phl=transform(ntr)
+
+  df=data.frame(`4sU`=w,`no4sU`=n,ntr=ntr,lfc=LFC.fun(w,n),covar=phl,check.names = FALSE)
+  if (!is.null(TU.len)) df$tulen=data$gene.info[[TU.len]][use]
+  df
+}
+
 
 ComputeBiasCorrectionFactors=function(data,pairs=Findno4sUPairs(data),TU.len=NULL,...) {
   if (is.null(TU.len)) {
@@ -205,51 +242,11 @@ EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC, t
 PlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.len",...) {
   setNames(lapply(names(pairs),function(n) PlotToxicityTestLength(data,n,pairs[[n]],TU.len = TU.len,...)),names(pairs))
 }
-PlotToxicityTestRankAll=function(data,pairs=Findno4sUPairs(data),...) {
-  setNames(lapply(names(pairs),function(n) PlotToxicityTestRank(data,n,pairs[[n]],...)),names(pairs))
-}
-PlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
-  setNames(lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)),names(pairs))
-}
-
-DPlotToxicityTestAll=function(data,pairs=NULL,...) {
+PlotToxicityTestLengthDeferAll=function(data,pairs=NULL,TU.len="TU.len",...) {
   if (is.null(pairs)) pairs=Findno4sUPairs(data)
   rm(data)
-  setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTest,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),height=4,...)),names(pairs))
+  setNames(lapply(names(pairs),function(n) Defer(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],TU.len = TU.len,add=ggtitle(n),height=4,...)),names(pairs))
 }
-DPlotToxicityTestRankAll=function(data,pairs=NULL,...) {
-  if (is.null(pairs)) pairs=Findno4sUPairs(data)
-  rm(data)
-  setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),height=4,...)),names(pairs))
-}
-DPlotToxicityTestLengthAll=function(data,pairs=NULL,TU.len="TU.len",...) {
-  if (is.null(pairs)) pairs=Findno4sUPairs(data)
-  rm(data)
-  setNames(lapply(names(pairs),function(n) DPlot(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],TU.len = TU.len,add=ggtitle(n),height=4,...)),names(pairs))
-}
-
-MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=PsiLFC,slot="count",correction=1,TU.len=NULL) {
-  w=rowMeans(GetTable(data,type=slot,columns=w4sU))
-  col=no4sU
-  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=col))
-  ntr=apply(GetTable(data,"ntr",columns=ntr),1,mean,rm.na=TRUE)
-  use=!is.na(w+n+ntr)
-  w=w[use]
-  n=n[use]
-  ntr=ntr[use]
-
-  f1=1/correction-1
-  nw=w+f1*ntr*w
-  ntr=(ntr*w+f1*ntr*w)/nw
-  w=nw
-
-  phl=transform(ntr)
-
-  df=data.frame(`4sU`=w,`no4sU`=n,ntr=ntr,lfc=LFC.fun(w,n),covar=phl,check.names = FALSE)
-  if (!is.null(TU.len)) df$tulen=data$gene.info[[TU.len]][use]
-  df
-}
-
 PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",TU.len="TU.len") {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=1,TU.len = TU.len)
   if (is.null(ylim)) {
@@ -266,6 +263,60 @@ PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr
     ggtitle(w4sU)
 }
 
+#' Perform toxicity tests
+#'
+#' Testing for toxicity of a 4sU sample is performed by comparing half-lives or NTR ranks against
+#' the log2 fold change of the 4sU sample vs equivalent no4sU samples.
+#'
+#' @param data a grandR object
+#' @param pairs a no4sU pairs list as generated by \link{Findno4sUPairs}
+#' @param w4sU the name of a 4sU sample
+#' @param no4sU the name(s) of equivalent no4sU sample(s)
+#' @param ntr the name of a sample to take NTRs from (usually equal to w4sU)
+#' @param ylim y axis limits
+#' @param LFC.fun function to compute log fold change (default: \link[lfc]{PsiLFC}, other viable option: \link[lfc]{NormLFC})
+#' @param slot the slot of the grandR object to take the data from; for \link[lfc]{PsiLFC}, this really should be "count"!
+#' @param hl.quantile the half-life quantile to cut the plot
+#'
+#' @details The deferred versions are useful to be used in conjunction with \link{ServeGrandR} plot.static. Their implementation
+#' make sure that they are lightweight, i.e. when saving the returned function to an Rdata file, the grandR object is not stored.
+#'
+#' @return either a ggplot object, a list of ggplot objects, or a list of deferred functions for plotting
+#'
+#' @seealso \link{Findno4sUPairs},\link{Defer}
+#'
+#' @name toxicity
+NULL
+#> NULL
+
+#' @rdname toxicity
+#' @export
+PlotToxicityTestRankAll=function(data,pairs=Findno4sUPairs(data),...) {
+  setNames(lapply(names(pairs),function(n) PlotToxicityTestRank(data,n,pairs[[n]],...)),names(pairs))
+}
+#' @rdname toxicity
+#' @export
+PlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
+  setNames(lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)),names(pairs))
+}
+
+#' @rdname toxicity
+#' @export
+PlotToxicityTestDeferAll=function(data,pairs=NULL,...) {
+  if (is.null(pairs)) pairs=Findno4sUPairs(data)
+  rm(data)
+  setNames(lapply(names(pairs),function(n) Defer(PlotToxicityTest,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),...)),names(pairs))
+}
+#' @rdname toxicity
+#' @export
+PlotToxicityTestRankDeferAll=function(data,pairs=NULL,...) {
+  if (is.null(pairs)) pairs=Findno4sUPairs(data)
+  rm(data)
+  setNames(lapply(names(pairs),function(n) Defer(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),...)),names(pairs))
+}
+
+#' @rdname toxicity
+#' @export
 PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",correction=1) {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(v) rank(v),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(ylim)) {
@@ -287,7 +338,9 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
     ggtitle(w4sU,subtitle = bquote(rho == .(rho) ~ "," ~ p ~ .(p)))
 }
 
-PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot=DefaultSlot(data),hl.quantile=0.8,correction=1) {
+#' @rdname toxicity
+#' @export
+PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",hl.quantile=0.8,correction=1) {
   time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   df=df[df$covar<quantile(df$covar[is.finite(df$covar)],hl.quantile) & df$ntr<1 & df$ntr>0,]

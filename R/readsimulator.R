@@ -24,7 +24,7 @@
 #'
 #' @details The simulation proceeds as follows:
 #' \enumerate{
-#'   \item Draw for each gene the number of reads from a multinomia distribution parmetrized with the relative abundances
+#'   \item Draw for each gene the number of reads from a negative binomial distribution parametrized with the relative abundances x read number and the dispersion parameter
 #'   \item For each gene: Draw for each read the number of uridines according to a beta binomial distribution for the given read length
 #'   (the beta prior is parametrized to match the u.content and u.content.sd parameters)
 #'   \item For each read: Draw the number of conversions according to the binomial mixture model of GRAND-SLAM

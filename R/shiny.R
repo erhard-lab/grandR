@@ -1,4 +1,27 @@
 
+#' Serve a shiny web-server
+#'
+#' Start a shiny web server for exploration of a grandR object
+#'
+#' @param data
+#' @param df
+#' @param df.set
+#' @param sizes
+#' @param height
+#' @param plot.gene
+#' @param plot.global
+#' @param plot.static
+#' @param df.identifier
+#' @param title
+#' @param show.sessionInfo
+#' @param help
+#'
+#' @details How to use this:
+#'
+#' @return
+#' @export
+#'
+#' @examples
 ServeGrandR=function(data,
                    df=GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q",gene.info = FALSE),
                    df.set=df,

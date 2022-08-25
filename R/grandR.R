@@ -360,7 +360,7 @@ Condition <- function(data,value=NULL) {
 #' @details If both column and value are specified for \code{GeneInfo}, a new column is added to the gene annotation table
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
 #' @return Either the gene or column names of the grandR data object, or the columns of an analysis table in the grandR object
@@ -593,6 +593,10 @@ ToIndex=function(data,gene,regex=FALSE) {
 #' Otherwise columns must either be condition/cell names (if type refers to one or several data slots), or regular expressions
 #' to match against the names in the analysis tables.
 #'
+#' @details Columns definitions for data slots can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
+#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition="x").
+#'
 #' @details To refer to data slots, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total)
 #' followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to obtain the \emph{new counts}.
 #'
@@ -696,7 +700,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #'
 #' @param data A grandR object
 #' @param mode.slot Which kind of data to access (see details)
-#' @param columns A vector of columns (either condition/cell names if the type is a mode.slot, or names in the output table from an analysis; use \link{Columns}(data,<analysis>) to learn which columns are available); all condition/cell names if NULL
+#' @param columns which columns (i.e. samples or cells) to return (see details)
 #' @param genes Restrict the output table to the given genes
 #' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
 #'
@@ -789,9 +793,14 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
 #' @return A data frame containing the desired values
 #'
 #' @details To refer to data slots, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total) followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to obtain the \emph{new counts}.
+#'
 #' @details If only one mode.slot and one gene is given, the output table contains one column (and potentially columns from \link{Coldata}) named \emph{Value}. If one gene and multiple mode.slots are given, the columns are named according to the mode.slots. If one mode.slot and multiple genes are given, the columns are named according to the genes. If multiple genes and mode.slots are given, columns are named gene.mode.slot.
+#'
 #' @details If by.rows=TRUE, the table is molten such that each row contains only one value (for one of the genes and for one of the mode.slots). If only one gene and one mode.slot is given, melting does not have an effect.
-#' @details Columns can i.e. condition/cell names; use colnames(data) to learn which columns are available
+#'
+#' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
+#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
 #' @seealso \link{GetTable},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes}
 #'
@@ -839,26 +848,39 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
   re
 }
 
-#' Get a list of significant genes for this grandR object
+#' Significant genes
+#'
+#' Return significant genes for this grandR object
 #'
 #' @param data the grandR object
-#' @param analyses the name or names (or regexes) for the analyses
+#' @param analysis the analysis to use, can be more than one and can be regexes (see details)
 #' @param regex interpret analyses as regex?
-#' @param q.cutoff Q value cut-off (overridden, if criteria is specified)
-#' @param LFC.cutoff LFC value cut-off (overridden, if criteria is specified)
 #' @param criteria the criteria used to define what significant means; can use the column names of the analysis table as variables,  should be a logical or numerical value per gene (see Details)
 #' @param as.table return a table
 #' @param use.symbols return them as symbols (gene ids otherwise)
 #' @param gene.info add gene infos to the output table
 #'
-#' @details If criteria is a logical, it obtains significant genes defined by cut-offs (e.g. on q value and LFC).
+#' @details The analysis parameter (just like for \link{GetAnalysisTable} can be a regex (that will be matched
+#' against all available analysis names). It can also be a vector (of regexes). Be careful with this, if
+#' more than one table e.g. with column LFC ends up in here, only the first is used (if criteria=LFC).
+#'
+#' @details The criteria parameter can be used to define how analyses are performed. If criteria is a logical,
+#' it obtains significant genes defined by cut-offs (e.g. on q value and LFC).
 #' If it is a numerical, all genes are returned sorted (descendingly) by this value.
+#' The columns of the given analysis table(s) can be used to build this expression.
 #'
+#' @return a vector of gene names (or symbols), or a table
 #'
-#' @return a vector of gene names (or symbols)
 #' @export
 #'
-GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,q.cutoff=0.05,LFC.cutoff=1,criteria=Q<q.cutoff & abs(LFC)>=LFC.cutoff,as.table=FALSE,use.symbols=TRUE,gene.info=TRUE) {
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+#' sars <- subset(sars,Coldata(sars,Design$dur.4sU)==2)
+#' sars<-LFC(sars,mode="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' GetSignificantGenes(sars,criteria=LFC>1)
+#'
+GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=Q<0.05 & abs(LFC)>=1,as.table=FALSE,use.symbols=TRUE,gene.info=TRUE) {
   analysis=match.analyses(data,analysis,regex)
   criteria=substitute(criteria)
 
@@ -905,7 +927,7 @@ GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,q.cutoff=0.05,LFC.cut
 #' @param as.list return it as a list (names correspond to each sample, elements are the reference samples)
 #' @param columns find references only for a subset of the columns (samples or cells; can be NULL)
 #'
-#' @return A 0-1 matrix that contains for each sample or cell (in columns) a 1 for the corresponding corresponding reference samples or cells in rows
+#' @return A logical matrix that contains for each sample or cell (in columns) a TRUE for the corresponding corresponding reference samples or cells in rows
 #'
 #' @details Without any group, the list simply contains all references for each sample/cell. With groups defined, each list entry consists of all references from the same group.
 #'

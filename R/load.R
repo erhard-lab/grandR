@@ -217,7 +217,7 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' if the RCurl package is installed, this can also be a URL
 #' @param design Either a design vector (see details), or a data.frame providing metadata for all columns (samples/cells),
 #' or a function that is called with the condition name vector and is supposed to return this data.frame.
-#' @param classify.genes A functions that is used to add the \emph{type} column to the gene annotation table
+#' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{GeneType}
 #' @param read.percent.conv Should the percentage of conversions also be read?
 #' @param verbose Print status updates
 #' @param rename.sample function that is applied to each sample name before parsing (or NULL)

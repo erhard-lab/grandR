@@ -13,7 +13,15 @@
 #' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
 #' @param verbose Print status updates
 #'
-#' @return a new grandR object including a new analysis table
+#' @details This is a convenience wrapper around the likelihood ratio test implemented in DESeq2.
+#'
+#' @return a new grandR object including a new analysis table. The columns of the new analysis table are
+#' \itemize{
+#'  \item{"M"}{the base mean}
+#'  \item{"S"}{the difference in deviance between the reduced model and the full model}
+#'  \item{"P"}{the likelihood ratio test P value}
+#'  \item{"Q"}{same as P but Benjamini-Hochberg multiple testing corrected}
+#' }
 #'
 #' @export
 #'
@@ -51,22 +59,29 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
 }
 
 
-
-#' Helper function to apply apply analysis methods to pairs of conditions
+#' Apply a function over contrasts
+#'
+#' Helper function to run many pairwise comparisons using a contrast matrix
 #'
 #' @param data the grandR object
-#' @param analysis
-#' @param name.prefix the prefix of the new analysis name; a dot and the column names of the contrast matrix are appended
-#' @param contrasts
-#' @param mode.slot
-#' @param FUN
-#' @param ...
+#' @param analysis a plain name, only used for status messages
+#' @param name.prefix the prefix for the new analysis name; a dot and the column names of the contrast matrix are appended; can be NULL (then only the contrast matrix names are used)
+#' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
+#' @param mode.slot which slot to take expression values from
+#' @param FUN a function taking 1. the data matrix, 2. a logical vector indicating condition A and 3. a logical vector indicating condition B
+#' @param ... further parameters forward to FUN
 #'
-#' @return
+#' @details To implement most pairwise analyses, you only have to define FUN; see the source code of \link{LFC} for an example!
+#'
+#' @return a new grandR object with added analysis tables (that were returned by FUN)
+#'
+#' @seealso \link{LFC},\link{PairwiseDESeq2},\link{GetContrasts}
+#'
 #' @export
 #'
-#' @examples
-ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot="count",verbose=FALSE,FUN,...) {
+ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbose=FALSE,FUN,...) {
+  if (is.null(mode.slot)) stop("Need to specify mode.slot!")
+
   mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
   mode.slot=get.mode.slot(data,mode.slot)
   for (n in names(contrasts)) {
@@ -77,20 +92,42 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot="count",ve
   data
 }
 
-#' Calculate the log fold changes between some data based on a contrast matrix
-#' Requires the LFC package
+#' Estimation of log2 fold changes
+#'
+#' Estimate the log fold changes based on a contrast matrix, requires the LFC package.
+#'
 #' @param data the grandR object
-#' @param name.prefix the prefix of the new analysis name; a dot and the column names of the contrast matrix are appended
-#' @param constrasts a contrast matrix that specifies where to compute LFC
-#' @param LFC.fun function to compute log fold change (default: psiLFC)
-#' @param mode one of "total"/"new"/"old"
-#' @param slot the slot of the grandR object to take the data from
-#' @param normalization
-#' @param verbose
-#' @examples
+#' @param name.prefix the prefix for the new analysis name; a dot and the column names of the contrast matrix are appended; can be NULL (then only the contrast matrix names are used)
+#' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
+#' @param slot the slot of the grandR object to take the data from; for \link[lfc]{PsiLFC}, this really should be "count"!
+#' @param LFC.fun function to compute log fold change (default: \link[lfc]{PsiLFC}, other viable option: \link[lfc]{NormLFC})
+#' @param mode compute LFCs for "total", "new", or "old" RNA
+#' @param normalization normalize on "total", "new", or "old" (see details)
+#' @param verbose print status messages?
+#' @param ... further arguments forwarded to LFC.fun
+#'
+#' @details Both \link[lfc]{PsiLFC} and  \link[lfc]{NormLFC}) by default perform normalization by subtracting the median log2 fold change from all log2 fold changes.
+#' When computing LFCs of new RNA, it might be sensible to normalize w.r.t. to total RNA, i.e. subtract the median log2 fold change of total RNA from all the log2 fold change of new RNA.
+#' This can be accomplished by setting mode to "new", and normalization to "total"!
+#'
+#' @return a new grandR object including a new analysis table. The columns of the new analysis table are
+#' \itemize{
+#'  \item{"LFC"}{the log2 fold change}
+#' }
+#'
+#' @seealso \link{PairwiseDESeq2},\link{GetContrasts}
 #' @export
-LFC=function(data, name.prefix = mode, contrasts, LFC.fun=PsiLFC, mode="total",
-             slot="count",
+#'
+#' @examples
+#' SetParallel()
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+#' sars <- subset(sars,Coldata(sars,Design$dur.4sU)==2)
+#' sars<-LFC(sars,mode="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' sars<-LFC(sars,mode="new",normalization="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' head(GetAnalysisTable(sars))
+#'
+LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=PsiLFC, mode="total",
              normalization=NULL,
              verbose=FALSE,...) {
   mode.slot=paste0(mode,".",slot)
@@ -109,18 +146,44 @@ LFC=function(data, name.prefix = mode, contrasts, LFC.fun=PsiLFC, mode="total",
   })
 }
 
-#' Apply DESeq2 on pairs of data defined by a contrast matrix
-#' Requires the DESeq2 package
-#' @param data the grandR object that contains the data
-#' @param name.prefix the prefix for the analysis name
-#' @param constrasts a contrast matrix
-#' @param separate
-#' @param mode one of "total"/"new"/"old"
-#' @param normalization
-#' @param logFC
-#' @param verbose
-#' @examples
+#' Perform Wald tests for differential expression
+#'
+#' Apply DESeq2 for comparisons defined in a contrast matrix, requires the DESeq2 package.
+#'
+#' @param data the grandR object
+#' @param name.prefix the prefix for the new analysis name; a dot and the column names of the contrast matrix are appended; can be NULL (then only the contrast matrix names are used)
+#' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
+#' @param separate model overdispersion separately for all pairwise comparison (TRUE), or fit a single model per gene, and extract contrasts (FALSE)
+#' @param mode compute LFCs for "total", "new", or "old" RNA
+#' @param normalization normalize on "total", "new", or "old" (see details)
+#' @param logFC compute and add the log2 fold change as well
+#' @param verbose print status messages?
+#'
+#' @details DESeq2 by default performs size factor normalization. When computing differential expression of new RNA,
+#' it might be sensible to normalize w.r.t. to total RNA, i.e. use the size factors computed from total RNA instead of computed from new RNA.
+#' This can be accomplished by setting mode to "new", and normalization to "total"!
+#'
+#' @return a new grandR object including a new analysis table. The columns of the new analysis table are
+#' \itemize{
+#'  \item{"M"}{the base mean}
+#'  \item{"S"}{the log2FoldChange divided by lfcSE}
+#'  \item{"P"}{the Wald test P value}
+#'  \item{"Q"}{same as P but Benjamini-Hochberg multiple testing corrected}
+#'  \item{"LFC"}{the log2 fold change (only with the logFC parameter set to TRUE)}
+#' }
+#'
+#' @seealso \link{LFC},\link{GetContrasts}
 #' @export
+#'
+#' @examples
+#' SetParallel()
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+#' sars <- subset(sars,Coldata(sars,Design$dur.4sU)==2)
+#' sars<-PairwiseDESeq2(sars,mode="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' sars<-PairwiseDESeq2(sars,mode="new",normalization="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' head(GetAnalysisTable(sars,column="Q"))
+#'
 PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode="total",
                         normalization=mode, logFC=FALSE, verbose=FALSE) {
   mode.slot=paste0(mode,".count")
@@ -206,49 +269,98 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
   }
 }
 
-#' Compute the posterior logFC distributions of RNA synthesis and degradation
+
+#' Estimate regulation from snapshot experiments
+#'
+#' Compute the posterior log2 fold change distributions of RNA synthesis and degradation
 #'
 #' @param data the grandR object
-#' @param name.prefix  the prefix for the analysis name
-#' @param contrasts A contrast matrix defining pairwise comparisons
-#' @param reference.columns either a reference matrix (\code{\link{FindReferences}}) to define reference samples for each sample in A and B, or a
-#' name list with names A and B containing logical vectors denoting the reference samples
+#' @param name.prefix the prefix for the new analysis name; a dot and the column names of the contrast matrix are appended; can be NULL (then only the contrast matrix names are used)
+#' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
+#' @param reference.columns a reference matrix usually generated by \link{FindReferences} to define reference samples for each sample (see details)
 #' @param slot the data slot to take f0 and totals from
-#' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
-#' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
+#' @param time.labeling the column in the \link{Coldata} table denoting the labeling duration, or the numeric labeling duration itself
+#' @param time.experiment the column in the \link{Coldata} table denoting the experimental time point (can be NULL, see details)
 #' @param ROPE.max.log2FC the region of practical equivalence is [-ROPE.max.log2FC,ROPE.max.log2FC] in log2 fold change space
 #' @param sample.f0.in.ss whether or not to sample f0 under steady state conditions
 #' @param N the sample size
 #' @param N.max the maximal number of samples (necessary if old RNA > f0); if more are necessary, a warning is generated
-#' @param conf.int A number between 0 and 1 representing the size of the credible interval
+#' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param seed Seed for the random number generator
 #' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
 #' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
-#' @param verbose Vebose output
+#' @param verbose Print status messages
 #'
 #' @details The kinetic parameters s and d are computed using \link{TransformSnapshot}. For that, the sample either must be in steady state
-#' (this is the case if defined in the reference.columns matrix), or if the levels at a specific time point are known. This time point is
-#' defined by \code{time.experiment} (i.e. the difference between the steady state samples and the A or B samples themselves). If
-#' \code{time.experiment} is NULL, then the labeling time of the A or B samples is used (e.g. useful if labeling was started concomitantly with
-#' the perturbation, and the steady state samples are unperturbed samples).
+#' (this is the case if defined in the reference.columns matrix), or if the levels at an earlier time point are known from separate samples,
+#' so called temporal reference samples. Thus, if s and d are estimated for a set of samples x_1,...,x_k (that must be from the same time point t),
+#' we need to find (i) the corresponding temporal reference samples from time t0, and (ii) the time difference between t and t0.
+#'
+#' @details The temporal reference samples are identified by the reference.columns matrix. This is a square matrix of logicals, rows and columns correspond to all samples
+#' and TRUE indicates that the row sample is a temporal reference of the columns sample. This time point is defined by \code{time.experiment}. If \code{time.experiment}
+#' is NULL, then the labeling time of the A or B samples is used (e.g. useful if labeling was started concomitantly with the perturbation, and the steady state samples
+#' are unperturbed samples).
 #'
 #' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
-#' that approximates the mixture of betas from the replicate samples. (see \link{beta.approximate.mixture}).
+#' that approximates the mixture of betas from the replicate samples.
 #'
-#' @return a new grandR object containing an additional analysis
+#' @details if N is set to 0, then no sampling from the posterior is performed, but the transformed MAP estimates are returned
+#'
+#' @return a new grandR object including a new analysis table. The columns of the new analysis table are
+#' \itemize{
+#'  \item{"s.A"}{the posterior mean synthesis rate for sample A from the comparison}
+#'  \item{"s.B"}{the posterior mean synthesis rate for sample B from the comparison}
+#'  \item{"HL.A"}{the posterior mean RNA half-life for sample A from the comparison}
+#'  \item{"HL.B"}{the posterior mean RNA half-life for sample B from the comparison}
+#'  \item{"s.log2FC"}{the posterior mean synthesis rate log2 fold change}
+#'  \item{"s.cred.lower"}{the lower CI boundary of the synthesis rate log2 fold change)
+#'  \item{"s.cred.upper"}{the uper CI boundary of the synthesis rate log2 fold change)
+#'  \item{"s.ROPE"}{the signed ROPE probability (negative means downregulation) for the synthesis rate fold change)
+#'  \item{"HL.log2FC"}{the posterior mean half-life log2 fold change}
+#'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life log2 fold change)
+#'  \item{"HL.cred.upper"}{the uper CI boundary of the half-life log2 fold change)
+#'  \item{"HL.ROPE"}{the signed ROPE probability (negative means downregulation) for the half-life fold change)
+#' }
 #'
 #'
+#' @seealso \link{FitKineticsGeneSnapshot},\link{FitKineticsSnapshot}
 #' @export
-EstimateRegulation=function(data,name.prefix="Regulation",contrasts,reference.columns,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL, ROPE.max.log2FC=0.25,sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
+#'
+#' @examples
+#' SetParallel()
+#' banp <- readRDS(system.file("extdata", "BANP.rds", package = "grandR"))
+#'
+#' contrasts <- GetContrasts(banp,contrast=c("Experimental.time.original","0h"),name.format="$A")
+#' reference.columns <- FindReferences(banp,reference= Experimental.time==0)
+#' banp <- EstimateRegulation(banp,"Regulation",contrasts=contrasts,reference.columns=reference.columns,time.labeling = "calibrated_time",verbose=T,time.experiment = "Experimental.time",correct.labeling=TRUE,N=0,dispersion=0.1)
+#' # usually we do not set dispersion to a constant, but let EstimateRegulation estimate it from data; note that we also do not sample (N=0)!
+#' head(GetAnalysisTable(banp))
+#'
+EstimateRegulation=function(data,name.prefix="Regulation",
+                            contrasts,reference.columns,
+                            slot=DefaultSlot(data),
+                            time.labeling=Design$dur.4sU,
+                            time.experiment=NULL,
+                            ROPE.max.log2FC=0.25,
+                            sample.f0.in.ss=TRUE,
+                            N=10000,
+                            N.max=N*10,
+                            CI.size=0.95,
+                            seed=1337,
+                            dispersion=NULL,
+                            hierarchical=TRUE,
+                            correct.labeling=FALSE,
+                            verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
+  if (!is.matrix(reference.columns) || nrow(reference.columns)!=ncol(data) || ncol(reference.columns)!=ncol(data)) stop("Illegal reference.columns parameter!")
 
   for (n in names(contrasts)) {
     if (verbose) cat(sprintf("Computing Regulation for %s...\n",n))
     A=contrasts[[n]]==1
     B=contrasts[[n]]==-1
 
-    ss=if (is.matrix(reference.columns)) list(A=apply(reference.columns[,Columns(data,A),drop=FALSE]==1,1,any),B=apply(reference.columns[,Columns(data,B),drop=FALSE]==1,1,any))
+    ss=list(A=apply(reference.columns[,Columns(data,A),drop=FALSE]==1,1,any),B=apply(reference.columns[,Columns(data,B),drop=FALSE]==1,1,any))
     if (length(Columns(data,ss$A))==0 || length(Columns(data,ss$B))==0) stop("No reference columns found; check your reference.columns parameter!")
     dispersion.A = if (sum(ss$A)==1) rep(0.1,nrow(data)) else if (!is.null(dispersion)) rep(dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$A))
     dispersion.B = if (sum(ss$B)==1) rep(0.1,nrow(data)) else if (!is.null(dispersion)) rep(dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss$B))
@@ -456,6 +568,21 @@ hierarchical.beta.posterior=function(a,b,
   re
 }
 
+
+
+#' List available gene sets
+#'
+#' Helper function to return a table with all available gene sets for \link{AnalyzeGeneSets}.
+#'
+#' @details This is a convenience wrapper for \link[msigdbr]{msigdbr_collections}.
+#'
+#' @return the gene set table; use the values in the category and subcategory columns for the corresponding parameters of \link{AnalyzeGeneSets}
+#'
+#'
+#'
+#' @seealso \link{AnalyzeGeneSets}
+#' @export
+#'
 ListGeneSets=function() {
   descr=c(
     H="Hallmark gene sets  are coherently expressed signatures derived by aggregating many MSigDB gene sets to represent well-defined biological states or processes.",
@@ -473,19 +600,43 @@ ListGeneSets=function() {
   re
 }
 
-#' Perform gene-set enrichment and overrepresentation analysis for a specified
+
+#' Gene set analysis
+#'
+#' Perform gene-set enrichment and overrepresentation analysis (GSEA/ORA) for a specified
 #' set of genes
+#'
 #' @param data the grandR object that contains the data to analyze
-#' @param analysis the analysis to use (default: the first analysis) can be multiple, use . notation
-#' @param criteria
-#' @param species the species the genes belong to (eg "Homo sapiens")
-#' @param category
-#' @param subcategory
-#' @param verbose
-#' @param minSize
-#' @param maxSize
-#' @param process.genesets
+#' @param analysis the analysis to use, can be more than one and can be regexes (see details)
+#' @param criteria an expression to define criteria for GSEA/ORA (see details)
+#' @param species the species the genes belong to (eg "Homo sapiens"); can be NULL, then the species is inferred from gene ids (see details)
+#' @param category the category defining gene sets (see \link{ListGeneSets})
+#' @param subcategory the category defining gene sets (see \link{ListGeneSets})
+#' @param verbose Print status messages
+#' @param minSize The minimal size of a gene set to be considered
+#' @param maxSize The maximal size of a gene set to be considered
+#' @param process.genesets a function to process geneset names; can be NULL (see details)
+#'
+#' @details The analysis parameter (just like for \link{GetAnalysisTable} can be a regex (that will be matched
+#' against all available analysis names). It can also be a vector (of regexes). Be careful with this, if
+#' more than one table e.g. with column LFC ends up in here, only the first is used (if criteria=LFC).
+#'
+#' @details The criteria parameter can be used to define how analyses are performed. The criteria must be an expression
+#' that either evaluates into a numeric or logical vector. In the first case, GSEA is performed, in the latter it is ORA.
+#' The columns of the given analysis table(s) can be used to build this expression.
+#'
+#' @details If no species is given, a very simple automatic inference is done, which will only work when having human or mouse ENSEMBL identifiers as gene ids.
+#'
+#' @details The process.genesets parameters can be function that takes the character vector representing the names of all gene sets. The original names are replaced
+#' by the return value of this function.
+#'
+#' @return the clusterprofile object representing the analysis results.
+#'
+#' @seealso \link[clusterProfiler]{GSEA},\link[clusterProfiler]{enricher},\link[msigdbr]{msigdbr}
+#'
 #' @examples
+#' # See the differential-expression vignette!
+#'
 #' @export
 AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
                          species = NULL, category = NULL, subcategory = NULL,
@@ -553,6 +704,8 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
 #' head(as.matrix(GetTable(sars)) %*% GetSummarizeMatrix(sars))   # average by matrix multiplication
 #' head(GetTable(sars,summarize = TRUE))                          # shortcut, does the same
 #'
+#' # See the data-matrices-and-analysis-results vignette for more examples!
+#'
 #' @export
 #'
 GetSummarizeMatrix <- function (x, ...) {
@@ -601,8 +754,6 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 #' @param group Split the samples or cells according to this column of the column annotation table (and adapt the of the output table)
 #' @param name.format Format string for generating the column from the contrast vector (see details)
 #'
-#' @return A contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}
-#'
 #' @details To compare one specific factor level \emph{A} against another level \emph{B} in
 #' a particular column \emph{COL} of the column annotation table, specify contrast=c("COL","A","B")
 #'
@@ -627,6 +778,8 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
+#' @return A contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}
+#'
 #' @seealso \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}
 #'
 #' @examples
@@ -636,8 +789,9 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 #' GetContrasts(sars,contrast="Condition")                    # Compare all Mock vs. all SARS
 #' GetContrasts(sars,contrast=c("Condition","SARS","Mock"))   # This direction of the comparison is more reasonable
 #' GetContrasts(sars,contrast=c("Condition","SARS","Mock"),group="Time")   # Compare SARS vs Mock per time point
-#' GetContrasts(sars,contrast=c("Time","no4sU"), group="Condition",name.format="$COL ($A vs $B)")   # Compare each sample against the respective no4sU sample
+#' GetContrasts(sars,contrast=c("Time","no4sU"), group="Condition",name.format="$A vs $B ($GRP)",no4sU=TRUE)   # Compare each sample against the respective no4sU sample
 #'
+#' # See the differential-expression vignette for more examples!
 #' @export
 #'
 GetContrasts <- function (x, ...) {
