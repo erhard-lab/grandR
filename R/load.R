@@ -8,12 +8,12 @@
 #' Returns a function to be used as \code{classify.genes} parameter for \code{\link{ReadGRAND}} and \code{\link{ReadGRAND3}}.
 #'
 #' @param use.default if TRUE, use the default type inference (priority after the user defined ones); see details
-#' @param drop.level if TRUE, drop unused types from the factor that is generated
+#' @param drop.levels if TRUE, drop unused types from the factor that is generated
 #' @param name.unknown the type to be used for all genes where no type was identified
 #' @param ... additional functions to define types (see details)
 #'
 #' @details This function returns a function. Usually, you do not use it ourself but \code{GeneType} is usually as \code{classify.genes} parameter
-#' for  \code{\link{ReadGRAND}} and \code{\link{ReadGRAND3}} to build the \emph{Type} column in the \code{\link{GeneInfo}} table. See the example
+#' for  \code{\link{ReadGRAND}} to build the \emph{Type} column in the \code{\link{GeneInfo}} table. See the example
 #' to see how to use it directly.
 #'
 #' @details Each ... parameter must be a function that receives the gene info table and must return a logical vector, indicating for each row
@@ -25,7 +25,7 @@
 #' and Ensembl gene identifiers (which it will call "cellular"). These three are the last functions to be checked (in case a user defined type via ...) also
 #' matches to, e.g., an Ensembl gene).
 #'
-#' @seealso \link{ReadGRAND}, \link{ReadGRAND3}
+#' @seealso \link{ReadGRAND}
 #' @examples
 #'
 #' viral.genes <- c('ORF3a','E','M','ORF6','ORF7a','ORF7b','ORF8','N','ORF10','ORF1ab','S')
@@ -54,7 +54,6 @@ GeneType=function(...,use.default=TRUE, drop.levels=TRUE, name.unknown="Unknown"
     re=factor(gene.info$Type,levels=names(ll))
     if (drop.levels) droplevels(re) else re
   }
-
 }
 
 
@@ -80,48 +79,57 @@ Design=list(
 )
 
 
-#' Add additional columns to the \code{\link{Coldata}} table.
+#' Build the design semantics list
 #'
-#' Design.Semantics is a list of functions that is supposed to be used as \code{semantics} parameter when calling \code{\link{MakeColdata}}.
+#' This is used to add additional columns to the \code{\link{Coldata}} table by giving additional semantics to existing columns.
+#'
+#' @param ... named parameter list of functions (see details)
+#'
+#' @details DesignSemantics returns a list of functions that is supposed to be used as \code{semantics} parameter when calling \code{\link{MakeColdata}}.
 #' For each design vector element matching a name of this list the corresponding function is called by \link{MakeColdata} to add additional columns.
-#' By default, \code{duration.4sU} is mapped to \code{\link{Semantics.time}}.
 #'
-#' @name Design.Semantics
+#' @details Each function takes two parameters, the first being the original column in the \code{Coldata} table column, the second being its name.
 #'
-#' @param s the original column in the \code{Coldata} table column
-#' @param name the name of the column in the \code{Coldata} table column
+#' @details Semantics.time is such a predefined function: Contents such as 3h or 30min are converted into a numerical value (in hours), and no4sU is converted into 0.
 #'
-#' @details
-#' \itemize{
-#'   \item{\strong{Semantics.noop:} Just add the column as is}
-#'   \item{\strong{Semantics.time:} Contents such as 3h or 30min are converted into a numerical value (in hours), and no4sU is converted into 0.}
-#'   }
+#' @details By default, this is used for the names duration.4sU and Experimental.time
 #'
-#' @format
 #' @seealso \link{MakeColdata}
 #' @examples
 #'
 #' Semantics.time(c("5h","30min","no4sU"),"Test")
 #'
 #'
-#' sema <- list(duration.4sU=
-#'      function(s,name) {
+#' myfun <- function(s,name) {
 #'         r<-Semantics.time(s,name)
 #'         cbind(r,data.frame(hpi=paste0(r$duration.4sU+3,"h")))
-#'      })
+#' }
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
-#'                   design=function(names) MakeColdata(names,c("Cell",Design$dur.4sU,Design$Replicate),semantics=sema),
-#'                   classify.genes=classi,
+#'                   design=function(names) MakeColdata(names,c("Cell",Design$dur.4sU,Design$Replicate),semantics=DesignSemantics(duration.4sU=myfun)),
 #'                   verbose=TRUE)
 #' Coldata(sars)
 #'
-NULL
+#' @export
+DesignSemantics=function(...) {
+  ll=list(...)
+  if (!"duration.4sU" %in% names(ll)) ll=c(ll,list(duration.4sU=Semantics.time))
+  if (!"Experimental.time" %in% names(ll)) ll=c(ll,list(Experimental.time=Semantics.time))
+  ll
+}
 
-#' @rdname Design.Semantics
+
+#' Semantics for time columns
+#'
+#' Defines additional semantics for columns representing temporal dimensions
+#'
+#' @param s original column
+#' @param name the column name
+#'
+#' @return a data frame with a single numeric column, where <x>h froms is replaced by x, <x>min is replaced by
+#' x/60, and no4sU is replaced by 0
+#'
 #' @export
-Semantics.noop=function(s,name) setNames(data.frame(s),name)
-#' @rdname Design.Semantics
-#' @export
+#'
 Semantics.time=function(s,name) {
   time=rep(NA,length(s))
 
@@ -138,13 +146,6 @@ Semantics.time=function(s,name) {
   if (any(is.na(time))) stop(paste0("Time semantics cannot be used for this: ",paste(s[is.na(time)],collapse=",")))
   setNames(data.frame(time),name)
 }
-
-#' @rdname Design.Semantics
-#' @export
-Design.Semantics=list(
-  duration.4sU=Semantics.time,
-  Experimental.time=Semantics.time
-)
 
 
 #' Extract an annotation table from a formatted names vector
@@ -177,12 +178,12 @@ Design.Semantics=list(
 #'
 #' @export
 #'
-#' @seealso \link{ReadGRAND},\link{Design.Semantics},\link{Coldata}
+#' @seealso \link{ReadGRAND},\link{DesignSemantics},\link{Coldata}
 #'
 #' @examples
 #' coldata <- MakeColdata(c("Mock.0h.A","Mock.0h.B","Mock.2h.A","Mock.2h.B"), design=c("Cell",Design$dur.4sU,Design$Replicate))
 #'
-MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.originals=TRUE) {
+MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep.originals=TRUE) {
   coldata=data.frame(Name=factor(names,levels=unique(names)),check.names=FALSE,stringsAsFactors = FALSE)
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
@@ -244,7 +245,7 @@ MakeColdata=function(names,design,semantics=Design.Semantics,rownames=TRUE,keep.
 #' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
 #' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
 #'
-#' @seealso \link{GeneType},\link{MakeColdata},\link{Design.Semantics}
+#' @seealso \link{GeneType},\link{MakeColdata},\link{DesignSemantics}
 #'
 #' @examples
 #' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz", design=c("Cell",Design$dur.4sU,Design$Replicate), verbose=TRUE)
@@ -377,7 +378,7 @@ ReadGRAND3_sparse=function(prefix, design=c(Design$Library,Design$Sample,Design$
 
 
   if (verbose) cat("Reading count matrix...\n")
-  count=as(Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "dgCMatrix")
+  count=methods::as(Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "dgCMatrix")
   gene.info=read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
   if (ncol(gene.info)==4) gene.info$Length=1
   gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
@@ -412,19 +413,19 @@ ReadGRAND3_sparse=function(prefix, design=c(Design$Library,Design$Sample,Design$
   re$count=count
 
   if (verbose) cat("Reading NTRs...\n")
-  ntr=as(Matrix::readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+  ntr=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
   colnames(ntr)=cols
   rownames(ntr)=gene.info$Gene
   re$ntr=ntr
 
   if (read.posterior && file.exists(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
     if (verbose) cat("Reading posterior beta parameters...\n")
-    alpha=as(Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    alpha=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
     colnames(alpha)=cols
     rownames(alpha)=gene.info$Gene
     re$alpha=alpha
 
-    beta=as(Matrix::readMM(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    beta=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
     colnames(beta)=cols
     rownames(beta)=gene.info$Gene
     re$beta=beta
@@ -463,7 +464,7 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
   gene.info=setNames(read.csv(genes,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
 
   if (verbose) cat("Reading total count matrix...\n")
-  count=as(Matrix::readMM(total.matrix),Class = "dgCMatrix")
+  count=methods::as(Matrix::readMM(total.matrix),Class = "dgCMatrix")
 
   if (anyDuplicated(gene.info$Gene)) {
     dupp=table(gene.info$Gene)
@@ -488,14 +489,14 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
   rownames(count)=gene.info$Symbol
 
   if (verbose) cat("Reading new count matrix...\n")
-  new=as(Matrix::readMM(new.matrix),Class = "dgCMatrix")
+  new=methods::as(Matrix::readMM(new.matrix),Class = "dgCMatrix")
 
   if (verbose) cat("Computing NTRs...\n")
   new=new/detection.rate
   ntr=new/count
   ntr@x[ntr@x>1]=1
   ntr@x[is.nan(ntr@x)]=0
-  ntr=as(ntr,Class = "dgCMatrix")
+  ntr=methods::as(ntr,Class = "dgCMatrix")
 
   colnames(ntr)=colnames(count)
   rownames(ntr)=rownames(count)

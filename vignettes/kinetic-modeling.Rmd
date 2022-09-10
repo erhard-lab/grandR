@@ -17,7 +17,7 @@ vignette: >
 knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
 ```
 
-One of the main applications of metabolic RNA labeling is to model the kinetics of RNA expression levels [Jürges et al, Bioinformatics 2018](https://doi.org/10.1093/bioinformatics/bty256)[Narain et al., Mol Cell 2021](https://doi.org/10.1016/j.molcel.2021.06.016). The most natural and widely used model is to describe the change of RNA levels $a(t)$ at time $t$ is via first order reactions by the differential equation:
+One of the main applications of metabolic RNA labeling is to model the kinetics of RNA expression levels [1](https://doi.org/10.1093/bioinformatics/bty256)[2](https://doi.org/10.1016/j.molcel.2021.06.016). The most natural and widely used model is to describe the change of RNA levels $a(t)$ at time $t$ is by the differential equation:
 
 
 $$
@@ -25,10 +25,16 @@ $$
 $$
 Here $\sigma$ is the net synthesis rate of RNA and $\delta$ is the degradation rate. This differential equation can be solved analytically (see e.g. [[1]](https://doi.org/10.1093/bioinformatics/bty256)). Based on this, there are several ways implemented in grandR to estimate both $\sigma$ and $\delta$. Here, we will see how to fit this model using non-linear least squares (NLLS) regression on the estimated new and old RNA levels [[2]](https://doi.org/10.1016/j.molcel.2021.06.016).
 
-To perform an analysis of the RNA dynamics for data from [Finkel et al, Nature 2021](https://www.nature.com/articles/s41586-021-03610-3), we first load the grandR package and the read the GRAND-SLAM output table directly from zenodo:
+To perform an analysis of the RNA dynamics for data from [3](https://www.nature.com/articles/s41586-021-03610-3), we first load the grandR package and the read the GRAND-SLAM output table directly from zenodo:
 
+```{r warning=FALSE}
+suppressPackageStartupMessages({
+    library(grandR)
+    library(ggplot2)
+    library(patchwork)
+})
+```
 ```{r}
-suppressPackageStartupMessages({library(grandR)})
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
 ```
@@ -39,21 +45,17 @@ Note that sample metadata has been automatically extracted from the sample names
 Coldata(sars)
 ```
 
-At 3h post infection, 4sU was added to the cells for 1,2,3 or 4h. The two no4sU samples are also 3h post infection. The infection time point can be added to this table via:
-
-```{r}
-Coldata(sars,"hpi")<-paste0(Coldata(sars,"duration.4sU")+3,"hpi")
-Coldata(sars)
-```
-
-By default GRAND-SLAM will output all genes (with at least one mapped read), and `ReadGRAND` will read all these genes from the output:
+By default GRAND-SLAM will report data on all genes (with at least one mapped read), and `ReadGRAND` will read all these genes from the output:
 
 ```{r}
 sars
 ```
+
 Thus, we filter to only include genes that have at least 100 reads in at least 6 samples:
+
 ```{r}
-sars <- FilterGenes(sars,minval = 100, mincol = 6) # as 100 reads and half of the sample is the default, this is identical to sars <- FilterGenes(sars)
+sars <- FilterGenes(sars,minval = 100, mincol = 6) 
+# as 100 reads and half of the sample is the default, this is identical to sars <- FilterGenes(sars)
 sars
 ```
 The actual data is available in so-called "data slots". `ReadGRAND` adds the read counts, new to total RNA ratios (NTRs) and information on the NTR posterior distribution (alpha,beta).
@@ -65,7 +67,7 @@ PlotPCA(sars)
 
 The samples are colored according to the `Condition` annotation (see above in the Coldata table). `Condition` has a special meaning in grandR, not only for `PlotPCA`, but also for other analyses (see below). The `Condition` can be set conveniently using the `Condition` function. For more information, see the [Loading data vignette](loading-data.html). For `PlotPCA`, the visual attributes can be adapted via a parameter (this is the mapping parameter to ggplot, and, thus, all names from the Coldata table can be used in expressions):
 ```{r,fig.height=4}
-PlotPCA(sars,aest=aes(color=hpi,shape=Condition))
+PlotPCA(sars,aest=aes(color=duration.4sU.original,shape=Condition))
 ```
 There are no obvious problems with the samples, even though the virus infected 3hpi sample is the top-most whereas the other virus infected samples are ordered along infection time from bottom to top.
 
@@ -84,7 +86,7 @@ PlotToxicityTestRankAll(subset(sars,Condition=="Mock"))
 
 Before we estimate kinetic parameters globally, we inspect an example:
 ```{r,fig.height=3.5,fig.width=5}
-PlotGeneKinetics(sars,"SRSF6")
+PlotGeneProgressiveTimecourse(sars,"SRSF6")
 ```
 
 The curves represent the fitted model for this gene. The kinetic modeling by default makes the assumption of steady state gene expression, i.e. that as much RNA is transcribed per time unit as it is degraded. In mathematical terms, it is 
@@ -93,7 +95,7 @@ $$
 $$
 For the virus infected samples ("SARS"), this is not the case. So we specify an additional parameter:
 ```{r,fig.height=3.5,fig.width=5}
-PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
+PlotGeneProgressiveTimecourse(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 
 Note that the fit actually changed. Now we are ready to fit the model for each gene. For that, we set `SetParallel()` which will set the number of worker threads to "number of cores"-2. We also specify the same `steady.state` parameter to `FitKinetics`:
@@ -160,7 +162,7 @@ sars<-FitKinetics(sars,"kinetics",steady.state=list(Mock=TRUE,SARS=FALSE),return
 Let's plot their distributions:
 ```{r}
 df <- GetAnalysisTable(sars,columns = "Residuals",gene.info = FALSE,prefix.by.analysis = FALSE)
-df <- melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
+df <- reshape2::melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
 df$Sample=gsub("Residuals.","",df$Sample)
 ggplot(df,aes(Sample,`Relative residual`))+
   geom_hline(yintercept = 0)+
@@ -171,7 +173,7 @@ ggplot(df,aes(Sample,`Relative residual`))+
 
 We see that the residuals from the 1h timepoints are systematically below zero. A canonical example of this is SMAD3:
 ```{r}
-PlotGeneKinetics(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE))
+PlotGeneProgressiveTimecourse(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 For both Mock and SARS, we see that new RNA from 1h is well below the model fit, i.e. has negative residual. This indicates that the effective labeling time was much lower than the nominal labeling time of 1h for these samples, i.e. that actualy, these samples should move to the left. This can be rectified by temporal recalibration:
 
@@ -187,7 +189,7 @@ Coldata(sars)
 
 This recalibrated time can now be used to plot fitted models:
 ```{r}
-PlotGeneKinetics(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE),
+PlotGeneProgressiveTimecourse(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE),
                  time = "calibrated_time",exact.tics = FALSE)
 ```
 
@@ -199,7 +201,11 @@ sars<-FitKinetics(sars,"corrected",time = "calibrated_time",steady.state=list(Mo
 This indeed corrected the residuals:
 ```{r}
 df <- GetAnalysisTable(sars,analyses = "corrected", columns = "Residuals",gene.info = FALSE,prefix.by.analysis = FALSE)
-df <- melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
+df <- reshape2::melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
 df$Sample=gsub("Residuals.","",df$Sample)
-ggplot(df,aes(Sample,`Relative residual`))+geom_boxplot()+RotatateAxisLabels()+geom_hline(yintercept = 0)+coord_cartesian(ylim=c(-1,1))
+ggplot(df,aes(Sample,`Relative residual`))+
+  geom_boxplot()+
+  RotatateAxisLabels()+
+  geom_hline(yintercept = 0)+
+  coord_cartesian(ylim=c(-1,1))
 ```

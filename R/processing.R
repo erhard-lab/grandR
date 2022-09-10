@@ -91,7 +91,7 @@ ComputeNtrPosteriorUpper=function(data,CI.size=0.95,name="upper") ComputeNtrPost
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
-#' conveniently build a logical vector (e.g., columns=Condition="x").
+#' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a new grandR object with an additional slot or analysis
 #' @export
@@ -158,10 +158,10 @@ ComputeAbsolute=function(data,dilution=4E4,volume=10,slot="tpm",name="absolute")
   mat=GetTable(data,type=slot)
   ercc=mat[GeneInfo(data,"Type")=='ERCC',]
 
-  cds <- newCellDataSet(mat,
-                        featureData = new ("AnnotatedDataFrame",fd),
+  cds <- monocle::newCellDataSet(mat,
+                        featureData = methods::new ("AnnotatedDataFrame",fd),
                         lowerDetectionLimit = 0.1,
-                        expressionFamily = tobit(Lower = 0.1))
+                        expressionFamily = VGAM::tobit(Lower = 0.1))
   rpc_matrix <- monocle::relative2abs(cds, method = "num_genes", ERCC_controls=ercc, ERCC_annotation=monocle::spike_df,dilution=dilution, volume=volume)
   rpc_matrix[mat]=0
 
@@ -280,7 +280,7 @@ NormalizeTPM=function(data,genes=Genes(data),name="tpm",slot="count",set.to.defa
 #' blmat <- FindReferences(sars,reference = duration.4sU==0, group = "Cell")  # the Mock.no4sU or SARS.no4sU sample are the baselines for each sample
 #' sars <- NormalizeBaseline(data,baseline=blmat)
 #' head(GetTable(data,type="baseline"))
-NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition==levels(Condition)[1]),name="baseline",slot=DefaultSlot(data),set.to.default=FALSE,LFC.fun=PsiLFC,...) {
+NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition==levels(Condition)[1]),name="baseline",slot=DefaultSlot(data),set.to.default=FALSE,LFC.fun=lfc::PsiLFC,...) {
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
   mat=sapply(colnames(baseline),function(n) LFC.fun(mat[,n],rowMeans(mat[,baseline[,n],drop=FALSE]),...))
@@ -405,7 +405,6 @@ FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.c
 #' @return a new grandR object having the expression percentage in its Coldata table
 #' @export
 #'
-#' @examples
 ComputeExpressionPercentage=function(data,name,genes,mode.slot=DefaultSlot(data),multiply.by.100=TRUE) {
   gof=colSums(GetTable(data,type=mode.slot,ntr.na = FALSE,genes = genes))
   total=colSums(GetTable(data,type=mode.slot,ntr.na = FALSE))

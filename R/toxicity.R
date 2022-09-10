@@ -8,6 +8,7 @@
 #'
 #' @param data a grandR object
 #' @param paired.replicates pair replicates, i.e. only no4sU.A is found for 4sU.A
+#' @param discard.no4sU do not report references for no4sU samples
 #'
 #' @return a named list containing, for each 4sU sample, a vector of equivalent no4sU samples
 #' @export
@@ -20,7 +21,11 @@
 #' Findno4sUPairs(sars)
 #'
 Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
-  pairs=FindReferences(data,reference=no4sU,group = if(paired.replicates) c(Design$Replicate,Design$Condition) else Design$Condition, as.list=TRUE)
+  grp=NULL
+  if (paired.replicates && Design$Replicate %in% names(Coldata(data))) grp=c(grp,Design$Replicate)
+  if (Design$Condition %in% names(Coldata(data))) grp=c(grp,Design$Condition)
+
+  pairs=FindReferences(data,reference=no4sU,group = grp, as.list=TRUE)
 
   pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
   if (any(sapply(pairs,function(a) length(a)==0))) warning("There were samples without corresponding no4sU sample!")
@@ -29,7 +34,7 @@ Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
   pairs
 }
 
-MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=PsiLFC,slot="count",correction=1,TU.len=NULL) {
+MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=lfc::PsiLFC,slot="count",correction=1,TU.len=NULL) {
   w=rowMeans(GetTable(data,type=slot,columns=w4sU))
   col=no4sU
   n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=col))
@@ -141,10 +146,10 @@ CorrectBiasHLNonlinear=function(data,pairs=Findno4sUPairs(data),TU.len=NULL) {
 }
 
 
-CorrectBiasHLLen = function(data,pairs=Findno4sUPairs(data),LFC.fun=NormLFC) {
+CorrectBiasHLLen = function(data,pairs=Findno4sUPairs(data),LFC.fun=lfc::NormLFC) {
   for (i in 1:length(pairs)) {
     df=MakeToxicityTestTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,LFC.fun=LFC.fun)
-    df$tulen=pmin(80000,setNames(fil$gene.info$TU.len,fil$gene.info$Symbol)[rownames(df)])
+    df$tulen=pmin(80000,setNames(data$gene.info$TU.len,data$gene.info$Symbol)[rownames(df)])
     obj=function(par) {
       p=par[1]
       f=par[2]
@@ -177,7 +182,7 @@ CorrectBiasHLLen = function(data,pairs=Findno4sUPairs(data),LFC.fun=NormLFC) {
 }
 
 
-EstimateTranscriptionLossLen = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC,TU.len) {
+EstimateTranscriptionLossLen = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::NormLFC,TU.len) {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun,TU.len=TU.len)
   df$tulen[is.na(df$tulen)]=median(df$tulen,na.rm=TRUE)
   obj=function(par) {
@@ -192,7 +197,7 @@ EstimateTranscriptionLossLen = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC
   setNames(optim(c(0.01,0.5),obj)$par,c("p","f"))
 }
 
-EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=NormLFC, type=c("quantreg","spearman","linear","lowess"),bootstrap=FALSE) {
+EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::NormLFC, type=c("quantreg","spearman","linear","lowess"),bootstrap=FALSE) {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun)
 
   if (bootstrap) df = df[sample.int(nrow(df),nrow(df),replace=TRUE),]
@@ -247,13 +252,14 @@ PlotToxicityTestLengthDeferAll=function(data,pairs=NULL,TU.len="TU.len",...) {
   rm(data)
   setNames(lapply(names(pairs),function(n) Defer(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],TU.len = TU.len,add=ggtitle(n),height=4,...)),names(pairs))
 }
-PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",TU.len="TU.len") {
+PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",TU.len="TU.len") {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=1,TU.len = TU.len)
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
     ylim=c(-d,d)
   }
   ggplot(df,aes(tulen,lfc,color=density2d(log(tulen), lfc, n = 100)))+
+    cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide=FALSE)+
     geom_point(alpha=1)+
     scale_x_log10("TU length")+
@@ -277,6 +283,8 @@ PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr
 #' @param LFC.fun function to compute log fold change (default: \link[lfc]{PsiLFC}, other viable option: \link[lfc]{NormLFC})
 #' @param slot the slot of the grandR object to take the data from; for \link[lfc]{PsiLFC}, this really should be "count"!
 #' @param hl.quantile the half-life quantile to cut the plot
+#' @param correction correction factor
+#' @param ... further arguments to be passed to or from other methods.
 #'
 #' @details The deferred versions are useful to be used in conjunction with \link{ServeGrandR} plot.static. Their implementation
 #' make sure that they are lightweight, i.e. when saving the returned function to an Rdata file, the grandR object is not stored.
@@ -317,7 +325,7 @@ PlotToxicityTestRankDeferAll=function(data,pairs=NULL,...) {
 
 #' @rdname toxicity
 #' @export
-PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",correction=1) {
+PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",correction=1) {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(v) rank(v),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
@@ -329,6 +337,7 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
   df$lfc=ifelse(df$lfc<ylim[1],-Inf,df$lfc)
   df$lfc=ifelse(df$lfc>ylim[2],+Inf,df$lfc)
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
+    cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide='none')+
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+
@@ -340,7 +349,7 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
 
 #' @rdname toxicity
 #' @export
-PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=PsiLFC,slot="count",hl.quantile=0.8,correction=1) {
+PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,correction=1) {
   time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   df=df[df$covar<quantile(df$covar[is.finite(df$covar)],hl.quantile) & df$ntr<1 & df$ntr>0,]
@@ -349,6 +358,7 @@ PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,
     ylim=c(-d,d)
   }
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
+    cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide=FALSE)+
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+

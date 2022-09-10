@@ -1,36 +1,51 @@
 
-#' Serve a shiny web-server
+#' Serve a shiny web interface
 #'
-#' Start a shiny web server for exploration of a grandR object
+#' Fire up a shiny web server for exploratory analysis of grandR data.
 #'
-#' @param data
-#' @param df
-#' @param df.set
-#' @param sizes
-#' @param height
-#' @param plot.gene
-#' @param plot.global
-#' @param plot.static
-#' @param df.identifier
-#' @param title
-#' @param show.sessionInfo
-#' @param help
+#' @param data the grandR object (or a file name to an rds file containing a grandR object)
+#' @param table the table to display (can be NULL; see details)
+#' @param sizes the widths for the gene plots to show (12 is full screen with); must be a vector as long as there are gene plots
+#' @param height the height for the gene plots in pixel
+#' @param plot.gene a list of gene plots; can be NULL, then the stored gene plots are used (see \link{Plots})
+#' @param plot.global  a list of global plots; can be NULL, then the stored global plots are used (see \link{Plots})
+#' @param df.identifier the main identifier (column name) from the table; this is used when calling the gene plot functions;
+#' @param title the title to show in the header of the website
+#' @param show.sessionInfo wether to show session info
+#' @param help a list of characters that is shown as help text at the beginning (when no gene plot is shown); should describe the contents of your table
 #'
-#' @details How to use this:
+#' @details If the table parameter is NULL, either an analysis table named "ServeGrandR" is
+#' used (if it exists), otherwise the columns "Q", "LFC", "Synthesis" and "Half-life" of all analysis tables are used.
 #'
-#' @return
+#' @details The gene plots must be functions that accept two parameters: the grandR object and a gene identifier. You can either use
+#' functions directly (e.g. \code{plot.gene=list(PlotGeneOldVsNew)}), or use \link{Defer} in cases you need to specify additional parameters,
+#' e.g. \code{plot.gene=list(Defer(PlotGeneOldVsNew,log=FALSE))}. The global plots are functions accepting a single parameter (the grandR object). Here
+#' the use of \link{Defer} is encouraged due to its caching mechanism.
+#'
+#' @return a shiny web server
 #' @export
-#'
-#' @examples
 ServeGrandR=function(data,
-                   df=GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q",gene.info = FALSE),
-                   df.set=df,
+                   table=NULL,
                    sizes=NA,height=400,
-                   plot.gene=list(), plot.global=list(), plot.static=list(),
+                   plot.gene=NULL,
+                   plot.global=NULL,
                    df.identifier="Symbol",
                    title=Title(data),
                    show.sessionInfo=FALSE,
                    help=list(".Q: multiple testing corrected p values",".LFC: log2 fold changes") ) {
+
+  if (is.character(data) && file.exists(data)) data = readRDS(data)
+
+  plot.static=list()
+  df=table
+  if (is.null(df)) {
+    df=if ("ServeGrandR" %in% Analyses(data)) GetAnalysisTable(data,analyses = "ServeGrandR",regex = FALSE,gene.info = FALSE) else GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q",gene.info = FALSE)
+  }
+
+  if (ncol(df)==0) stop("Empty table given!")
+
+  if (is.null(plot.gene)) plot.gene=data$plots$gene
+  if (is.null(plot.global)) plot.global=data$plots$global
 
 
   if (!is.list(plot.gene)) plot.gene=list(plot.gene)
@@ -73,12 +88,12 @@ ServeGrandR=function(data,
 	  )
 
 	  mods=list(`Raw data`=unlist(lapply(Slots(data),function(sl) if(sl %in% c("ntr","alpha","beta")) sl else paste0(c("","new.","old."),sl))),Analyses=Analyses(data))
-	  observeEvent(input$downloadraw, {
+	  shiny::observeEvent(input$downloadraw, {
 	    shiny::showModal(shiny::modalDialog(
 	      shiny::selectInput("datamodality","Data modality",choices=mods,selected=DefaultSlot(data),selectize = FALSE),
 
-	      title="Download data",easyClose=TRUE,footer=tagList(
-	        modalButton("Cancel"),
+	      title="Download data",easyClose=TRUE,footer=htmltools::tagList(
+	        shiny::modalButton("Cancel"),
 	        shiny::downloadButton("downloadrawdoit", "OK")
 	      )
 	    ))
@@ -88,33 +103,33 @@ ServeGrandR=function(data,
 	      paste0(title,"-", Sys.Date(), ".tsv.gz")
 	    },
 	    content = function(file) {
-	      on.exit(removeModal())
+	      on.exit(shiny::removeModal())
 	      ggg=as.character(df[input$tab_rows_all,1])
 	      tab=GetTable(data,type=input$datamodality,ntr.na = FALSE,gene.info = TRUE,genes = ggg)
 	      write.table(tab, gzfile(file),row.names=F,col.names=T,quote=F,sep="\t")
 	    }
 	  )
 
-	  output$clip <- renderUI({
+	  output$clip <- shiny::renderUI({
 	    nn=if(.row_names_info(df)<0) df[input$tab_rows_all,1] else rownames(df)[input$tab_rows_all]
 	    rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), modal=TRUE,shiny::icon("clipboard"))
 	  })
-	  observeEvent(input$clipbtn, {showNotification(
+	  shiny::observeEvent(input$clipbtn, {shiny::showNotification(
 	    sprintf("Copied %d names",length(input$tab_rows_all)),
 	    duration = 2,
 	    type = "message"
 	  )})
 
 
-	  output$plot1=renderPlot({ if (length(input$tab_rows_selected)==1) plot.gene[[1]](data=data,gene=df[[df.identifier]][input$tab_rows_selected]) })
-	  output$plot2=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=2) plot.gene[[2]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot3=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=3) plot.gene[[3]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot4=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=4) plot.gene[[4]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot5=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=5) plot.gene[[5]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot6=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=6) plot.gene[[6]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot7=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=7) plot.gene[[7]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$plot8=renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=8) plot.gene[[8]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-	  output$helpText=renderText({ if (length(input$tab_rows_selected)==0 && !is.null(help)) help  })
+	  output$plot1=shiny::renderPlot({ if (length(input$tab_rows_selected)==1) plot.gene[[1]](data=data,gene=df[[df.identifier]][input$tab_rows_selected]) })
+	  output$plot2=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=2) plot.gene[[2]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot3=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=3) plot.gene[[3]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot4=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=4) plot.gene[[4]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot5=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=5) plot.gene[[5]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot6=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=6) plot.gene[[6]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot7=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=7) plot.gene[[7]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$plot8=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=8) plot.gene[[8]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
+	  output$helpText=shiny::renderText({ if (length(input$tab_rows_selected)==0 && !is.null(help)) help  })
 
 	  for (n in names(plot.static)) {
 	    create=function(n) {
@@ -130,7 +145,7 @@ ServeGrandR=function(data,
 	        if (is.null(w)) w=7*100
 	        w
 	      }
-	      renderPlot({plot.static[[n]][[input[[paste0(n,"list")]]]](data)},width=getwidth,height=getheight,env=env)
+	      shiny::renderPlot({plot.static[[n]][[input[[paste0(n,"list")]]]](data)},width=getwidth,height=getheight,env=env)
 	    }
 	    output[[paste0(n,"plot")]]=create(n)
 	  }
@@ -149,21 +164,21 @@ ServeGrandR=function(data,
 	        if (is.null(w)) w=7*100
 	        w
 	      }
-	      renderPlot({plot.global[[n]](df.set)},width=getwidth,height=getheight,env=env)
+	      shiny::renderPlot({plot.global[[n]](data)},width=getwidth,height=getheight,env=env)
 	    }
 	    output[[make.names(paste0(n,"plotset"))]]=create(n)
 	    e=new.env()
-	    e$ddf=attr(plot.global[[n]](df.set),"df")
+	    e$ddf=attr(plot.global[[n]](data),"df")
 	    e$n=n
 
-	    observe({
-	      brushgenes=rownames(brushedPoints(ddf, input[[make.names(paste0(n,"plotsetbrush"))]]))
-	      updateTextAreaInput(session, make.names(paste0(n,"plotsetgenes")), value = paste(brushgenes,collapse="\n"), label=sprintf("Selected genes (n=%d)",length(brushgenes)))
+	    shiny::observe({
+	      brushgenes=rownames(shiny::brushedPoints(ddf, input[[make.names(paste0(n,"plotsetbrush"))]]))
+	      shiny::updateTextAreaInput(session, make.names(paste0(n,"plotsetgenes")), value = paste(brushgenes,collapse="\n"), label=sprintf("Selected genes (n=%d)",length(brushgenes)))
 	    },env=e)
 
 	  }
 
-	  if (show.sessionInfo) output$sessionInfo <- renderPrint({
+	  if (show.sessionInfo) output$sessionInfo <- shiny::renderPrint({
 	    capture.output(sessionInfo())
 	  })
 
@@ -274,7 +289,7 @@ ServeGrandR=function(data,
 	  htmltools::tags$script(htmltools::HTML(sprintf("
         	var header = $('.navbar> .container-fluid');
           header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">%s</span></div>')",
-        	                         VersionString(data)
+        	                         VersionString()
         	)))
 	)
 

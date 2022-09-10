@@ -7,13 +7,18 @@
 #' @param data A grandR object
 #' @param name the user defined analysis name to store the results
 #' @param mode either "total", "new" or "old"
-#' @param target formula specifying the target model (you can use any column name from the \code{\link{Coldata}(data)))
-#' @param background formula specifying the background model (you can use any column name from the \code{\link{Coldata}(data)))
+#' @param normalization normalize on "total", "new", or "old" (see details)
+#' @param target formula specifying the target model (you can use any column name from the \code{\link{Coldata}(data)})
+#' @param background formula specifying the background model (you can use any column name from the \code{\link{Coldata}(data)})
 #' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
 #' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
 #' @param verbose Print status updates
 #'
 #' @details This is a convenience wrapper around the likelihood ratio test implemented in DESeq2.
+#'
+#' @details DESeq2 by default performs size factor normalization. When computing differential expression of new RNA,
+#' it might be sensible to normalize w.r.t. to total RNA, i.e. use the size factors computed from total RNA instead of computed from new RNA.
+#' This can be accomplished by setting mode to "new", and normalization to "total"!
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
 #' \itemize{
@@ -69,6 +74,7 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
 #' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
 #' @param mode.slot which slot to take expression values from
 #' @param FUN a function taking 1. the data matrix, 2. a logical vector indicating condition A and 3. a logical vector indicating condition B
+#' @param verbose print status messages?
 #' @param ... further parameters forward to FUN
 #'
 #' @details To implement most pairwise analyses, you only have to define FUN; see the source code of \link{LFC} for an example!
@@ -100,11 +106,12 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @param name.prefix the prefix for the new analysis name; a dot and the column names of the contrast matrix are appended; can be NULL (then only the contrast matrix names are used)
 #' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
 #' @param slot the slot of the grandR object to take the data from; for \link[lfc]{PsiLFC}, this really should be "count"!
-#' @param LFC.fun function to compute log fold change (default: \link[lfc]{PsiLFC}, other viable option: \link[lfc]{NormLFC})
+#' @param LFC.fun function to compute log fold changes (default: \link[lfc]{PsiLFC}, other viable option: \link[lfc]{NormLFC})
 #' @param mode compute LFCs for "total", "new", or "old" RNA
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param verbose print status messages?
-#' @param ... further arguments forwarded to LFC.fun
+#' @param ... further arguments forwarded to LFC.funpatchwork,
+
 #'
 #' @details Both \link[lfc]{PsiLFC} and  \link[lfc]{NormLFC}) by default perform normalization by subtracting the median log2 fold change from all log2 fold changes.
 #' When computing LFCs of new RNA, it might be sensible to normalize w.r.t. to total RNA, i.e. subtract the median log2 fold change of total RNA from all the log2 fold change of new RNA.
@@ -127,7 +134,7 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' sars<-LFC(sars,mode="new",normalization="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
 #' head(GetAnalysisTable(sars))
 #'
-LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=PsiLFC, mode="total",
+LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiLFC, mode="total",
              normalization=NULL,
              verbose=FALSE,...) {
   mode.slot=paste0(mode,".",slot)
@@ -191,7 +198,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
 
   if (separate) {
-    ApplyContrasts(data,name=name,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="DESeq2.Wald",FUN=function(mat,A,B) {
+    ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="DESeq2.Wald",FUN=function(mat,A,B) {
       norm.mat=as.matrix(GetTable(data,type=normalization))
       norm.mat=cbind(norm.mat[,A,drop=FALSE],norm.mat[,B,drop=FALSE])
       A=mat[,A,drop=FALSE]
@@ -287,6 +294,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #' @param N.max the maximal number of samples (necessary if old RNA > f0); if more are necessary, a warning is generated
 #' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param seed Seed for the random number generator
+#' @param dispersion overdispersion parameter for each gene; if NULL this is estimated from data
 #' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
 #' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
 #' @param verbose Print status messages
@@ -313,13 +321,13 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #'  \item{"HL.A"}{the posterior mean RNA half-life for sample A from the comparison}
 #'  \item{"HL.B"}{the posterior mean RNA half-life for sample B from the comparison}
 #'  \item{"s.log2FC"}{the posterior mean synthesis rate log2 fold change}
-#'  \item{"s.cred.lower"}{the lower CI boundary of the synthesis rate log2 fold change)
-#'  \item{"s.cred.upper"}{the uper CI boundary of the synthesis rate log2 fold change)
-#'  \item{"s.ROPE"}{the signed ROPE probability (negative means downregulation) for the synthesis rate fold change)
+#'  \item{"s.cred.lower"}{the lower CI boundary of the synthesis rate log2 fold change}
+#'  \item{"s.cred.upper"}{the uper CI boundary of the synthesis rate log2 fold change}
+#'  \item{"s.ROPE"}{the signed ROPE probability (negative means downregulation) for the synthesis rate fold change}
 #'  \item{"HL.log2FC"}{the posterior mean half-life log2 fold change}
-#'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life log2 fold change)
-#'  \item{"HL.cred.upper"}{the uper CI boundary of the half-life log2 fold change)
-#'  \item{"HL.ROPE"}{the signed ROPE probability (negative means downregulation) for the half-life fold change)
+#'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life log2 fold change}
+#'  \item{"HL.cred.upper"}{the uper CI boundary of the half-life log2 fold change}
+#'  \item{"HL.ROPE"}{the signed ROPE probability (negative means downregulation) for the half-life fold change}
 #' }
 #'
 #'
@@ -332,7 +340,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #'
 #' contrasts <- GetContrasts(banp,contrast=c("Experimental.time.original","0h"),name.format="$A")
 #' reference.columns <- FindReferences(banp,reference= Experimental.time==0)
-#' banp <- EstimateRegulation(banp,"Regulation",contrasts=contrasts,reference.columns=reference.columns,time.labeling = "calibrated_time",verbose=T,time.experiment = "Experimental.time",correct.labeling=TRUE,N=0,dispersion=0.1)
+#' banp <- EstimateRegulation(banp,"Regulation",contrasts=contrasts,reference.columns=reference.columns,time.labeling = "calibrated_time",verbose=TRUE,time.experiment = "Experimental.time",correct.labeling=TRUE,N=0,dispersion=0.1)
 #' # usually we do not set dispersion to a constant, but let EstimateRegulation estimate it from data; note that we also do not sample (N=0)!
 #' head(GetAnalysisTable(banp))
 #'
@@ -393,13 +401,11 @@ EstimateRegulation=function(data,name.prefix="Regulation",
     if (verbose) cat(sprintf("Beta prior for %s: a=%.3f, b=%.3f\n",paste(colnames(data)[A],collapse = ","),beta.prior.A[1],beta.prior.A[2]))
     if (verbose) cat(sprintf("Beta prior for %s: a=%.3f, b=%.3f\n",paste(colnames(data)[B],collapse = ","),beta.prior.B[1],beta.prior.B[2]))
 
-    #TODO: change the ROPE to choose the region to be a credible interval
-
 
     re=plapply(1:nrow(data),function(i) {
     #for (i in 1:nrow(data)) { print (i);
-      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
-      fit.B=FitKineticsGeneSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
+      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
+      fit.B=FitKineticsGeneSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
       samp.a=fit.A$samples
       samp.b=fit.B$samples
 
@@ -425,8 +431,8 @@ EstimateRegulation=function(data,name.prefix="Regulation",
       lfc.s=savelfc(samp.a[,'s'],samp.b[,'s'])
       lfc.HL=savelfc(samp.b[,'d'],samp.a[,'d'])
 
-      sc=quantile(lfc.s,c(0.5-conf.int/2,0.5+conf.int/2))
-      hc=quantile(lfc.HL,c(0.5-conf.int/2,0.5+conf.int/2))
+      sc=quantile(lfc.s,c(0.5-CI.size/2,0.5+CI.size/2))
+      hc=quantile(lfc.HL,c(0.5-CI.size/2,0.5+CI.size/2))
 
       return(
         c(
@@ -561,9 +567,9 @@ hierarchical.beta.posterior=function(a,b,
   if (plot) {
     x=seq(min(qbeta(0.001,a,b)),max(qbeta(0.999,a,b)),length.out=1000)
     plot(x,pbeta(x,a[1],b[1]),type='l',xlim=range(x),ylim=c(0,1))
-    for (i in 2:length(a)) lines(x,pbeta(x,a[i],b[i]))
-    lines(x,pbeta(x,re$a,re$b),col='black',lwd=2)
-    if (!is.null(re$sample.mu)) lines(ecdf(re$sample.mu(10000)),col='red')
+    for (i in 2:length(a)) graphics::lines(x,pbeta(x,a[i],b[i]))
+    graphics::lines(x,pbeta(x,re$a,re$b),col='black',lwd=2)
+    if (!is.null(re$sample.mu)) graphics::lines(ecdf(re$sample.mu(10000)),col='red')
   }
   re
 }
@@ -679,12 +685,12 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
 #' either the average (average=TRUE) or the sum (average=FALSE) of all columns (samples or cells)
 #' belonging to the same \code{\link{Condition}} is computed.
 #'
-#' @param data A grandR object
+#' @param x A grandR object or a named vector (the names indicate the sample names, the value the conditions to be summarized)
 #' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
 #' @param columns which columns (i.e. samples or cells) to return (see details)
 #' @param average matrix to compute the average (TRUE) or the sum (FALSE)
-#' @param v a named vector (the names indicate the sample names, the value the conditions to be summarized)
 #' @param subset logical vector of which elements of the vector v to use (or NULL: use all)
+#' @param ... further arguments to be passed to or from other methods.
 #'
 #' @return A matrix to be multiplied with a count table
 #'
@@ -713,7 +719,8 @@ GetSummarizeMatrix <- function (x, ...) {
 }
 #' @rdname GetSummarizeMatrix
 #' @export
-GetSummarizeMatrix.grandR=function(data,no4sU=FALSE,columns=NULL,average=TRUE) {
+GetSummarizeMatrix.grandR=function(x,no4sU=FALSE,columns=NULL,average=TRUE,...) {
+  data=x
   if (is.null(Condition(data))) stop("Does not have conditions!")
 
   columns=substitute(columns)
@@ -725,7 +732,8 @@ GetSummarizeMatrix.grandR=function(data,no4sU=FALSE,columns=NULL,average=TRUE) {
 }
 #' @rdname GetSummarizeMatrix
 #' @export
-GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
+GetSummarizeMatrix.default=function(x,subset=NULL,average=TRUE,...) {
+  v=x
 	re=NULL
 	for (e in unique(v)) re=cbind(re,ifelse(v==e,1,0))
 	rownames(re)=names(v)
@@ -746,13 +754,13 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 #' a grandR object (or a column annotation table). Elements being 1 are contrasted vs. elements being -1
 #' (and all 0 are irrelevant for this comparison).
 #'
-#' @param data A grandR object
-#' @param coldata A column annotation table
+#' @param x A grandR object or a column annotation table
 #' @param contrast A vector describing what should be contrasted
 #' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
 #' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all); for grandR objects, see details
 #' @param group Split the samples or cells according to this column of the column annotation table (and adapt the of the output table)
 #' @param name.format Format string for generating the column from the contrast vector (see details)
+#' @param ... further arguments to be passed to or from other methods.
 #'
 #' @details To compare one specific factor level \emph{A} against another level \emph{B} in
 #' a particular column \emph{COL} of the column annotation table, specify contrast=c("COL","A","B")
@@ -769,7 +777,7 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 #' with the same \emph{group} factor level.
 #'
 #' @details The format string specifies the column name in the generated contrast matrix (which is used as the \emph{Analysis} name when calling
-#' \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}, etc.). The keywords \emph{$GRP}, \emph{$COL}, \emph{$A} and \emph{$B} are substituted
+#' \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}, etc.). The keywords \emph{$GRP}, \emph{$COL}, \emph{$A} and \emph{$B} are substituted
 #' by the respective elements of the contrast vector or the group this comparison refers to. By default, it is "$A vs $B" if group is NULL, and "$A vs $B.$GRP" otherwise.
 #'
 #' @details The method for grandR objects simply calls the general method
@@ -778,9 +786,9 @@ GetSummarizeMatrix.default=function(v,subset=NULL,average=TRUE) {
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
-#' @return A contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}
+#' @return A contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}
 #'
-#' @seealso \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{TestPairwise}}
+#' @seealso \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
@@ -799,19 +807,20 @@ GetContrasts <- function (x, ...) {
 }
 #' @rdname GetContrasts
 #' @export
-GetContrasts.grandR=function(data,contrast="Condition",no4sU=FALSE,columns=NULL,group=NULL,name.format=NULL) {
+GetContrasts.grandR=function(x,contrast="Condition",no4sU=FALSE,columns=NULL,group=NULL,name.format=NULL,...) {
 
   columns=substitute(columns)
-  columns=if (is.null(columns)) Columns(data) else eval(columns,Coldata(data),parent.frame())
-  columns=Columns(data,columns)
-  if (!no4sU) columns=setdiff(columns,Columns(data,Coldata(data,"no4sU")))
-  columns=Columns(data) %in% columns
+  columns=if (is.null(columns)) Columns(x) else eval(columns,Coldata(x),parent.frame())
+  columns=Columns(x,columns)
+  if (!no4sU) columns=setdiff(columns,Columns(x,Coldata(x,"no4sU")))
+  columns=Columns(x) %in% columns
 
-  GetContrasts.default(coldata=Coldata(data),contrast=contrast,group=group,columns=columns,name.format=name.format)
+  GetContrasts.default(x=Coldata(x),contrast=contrast,group=group,columns=columns,name.format=name.format)
 }
 #' @rdname GetContrasts
 #' @export
-GetContrasts.default=function(coldata,contrast,columns=NULL,group=NULL,name.format=NULL) {
+GetContrasts.default=function(x,contrast,columns=NULL,group=NULL,name.format=NULL,...) {
+  coldata=x
   if (!(length(contrast) %in% 1:3) || !contrast[1]%in%names(coldata) || (length(contrast)>1 && !all(contrast[2:length(contrast)] %in% coldata[,contrast[1]]))) stop("Illegal contrasts (either a name from design (all pairwise comparisons), a name and a reference level (all comparisons vs. the reference), or a name and two levels (exactly this comparison))")
 
   if (is.null(name.format)) {

@@ -1,4 +1,13 @@
 
+#' @import stats
+#' @import utils
+#' @import ggplot2
+#' @import patchwork
+NULL
+#> NULL
+
+
+
 #' Create a grandR object and retrieve basic information
 #'
 #' The grandR object contains
@@ -18,13 +27,16 @@
 #' @param slots A list of matrices representing the slots
 #' @param coldata a data frame with metadata for all samples (or cells)
 #' @param metadata a metadata list
+#' @param analyses the analyses list
+#' @param plots the plots list
 #' @param parent A parent object containing default values for all other parameters (i.e. all parameters not specified are obtained from this object)
-#'
-#' @param data a grandR object
-#' @param order can either be an integer or character vector representing a permutation of the columns (samples or cells)
+#' @param data,x a grandR object
 #' @param columns which columns (i.e. samples or cells) to return (see details)
-#' @param column.name The name of the annotation table according to which the object is split or the new annotation table column name denoting the origin after merging
+#' @param f The name of the annotation table according to which the object is split or the new annotation table column name denoting the origin after merging
 #' @param list a list of grandR objects
+#' @param column.name a new name for the Coldata table to annotate the merged objects
+#' @param drop unused
+#' @param ... further arguments to be passed to or from other methods.
 #'
 #' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta)
 #' and potentially additional information of all genes detected by GRAND-SLAM
@@ -37,7 +49,7 @@
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
-#' conveniently build a logical vector (e.g., columns=Condition="x").
+#' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #'
 #' @section Functions:
@@ -47,7 +59,6 @@
 #'   \item{is}{Check whether it is a grandR object}
 #'   \item{dimnames}{Obtain the row and column names of this object (genes x samples or genes x cells)}
 #'   \item{print}{Print information on this grandR object}
-#'   \item{reorder}{Create a new grandR object with reordered columns}
 #'   \item{subset}{Create a new grandR object with a subset of the columns (use \code{\link{FilterGenes}} to subset on genes)}
 #'   \item{split}{Split the grandR object into a list of multiple grandR objects (according to the levels of an annotation table column)}
 #'   \item{merge}{Merge several grandR objects into one}
@@ -65,7 +76,7 @@
 #'
 #' @export
 #'
-grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$data,coldata=parent$coldata,metadata=parent$metadata,analyses=NULL,parent=NULL) {
+grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$data,coldata=parent$coldata,metadata=parent$metadata,analyses=NULL,plots=NULL,parent=NULL) {
   info=list()
   info$prefix=prefix
   info$gene.info=gene.info
@@ -73,6 +84,7 @@ grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$dat
   info$coldata=coldata
   info$metadata=metadata
   info$analysis=analyses
+  info$plots=plots
   class(info)="grandR"
   info
 }
@@ -80,7 +92,7 @@ grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$dat
 
 #' @rdname grandR
 #' @export
-VersionString=function(data) {
+VersionString=function() {
   "grandR v0.1.0"
 }
 
@@ -94,31 +106,37 @@ Title=function(data) {
 
 #' @rdname grandR
 #' @export
-dim.grandR=function(data) c(dim(data$gene.info)[1],dim(data$coldata)[1])
+dim.grandR=function(x) c(dim(x$gene.info)[1],dim(x$coldata)[1])
 #' @rdname grandR
 #' @export
 is.grandR <- function(x) inherits(x, "grandR")
 #' @rdname grandR
 #' @export
-dimnames.grandR=function(data) dimnames(data$data$count)
+dimnames.grandR=function(x) dimnames(x$data$count)
 #' @rdname grandR
 #' @export
-print.grandR=function(data) cat(
-  sprintf("grandR: %s\nRead from %s\n%d genes, %d samples/cells\nAvailable data slots: %s\nAvailable analyses: %s\nDefault data slot: %s\n",
-          data$metadata$Description,
-          data$prefix,
-          nrow(data),
-          ncol(data),
-          paste(Slots(data),collapse=","),
-          paste(Analyses(data),collapse=","),
-          DefaultSlot(data))
+print.grandR=function(x,...) {
+  cat(
+  sprintf("grandR: %s\nRead from %s\n%d genes, %d samples/cells\nAvailable data slots: %s\nAvailable analyses: %s\nAvailable plots: %s\nDefault data slot: %s\n",
+          x$metadata$Description,
+          x$prefix,
+          nrow(x),
+          ncol(x),
+          paste(Slots(x),collapse=","),
+          paste(Analyses(x),collapse=","),
+          paste(unlist(Plots(x)),collapse=","),
+          DefaultSlot(x))
 )
+}
+
+
 #' Internal function to apply functions to all slots etc.
 #'
 #' @param data a grandR object
 #' @param fun apply this function to each data slot (i.e. it receives each data matrix)
 #' @param fun.gene.info apply this function to the gene info table
 #' @param fun.coldata apply this function to the column annotation table
+#' @param ... passed further to fun, fun.gene.info and fun.coldata
 #'
 #' @details The additional parameters are provided to each of the functions.
 #' @return A new grandR object
@@ -134,28 +152,25 @@ data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
     map=setNames(1:nrow(data$gene.info),data$gene.info$Gene)
     analysis=lapply(data$analysis,function(d) d[map[as.character(ngene.info$Gene)],,drop=FALSE])
   }
-  grandR(parent=data,gene.info=ngene.info,slots=re,coldata=ncoldata,analyses = analysis)
+  grandR(parent=data,gene.info=ngene.info,slots=re,coldata=ncoldata,analyses = analysis,plots=data$plots)
 }
 
 #' @rdname grandR
 #' @export
-reorder.grandR=function(data,order) subset.grandR(data,order)
-#' @rdname grandR
-#' @export
-subset.grandR=function(data,columns) {
+subset.grandR=function(x,columns,...) {
   columns=substitute(columns)
-  columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
-  columns=Columns(data,columns)
+  columns=if (is.null(columns)) colnames(x) else eval(columns,Coldata(x),parent.frame())
+  columns=Columns(x,columns,reorder=TRUE)
 
-  data.apply(data,function(m) m[,columns],fun.coldata = function(t)
+  data.apply(x,function(m) m[,columns],fun.coldata = function(t)
     droplevels(t[columns,]))
 }
 
 #' @rdname grandR
 #' @export
-split.grandR=function(data,column.name=Design$Condition) {
-  col=as.factor(data$coldata[[column.name]])
-  setNames(lapply(levels(col),function(c) {re=subset(data,col==c);
+split.grandR=function(x,f=Design$Condition,drop=FALSE,...) {
+  col=as.factor(x$coldata[[f]])
+  setNames(lapply(levels(col),function(c) {re=subset(x,col==c);
   re$coldata[[Design$Origin]]=c; re }),levels(col))
 }
 
@@ -293,7 +308,7 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE) {
 #'
 #' The conditions column from the column annotation table is used by several functions to stratify the columns (samples or cells)
 #' during the analysis (e.g. to estimate separate kinetic parameters with \code{\link{FitKinetics}} or it is used as covariate for
-#' \code{\link{LFC}} or \code{\link{TestGenesLRT}}). For that reason there are special functions to set and get this column.
+#' \code{\link{LFC}} or \code{\link{LikelihoodRatioTest}}). For that reason there are special functions to set and get this column.
 #'
 #' @param data A grandR object
 #' @param value Either a vector of column names from the column annotation table, or the condition names themselves
@@ -331,9 +346,11 @@ Condition <- function(data,value=NULL) {
 `Condition<-` <- function(data, value) {
   if (is.null(value)) {
     data$coldata$Condition=NULL
+  } else if (length(value)==1 && value=="") {
+    stop("Empty string is not allowed as condition!")
   } else if (all(value %in% names(data$coldata))) {
     data$coldata$Condition <- interaction(data$coldata[value],drop=TRUE)
-  } else{
+  } else {
     data$coldata$Condition <- as.factor(value)
   }
   data
@@ -352,6 +369,7 @@ Condition <- function(data,value=NULL) {
 #' @param genes which genes to use
 #' @param regex treat genes as a regex, and return all that match
 #' @param columns which columns (i.e. samples or cells) to return (see details)
+#' @param reorder if TRUE, do not enforce the current order of columns
 #'
 #' @details The genes are either the (often unreadable) gene ids (e.g. Ensembl ids), or the symbols.
 #'
@@ -361,7 +379,7 @@ Condition <- function(data,value=NULL) {
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
-#' conveniently build a logical vector (e.g., columns=Condition="x").
+#' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return Either the gene or column names of the grandR data object, or the columns of an analysis table in the grandR object
 #'
@@ -380,12 +398,12 @@ Condition <- function(data,value=NULL) {
 Genes=function(data, genes=NULL, use.symbols=TRUE,regex=FALSE) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]][ToIndex(data,genes,regex=regex)]
 #' @rdname Genes
 #' @export
-Columns=function(data,columns=NULL) {
+Columns=function(data,columns=NULL, reorder=FALSE) {
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
 
   columns=unname(setNames(rownames(Coldata(data)),rownames(Coldata(data)))[columns])
-  rownames(Coldata(data))[ rownames(Coldata(data)) %in% columns]  # preserve order!
+  if (reorder) columns else rownames(Coldata(data))[ rownames(Coldata(data)) %in% columns]  # preserve order!
 }
 
 #' Get the gene annotation table or add additional columns to it
@@ -449,7 +467,7 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 #'
 #' @details The column named \emph{Condition} has a special meaning in this table: It is used by several functions to stratify the columns
 #' during the analysis (e.g. to estimate separate kinetic parameters with \code{\link{FitKinetics}} or it is used as covariate for
-#' \code{\link{LFC}} or \code{\link{TestGenesLRT}}). For that reason there are special functions to set and get this column.
+#' \code{\link{LFC}} or \code{\link{LikelihoodRatioTest}}). For that reason there are special functions to set and get this column.
 #'
 #' @return Either the column annotation table or a new grandR object having an updated column annotation table
 #'
@@ -490,8 +508,10 @@ Coldata=function(data,column=NULL,value=NULL) {
 #'
 #' @param data a grandR object
 #' @param analyses a regex to be matched to analysis names
+#' @param regex interpret as regular expression
 #' @param slot a slot name
 #' @param mode.slot a mode.slot
+#' @param allow.ntr whether to allow for the value "ntr" (and throw an error in case)
 #'
 #' @details A mode.slot is a mode followed by a dot followed by a slot name, or just a slot name. A mode is either \emph{total}, \emph{new} or \emph{old}.
 #'
@@ -502,12 +522,15 @@ check.analysis=function(data,analyses,regex) {
   sapply(analyses,function(pattern) any(grepl(pattern,Analyses(data),fixed=!regex)))
 }
 #' @rdname check.analysis
-check.slot=function(data,slot) slot %in% names(data$data)
+check.slot=function(data,slot,allow.ntr=TRUE) {
+  if (!allow.ntr && slot=="ntr") return(FALSE)
+  slot %in% names(data$data)
+}
 #' @rdname check.analysis
-check.mode.slot=function(data,mode.slot) {
+check.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
   sapply(strsplit(mode.slot,".",fixed=TRUE),function(spl) {
     if (length(spl)>2 || length(spl)==0) return(FALSE)
-    if (length(spl)==1) check.slot(data,spl) else tolower(substr(spl[1],1,1)) %in% c("t","n","o") && check.slot(data,spl[2])
+    if (length(spl)==1) check.slot(data,spl,allow.ntr=allow.ntr) else tolower(substr(spl[1],1,1)) %in% c("t","n","o") && check.slot(data,spl[2],allow.ntr = FALSE)
   })
 }
 
@@ -515,14 +538,15 @@ check.mode.slot=function(data,mode.slot) {
 #'
 #' @param data a grandR object
 #' @param mode.slot a mode.slot
+#' @param allow.ntr whether to allow for the value "ntr" (and throw an error in case)
 #'
 #' @details A mode.slot is a mode followed by a dot followed by a slot name, or just a slot name. A mode is either \emph{total}, \emph{new} or \emph{old}
 #'
 #' @return a named list with elements mode and slot (or only slot in case of \emph{ntr},\emph{alpha} or \emph{beta})
 #'
-get.mode.slot=function(data,mode.slot) {
+get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
   if (length(mode.slot)!=1) stop("mode.slot must be a vector of length 1")
-  if (!check.mode.slot(data,mode.slot)) stop("Invalid mode.slot")
+  if (!check.mode.slot(data,mode.slot,allow.ntr = allow.ntr)) stop("Invalid mode.slot")
   tno="t"
   spl=strsplit(mode.slot,".",fixed=TRUE)[[1]]
   if (length(spl)>1) {
@@ -594,10 +618,10 @@ ToIndex=function(data,gene,regex=FALSE) {
 #' to match against the names in the analysis tables.
 #'
 #' @details Columns definitions for data slots can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
-#' conveniently build a logical vector (e.g., columns=Condition="x").
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
-#' @details To refer to data slots, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total)
+#' @details To refer to data slots via \code{type}, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total)
 #' followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to obtain the \emph{new counts}.
 #'
 #' @seealso \link{GetData},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes},\link{GetSummarizeMatrix}
@@ -710,7 +734,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
-#' conveniently build a logical vector (e.g., columns=Condition="x").
+#' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @seealso \link{GetData},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes},\link{GetSummarizeMatrix}
 #'
@@ -738,16 +762,14 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
 
   if (is.matrix(re)) {
     mf = switch(tolower(substr(tno,1,1)),t=1,n=as.matrix(data$data$ntr[genes,columns,drop=FALSE]),o=1-as.matrix(data$data$ntr[genes,columns,drop=FALSE]),stop(paste0(mode.slot," unknown!")))
-    if (!ntr.na) {
       mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
-    }
     re=re*mf
     if (mode.slot=="count") {
       mode(re) <- "integer"
     } else if (mode.slot=="ntr") {
       re[is.na(re)]=0
     }
-    return(as(re,Class = Matrix::"dgCMatrix"))
+    return(methods::as(re,Class = "dgCMatrix"))
   } else {
     if (tolower(substr(tno,1,1))=="t") return(re)
     if (tolower(substr(tno,1,1))=="n") {
@@ -800,7 +822,7 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
-#' conveniently build a logical vector (e.g., columns=Condition="x").
+#' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @seealso \link{GetTable},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes}
 #'
@@ -821,6 +843,8 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
   columns=Columns(data,columns)
 
   genes=ToIndex(data,genes)
+  if (length(genes)==0) stop("Genes not found!")
+
   og=if (name.by %in% names(data$gene.info)) data$gene.info[[name.by]][genes] else data$gene.info[genes,1]
   uno=function(mode.slot) {
     tno="t"
@@ -839,7 +863,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
   if(length(mode.slot)==1 && length(genes)==1) names(re)="Value" else if (length(mode.slot)==1) names(re)=og else if (length(genes)==1) names(re)=mode.slot else names(re)=paste0(rep(og,length(mode.slot)),".",rep(mode.slot,each=length(og)))
   if (coldata) re = cbind(data$coldata[columns,],re)
   if (by.rows && (length(genes)>1 || length(mode.slot)>1)) {
-    re = melt(re,id.vars=if(coldata) names(data$coldata) else c(),value.name="Value")
+    re = reshape2::melt(re,id.vars=if(coldata) names(data$coldata) else c(),value.name="Value")
     if (length(mode.slot)==1) names(re)[dim(re)[2]-1]="Gene" else if (length(genes)==1) names(re)[dim(re)[2]-1]="mode.slot" else {
       re=cbind(re[,c(1:(dim(re)[2]-2))],setNames(as.data.frame(t(as.data.frame(strsplit(as.character(re$variable),".",fixed = TRUE)))),c("Gene","mode.slot")),Value=re$Value)
       rownames(re)=NULL
@@ -855,7 +879,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' @param data the grandR object
 #' @param analysis the analysis to use, can be more than one and can be regexes (see details)
 #' @param regex interpret analyses as regex?
-#' @param criteria the criteria used to define what significant means; can use the column names of the analysis table as variables,  should be a logical or numerical value per gene (see Details)
+#' @param criteria the criteria used to define what significant means; if NULL, Q<0.05 & abs(LFC)>=1 is used; can use the column names of the analysis table as variables,  should be a logical or numerical value per gene (see Details)
 #' @param as.table return a table
 #' @param use.symbols return them as symbols (gene ids otherwise)
 #' @param gene.info add gene infos to the output table
@@ -880,7 +904,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' sars<-LFC(sars,mode="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
 #' GetSignificantGenes(sars,criteria=LFC>1)
 #'
-GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=Q<0.05 & abs(LFC)>=1,as.table=FALSE,use.symbols=TRUE,gene.info=TRUE) {
+GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=NULL,as.table=FALSE,use.symbols=TRUE,gene.info=TRUE) {
   analysis=match.analyses(data,analysis,regex)
   criteria=substitute(criteria)
 
@@ -889,7 +913,11 @@ GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=Q<0.05 & abs
 
   for (name in analysis) {
     tab=GetAnalysisTable(data,analyses=name,regex=FALSE,gene.info=FALSE,prefix.by.analysis=FALSE)
-    use=eval(criteria,envir=tab,enclos = parent.frame())
+    if (is.null(criteria)) {
+      use=tab$Q<0.05 & abs(tab$LFC)>=1
+    } else {
+      use=eval(criteria,envir=tab,enclos = parent.frame())
+    }
     re[[name]]=use
     re[[name]][is.na(re[[name]])]=FALSE
   }
@@ -933,7 +961,7 @@ GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=Q<0.05 & abs
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
-#' conveniently build a logical vector (e.g., columns=Condition="x").
+#' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @seealso \link{Coldata},\link{Findno4sUPairs}, \link{Condition}
 #'
@@ -962,7 +990,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
   ef=substitute(reference.function)
   if (!is.null(reference.function)) {
     setColnames=function(m,n) {colnames(m)=n; m}
-    map=dlply(df,.(group),function(s) setColnames(sapply(1:nrow(s),function(row) setNames(eval(ef,s,parent.frame())(as.list(s[row,])),s$Name) ),s$Name))
+    map=plyr::dlply(df,plyr::.(group),function(s) setColnames(sapply(1:nrow(s),function(row) setNames(eval(ef,s,parent.frame())(as.list(s[row,])),s$Name) ),s$Name))
     re=matrix(FALSE,nrow=nrow(df),ncol=nrow(df))
     colnames(re)=df$Name
     rownames(re)=df$Name
@@ -971,7 +999,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 
   } else {
     e=substitute(reference)
-    map=dlply(df,.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
+    map=plyr::dlply(df,plyr::.(group),function(s) as.character(s$Name[eval(e,s,parent.frame())]))
     pairs=setNames(lapply(df$group,function(g) map[[g]]),df$Name)
   }
   if (as.list) return(pairs)
@@ -988,14 +1016,9 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 #' @param data A grandR object
 #' @param description if TRUE, also return the column names of each analysis table (i.e. a list named according to the analyses)
 #' @param pattern A regular expression that is matched to analysis names
-#' @param name A name for the analysis to add
+#' @param name The user-defined analysis name
 #' @param table The analysis table to add
 #' @param warn.present Warn if an analysis with the same name is already present (and then overwrite)
-#' @param name The user-defined analysis name
-#' @param analysis The name of the analysis tool
-#' @param mode An optional mode (new,old,total) on which the analysis has been run
-#' @param slot An optional data slot on which the analysis has been run
-#' @param columns An optional vector of columns the analysis was run on
 #'
 #' @return Either the analysis names or a grandR data with added/removed slots or the metatable to be used with AddAnalysis
 #'
@@ -1004,7 +1027,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 #' AddAnalysisTable produces more than one analysis table.
 #'
 #' @details \code{AddAnalysis} is usually not called directly by the user, but is
-#' used by analysis methods to add their final result to a grandR object (e.g., \link{FitKinetics},\link{TestGenesLRT},\link{TestPairwise},\link{LFC}).
+#' used by analysis methods to add their final result to a grandR object (e.g., \link{FitKinetics},\link{LikelihoodRatioTest},\link{LFC},\link{PairwiseDESeq2}).
 #'
 #' @seealso \link{Slots}, \link{DefaultSlot}
 #'
@@ -1123,10 +1146,10 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
     rbind(a,b)
   }
 
-  re=data$gene.info[genes,]
+  re=GeneInfo(data)[genes,]
 
   if (!is.null(name.by)) {
-    rownames(re)=if (name.by %in% names(data$gene.info)) data$gene.info[[name.by]][genes] else data$gene.info[genes,1]
+    rownames(re)=if (name.by %in% names(GeneInfo(data))) GeneInfo(data,column = name.by)[genes] else GeneInfo(data)[genes,1]
   }
   sintersect=function(a,b) if (is.null(b)) a else intersect(a,b)
 
@@ -1141,15 +1164,85 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
       if (prefix.by.analysis) names(t)=paste0(name,".",names(t))
       if (by.rows) t=cbind(data.frame(Analysis=name),t)
       if (by.rows && name!=analyses[1]) {
-        re=rbind.save(re,cbind(data$gene.info[genes,],t))
+        re=rbind.save(re,cbind(GeneInfo(data)[genes,],t))
       } else {
         re=cbind(re,t)
       }
     }
   }
 
-  if (is.logical(gene.info) && !gene.info) re=re[,(ncol(data$gene.info)+1):ncol(re),drop=FALSE]
-  if (is.character(gene.info)) re=re[,-which(!names(data$gene.info) %in% gene.info),drop=FALSE]
+  if (is.null(name.by)||by.rows) rownames(re)=NULL
+  if (is.logical(gene.info) && !gene.info) re=re[,-(1:ncol(GeneInfo(data))),drop=FALSE]
+  if (is.character(gene.info)) re=re[,-which(!names(GeneInfo(data)) %in% gene.info),drop=FALSE]
   if (by.rows) re$Analysis=factor(re$Analysis,levels=analyses)
   re
+}
+
+
+
+
+#' Stored plot functions
+#'
+#' Get plot names and add or remove plots
+#'
+#' @param data A grandR object
+#' @param name The user-defined plot name
+#' @param FUN The plotting function to add
+#' @param pattern A regular expression that is matched to plot names
+#' @param gene The gene to plot
+#'
+#' @return Either the plot names or a grandR data with added/removed plots
+#'
+#' @details FUN has to be a function with a single parameter for global plots (i.e., the grandR object) or two parameters for gene plots
+#' (i.e., the grandR object and the gene name). Usually, it is either the name of a plotting function, such as \link{PlotGeneOldVsNew}, or, if it is
+#' necessary to parametrize it, a call to \link{Defer} (which takes care of caching plots without storing an additional copy of the grandR object).
+#'
+#' @describeIn Plots Obtain the plot names
+#' @export
+#'
+Plots=function(data) {
+  re=list()
+  if (!is.null(data$plots$gene)) re=c(re,list(gene=names(data$plots$gene)))
+  if (!is.null(data$plots$global)) re=c(re,list(gene=names(data$plots$global)))
+  re
+}
+#' @describeIn Plots Add a gene plot to the grandR object
+#' @export
+AddGenePlot=function(data,name,FUN) {
+  if (!is.function(FUN)) stop("Cannot add; FUN must be a function!")
+  if (is.null(data$plots)) data$plots=list()
+  if (is.null(data$plots$gene)) data$plots$gene=list()
+  if (!is.null(data$plots$gene[[name]])) warning(sprintf("Plot %s already present! Overwriting...",name))
+  data$plots$gene[[name]]=FUN
+  data
+}
+
+#' @describeIn Plots Add a global plot to the the grandR object
+#' @export
+AddGlobalPlot=function(data,name,FUN) {
+  if (!is.function(FUN)) stop("Cannot add; FUN must be a function!")
+  if (is.null(data$plots)) data$plots=list()
+  if (is.null(data$plots$global)) data$plots$global=list()
+  if (!is.null(data$plots$global[[name]])) warning(sprintf("Plot %s already present! Overwriting...",name))
+  data$plots$global[[name]]=FUN
+  data
+}
+
+#' @describeIn Plots Create a gene plot
+#' @export
+PlotGene=function(data,name,gene) data$plots$gene[[name]](data,gene)
+#' @describeIn Plots Create a global plot
+#' @export
+PlotGlobal=function(data,name) data$plots$global[[name]](data)
+
+#' @describeIn Plots Remove plots from the grandR object
+#' @export
+DropPlots=function(data,pattern=NULL) {
+  if (is.null(pattern)) {
+    data$plots=NULL
+  } else {
+    if (!is.null(data$plots$gene)) data$plots$gene=data$plots$gene[!grepl(pattern,names(data$plots$gene))]
+    if (!is.null(data$plots$global)) data$plots$global=data$plots$global[!grepl(pattern,names(data$plots$global))]
+  }
+  data
 }

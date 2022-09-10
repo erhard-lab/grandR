@@ -66,7 +66,7 @@ logdiff <- function(l1, l2) { l1 + log1p(-exp(-(l1-l2))); }
 
 etbeta=function(l=0,u=1,s1=1,s2=1) exp(logdiff(libeta(u,1+s1,s2),libeta(l,1+s1,s2))-logdiff(libeta(u,s1,s2),libeta(l,s1,s2)))
 dtbeta=function(x,l=0,u=1,s1=1,s2=1,log=FALSE) {
- 	r=if(log) dbeta(x,s1,s2,log=T)-logdiff(pbeta(u,s1,s2,log=T),pbeta(l,s1,s2,log=T)) else dbeta(x,s1,s2)/(pbeta(u,s1,s2)-pbeta(l,s1,s2))
+ 	r=if(log) dbeta(x,s1,s2,log=T)-logdiff(pbeta(u,s1,s2,log.p=TRUE),pbeta(l,s1,s2,log.p=TRUE)) else dbeta(x,s1,s2)/(pbeta(u,s1,s2)-pbeta(l,s1,s2))
 	r[x<l|x>u]=0
 	r
 }
@@ -145,8 +145,8 @@ ReadOldMixMatrices=function(data,types=c("binom","binomOverlap"),...) {
 	r=lapply(types,function(type) {
 		t=read.tsv(paste0(data$prefix,".",type,".tsv"))
 		if ("Type" %in% names(t)) t=t[t$Type=="",]
-		l=dlply(t,.(Condition),function(s) {
-			m=acast(d~n,data=s[,c("n","d","count")],value.var="count")
+		l=plyr::dlply(t,plyr::.(Condition),function(s) {
+			m=reshape2::acast(d~n,data=s[,c("n","d","count")],value.var="count")
 			m[is.na(m)]=0
 			m=m[rowSums(m)>0,colSums(m)>0,drop=FALSE]
 			m=m[,colnames(m)!="0",drop=FALSE]
@@ -160,8 +160,8 @@ ReadOldMixMatrices=function(data,types=c("binom","binomOverlap"),...) {
 
 ReadMixMatrices=function(data,...) {
 	t=read.tsv(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
-	l=dlply(t,.(Condition,Subread,Label),function(s) {
-		m=acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
+	l=plyr::dlply(t,plyr::.(Condition,Subread,Label),function(s) {
+		m=reshape2::acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
 		m[is.na(m)]=0
 		m=m[rowSums(m)>0,colSums(m)>0,drop=FALSE]
 		m=m[,colnames(m)!="0",drop=FALSE]
@@ -176,7 +176,7 @@ ReadMixMatrices=function(data,...) {
 ReadMixMatrix=function(data,condition,subread,label="4sU") {
 	t=read.tsv(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
 	s=t[t$Condition==condition&t$Subread==subread&t$Label==label,]
-	m=acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
+	m=reshape2::acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
 	m[is.na(m)]=0
 	m=m[rowSums(m)>0,colSums(m)>0,drop=FALSE]
 	m=m[,colnames(m)!="0",drop=FALSE]
@@ -297,7 +297,7 @@ computeMixMatrix=function(m1,m2,fun) {
 GetMixMatk=function(mixmat) as.integer(rownames(mixmat))
 GetMixMatn=function(mixmat) as.integer(colnames(mixmat))
 as.data.frame.MixMatrix=function(x) {
-	df=melt(unclass(x),varnames=c("k","n"),value.name="Count")
+	df=reshape2::melt(unclass(x),varnames=c("k","n"),value.name="Count")
 	df=df[df$Count>0,]
 	rownames(df)=NULL
 	df
@@ -386,8 +386,8 @@ fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE)
 
   if (plot) {
     plot(x,fs2,xlab="ntr",ylab="Cumulative freq",type='l')
-    lines(x,pbeta(x,shapes[1],shapes[2]),col='red')
-    legend("topleft",legend=c("Actual distribution","Beta approximation"),fill=c("black","red"))
+    graphics::lines(x,pbeta(x,shapes[1],shapes[2]),col='red')
+    graphics::legend("topleft",legend=c("Actual distribution","Beta approximation"),fill=c("black","red"))
   }
 
   if (conversion.reads) c(ntr=opt$maximum,shapes,conversion.reads=sum(mixmat)-sum(mixmat[0,])) else c(ntr=opt$maximum,shapes)
@@ -488,7 +488,7 @@ table.MixMatrix.Ratios=function(mm,num=2,denom=3:10,coldata=NULL) {
 		}
 	}
 	re[is.na(re)]=0
-	df=melt(re,id.vars="n",variable.name="Name",value.name="Ratio")
+	df=reshape2::melt(re,id.vars="n",variable.name="Name",value.name="Ratio")
 	if (!is.null(coldata)) df=merge(df,coldata,by="Name")
 	df
 }
@@ -502,7 +502,7 @@ table.MixMatrix.Ratio=function(mixmat,num=2,denom=3:10,model.binom=fit.MixMat(mi
 	re[is.na(re)]=0
 	re$Binom=dbinom(num,size=re$n,prob=model.binom$p.conv)/sapply(re$n,function(n) sum(dbinom(denom,size=n,prob=model.binom$p.conv)))
 	re$`TB-Binom`=dtbbinom(num,size=re$n,l=model.tbbinom$p.err,u=model.tbbinom$p.mconv,shape=model.tbbinom$shape)/sapply(re$n,function(n) sum(dtbbinom(denom,size=n,l=model.tbbinom$p.err,u=model.tbbinom$p.mconv,shape=model.tbbinom$shape)))
-	df=melt(re,id.vars="n",variable.name="Name",value.name="Ratio")
+	df=reshape2::melt(re,id.vars="n",variable.name="Name",value.name="Ratio")
 	df
 }
 
@@ -529,7 +529,7 @@ table.MixMatrix.KL=function(mixmat,percentage=0.95,models=list()) {
 		re=cbind(re,df)
 	}
 	re=re[re$n %in% nminmax[1]:nminmax[2],]
-	df=melt(re,id.vars="n",variable.name="Name",value.name="KL")
+	df=reshape2::melt(re,id.vars="n",variable.name="Name",value.name="KL")
 	df
 }
 
@@ -572,11 +572,11 @@ shape.adjust=function(ntr,global.par) {
     opt.fun=function(shape) sum((pnew(global.par$shape)-pnew.adj(shape,global.d))^2)
     global.shape.d0=optimize(opt.fun,lower=global.par$shape-5,upper=global.par$shape+5)$minimum
 
-    opt.fun=function(shape,this.d) sum((pnew(shape)-pnew.adj(global.shape.d0,this.d))^2)
+    opt.fun2=function(shape,this.d) sum((pnew(shape)-pnew.adj(global.shape.d0,this.d))^2)
 
     sapply(ntr,function(n) {
         d=max(1E-12,ntr2d(n))
-        optimize(opt.fun,this.d=d,lower=global.par$shape-5,upper=global.par$shape+5)$minimum
+        optimize(opt.fun2,this.d=d,lower=global.par$shape-5,upper=global.par$shape+5)$minimum
     })
 }
 
@@ -594,7 +594,8 @@ PlotShapeAdjust=function(...) {
     df=do.call("rbind",lapply(global.par,function(g) make.df(g)))
 
     ggplot(df,aes(ntr,shape.adj,color=name))+
-    geom_line()+
+      cowplot::theme_cowplot()+
+      geom_line()+
     geom_vline(data=unique(df[,c("gntr","shape","name")]),mapping=aes(xintercept=gntr,color=name),linetype=2,show.legend = FALSE)+
     geom_hline(data=unique(df[,c("gntr","shape","name")]),mapping=aes(yintercept=shape,color=name),linetype=2,show.legend = FALSE)+
     scale_color_brewer(NULL,palette = "Dark2")

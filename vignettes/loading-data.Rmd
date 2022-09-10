@@ -17,30 +17,38 @@ vignette: >
 knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
 ```
 
-GRAND-R is an R package for the analysis of RNA-seq experiments involving 
-metabolic RNA labeling with nucleotide conversion, such as SLAM-seq experiments [[1]] (https://doi.org/10.1038/nmeth.4435). In such experiments, nucleoside analogs such as 4sU are added to 
+grandR is an R package for the analysis of RNA-seq experiments involving 
+metabolic RNA labeling with nucleotide conversion, such as SLAM-seq experiments [[1]](https://doi.org/10.1038/nmeth.4435). In such experiments, nucleoside analogs such as 4sU are added to 
 living cells, which take it up and incorporate it into newly synthesized RNA. Before sequencing, 4sU is converted into a cytosin analog. Reads covering 4sU sites therefore 
 have characteristic T-to-C mismatches after read mapping, in principle providing the opportunity to differentiate newly synthesized (during the time of labeling) from pre-existing RNA. 
 
-Confounders such as sequencing errors or reads that originate from newly synthesized RNA but, but chance, do not cover sites of 4sU incorporation (usually 20-80% of all new reads) can
-be handeled using specialized methods such as GRAND-SLAM 
+Confounders such as sequencing errors or reads that originate from newly synthesized RNA but, by chance, do not cover sites of 4sU incorporation (usually 20-80% of all "new reads") can
+be handled using specialized methods such as GRAND-SLAM 
 [[2]](https://doi.org/10.1093/bioinformatics/bty256).
 
 # Reading in the data
 
 Throughout this vignette, we will be using the GRAND-SLAM processed SLAM-seq data set
-from Finkel et al. 2021 [[3]](https://www.nature.com/articles/s41586-021-03610-3). The data set contains time series (progressive labeling) samples from a human epithelial cell line (Calu3 cells); half of the samples were infected with SARS-CoV-2 for different periods of time. The input is a tsv file where rows are genes and columns are read counts and other statistics (e.g., the new-to-total RNA ratio) for all samples. The data set is available on zenodo
-("https://zenodo.org/record/5834034/files/sars.tsv.gz")
+from Finkel et al. 2021 [[3]](https://www.nature.com/articles/s41586-021-03610-3). The data set contains time series (progressive labeling) samples from a human epithelial cell line (Calu3 cells); half of the samples were infected with SARS-CoV-2 for different periods of time. 
 
-```{r}
-suppressPackageStartupMessages({library(grandR)})
+The output of GRAND-SLAM is a tsv file where rows are genes and columns are read counts and other statistics (e.g., the new-to-total RNA ratio) for all samples. The data set is available on zenodo
+("https://zenodo.org/record/5834034/files/sars.tsv.gz"). We start by reading this file into R:
+
+```{r warning=FALSE}
+suppressPackageStartupMessages({
+    library(grandR)
+    library(ggplot2)
+    library(patchwork)
+})
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
 Columns(sars)
 ```
-The design vector describes the experimental design. This assumes that sample
-names are composed of three parts separated by dots as shown in the output. Note that the Columns function returns the sample names (or cell ids, if you load a single cell data set). Each part in the sample
-name represents an aspect of the design. For example, the sample named Mock.2h.A is a sample from the mock condition (i.e. not infected by SARS-CoV-2), subjected to metabolic labeling for 2 hours, and is the first replicate (i.e. replicate "A"). This sample name is consistent with the design vector used above. It is possible to specify other design elements (of course the samples would have to be named accordingly). A list of reasonable options is predefined in the list `Design`. Some names have additional semantics. For example, for the name \emph{duration.4sU} the values are interpreted: e.g. 4h is converted into the number 4, 30min into 0.5, and no4sU into 0.
+When reading in the file, we have to define the `design` vector. This is used to infer metadata automatically from sample names. Here sample
+names consist of three parts separated by dots as shown above (the Columns function returns the sample names or cell ids when analyzing a single cell data set). Each part in the sample
+name represents an aspect of the design. For example, the sample named Mock.2h.A is a sample from the mock condition (i.e. not infected by SARS-CoV-2), subjected to metabolic labeling for 2 hours, and is the first replicate (i.e. replicate "A"). This sample name is consistent with the three element design vector used above. It is possible to specify other design elements (of course the samples would have to be named accordingly). A list of reasonable options is predefined in the list `Design`. 
+
+There are names (i.e. the things you specify in the design vector) that have additional semantics. For example, for the name `duration.4sU` the values are interpreted like this: 4h is converted into the number 4, 30min into 0.5, and no4sU into 0. For more information, see [below](#column-metadata)
 
 The design vector is mandatory. Attempting to read in the data without it
 results in an error:
@@ -49,7 +57,7 @@ results in an error:
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz")
 ```
 
-Alternatively, a table containing the metadata can be specified. Make sure that it contains a Name column matching the names in the GRAND-SLAM output table!
+Alternatively, a table containing the metadata can be specified. Make sure that it contains a `Name` column matching the names in the GRAND-SLAM output table:
 ```{r}
 metadata = data.frame(Name=c(
   "Mock.no4sU.A","Mock.1h.A","Mock.2h.A","Mock.2h.B","Mock.3h.A","Mock.4h.A",
@@ -61,32 +69,35 @@ sars.meta <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",des
 
 # What is in the grandR object
 
-The grandR object contains
+`ReadGRAND` returns a grandR object, which contains
 
 1. metadata for genes
 2. metadata for samples/cells (as inferred from the sample names by the design parameter)
 3. all data matrices (counts, normalized counts, ntrs, etc. these types of data are called "slots")
 4. analysis results
 
-Metadata (1. and 2.) are described below. How to work with the data matrices and analysis results is described in a separate vignette.
+Metadata (1. and 2.) are described below. How to work with the data matrices and analysis results is described in a separate [vignette](data-matrices-and-analysis-results.html).
+
 
 ## Working with grandR objects
 
+Here we will see how to work with grandR objects in general. A short summmary can be displayed when `print`ing the object, and there are several functions to retrieve general information about the object:
 
-A short summmary as well can be displayed when printing the object, and there are several functions to retrieve general information about the object:
 ```{r}
 print(sars)
 Title(sars)
-VersionString(sars)
 nrow(sars)
 ncol(sars)
 ```
-Genes can be filtered:
+
+It is straight-forward to filter genes:
+
 ```{r}
 sars <- FilterGenes(sars)
 nrow(sars)
 ```
-By default genes are retained, if they have 100 read counts in at least half of the columns (i.e. samples or cells). There are many options how to filter by genes:
+
+By default genes are retained if they have 100 read counts in at least half of the samples (or cells). There are many options how to filter by genes (note that `FilterGenes` returns a new grandR object, and below we directly call `nrow` on this new object to check how many genes are retained by filtering):
 
 ```{r}
 cat(sprintf("Genes with at least 1000 read counts in half of the columns: %d\n",
@@ -101,43 +112,52 @@ sars <- NormalizeTPM(sars)     # compute transcript per million
 cat(sprintf("Genes with at least 10 TPM in half of the columns: %d\n",
             nrow(FilterGenes(sars,mode.slot="tpm",minval=10))))
 ```
-Also the columns can be filtered, this is done using the subset function:
+
+
+
+`FilterGenes` essentially removes rows from the data slots. It is also possible to remove columns (i.e. samples or cells). This is done using the subset function:
+
+
 ```{r}
 mock <- subset(sars,columns = Condition=="Mock")
 mock
 ```
-Note that the new grandR object now only has 6 columns. The `columns` parameter to subset must be a logical vector, and you can use the names of the column metadata table (see below) as variables. 
+
+The new grandR object now only has 6 columns. The `columns` parameter to subset must be a logical vector, and you can use the names of the column metadata table (see below) as variables (i.e. the parameter here is a logical vector with all samples being TRUE where the `Condition` column is equal to "Mock". 
 
 A closely related function is `split`, which returns a list of several grandR objects, each composed of samples having the same `Condition`.
 
 ```{r}
 split.list <- split(sars)
 split.list
-Columns(split.list$Mock)
-Columns(split.list$SARS)
+lapply(split.list,Columns)
 ```
-In inverse of `split` is `join`:
+
+The inverse of `split` is `join`:
 
 ```{r}
 sars.mock <- merge(split.list$SARS,split.list$Mock)
 Columns(sars.mock)
 ```
+
 Note that we merged such that now we have first the SARS samples and then the Mock samples. We can reorder by
 
 ```{r}
-mock.sars <- reorder(sars.mock,order = c(7:12,1:6))
+mock.sars <- subset(sars.mock,columns = c(7:12,1:6))
 Columns(mock.sars)
 ```
 
 ## Gene metadata
 
-The metadata for genes can be retrieved using the `GeneInfo` function:
+Here we see how to work with the metadata for genes. The gene metadata essentially is a table that can be retrieved using the `GeneInfo` function:
 
 ```{r}
 head(GeneInfo(sars), 10)
 ```
 
-Each gene has associated gene ids and symbols. Genes can be found by the `Genes` function:
+Each gene has associated gene ids and symbols. Gene ids and symbols as well as the transcript length are part of the GRAND-SLAM output. The `Type` column is inferred automatically (see below). 
+
+Genes can be identified by the `Genes` function:
 
 ```{r}
 head(Genes(sars), n=20)                          # retrieve the first 20 genes
@@ -146,11 +166,12 @@ Genes(sars,genes = c("MYC","ORF1ab"),use.symbols = FALSE)    # convert to ids
 Genes(sars,genes = "YC", regex = TRUE)           # retrieve all genes matching to the regular expression YC
 ```
 
-From the metadata, gene ids and symbols as well as the transcript length are part of the GRAND-SLAM output. The type is inferred from the gene ids using the `GeneType()` function. By default, this will recognize mitochondrial genes (MT prefix of the gene symbol), ERCC spike-ins, and Ensembl gene identifiers (which it will call "cellular"). Here, we also have the viral genes, that are not recognized:
+For inferring the `Type` column, the `GeneType()` function is used. By default, this will recognize mitochondrial genes (MT prefix of the gene symbol), ERCC spike-ins, and Ensembl gene identifiers (which it will call "cellular"). Here, we also have the viral genes, that are not recognized:
 
 ```{r}
 table(GeneInfo(sars,"Type"))
 ```
+
 If you want to define your own types, you can do this easily be specifying the `classify.genes` parameter when read in your data:
 
 ```{r}
@@ -161,48 +182,89 @@ sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
 table(GeneInfo(sars,"Type"))
 ```
 
-Note that each parameter to `GeneType` must be named (`viral`) and must be a function that takes the gene metadata table and returns a logical vector. Here, it might have been easier to rename "Unknown" to viral, which can be accomplished by:
+Note that each parameter to `GeneType` must be named (`viral`) and must be a function that takes the gene metadata table and returns a logical vector. 
 
-```{r}
+The `GeneType` function has one additional important parameter, which defines how "Unknown" types are supposed to be called. For this data set, a similar behavior as above can be accomplished by:
+
+```{r warning=FALSE}
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate),
                   classify.genes = GeneType(name.unknown = "viral"))
 table(GeneInfo(sars,"Type"))
 ```
 
-Additional gene metadata can be set like this:
+It is also straight-forward to add additional gene metadata:
+
 ```{r}
 GeneInfo(sars,"length.category") <- cut(GeneInfo(sars,"Length"),breaks=c(0,2000,5000,Inf),labels = c("Short","Medium","Long"))
 table(GeneInfo(sars,"length.category"))
 ```
 
 
+## Column metadata
 
-## Column (i.e. samples or cells) metadata
-
-The metadata for samples/cells is a table that describes the experimental design we specified
-in grandR. It can be accessed via `Coldata(sars)`. Note that we call samples or cells (depending on your experiment)
-jointly the "columns" of our experiment. We can also see that the duration of 4sU 
-has been interpreted and converted to a numeric value (compare "duration.4sU" with "duration.4sU.original"). 
+Samples for bulk experiments and cells in single cell experiments are in grandR jointly called "columns". The metadata for columns is a table that describes the experimental design we specified
+when reading in data in grandR. It can be accessed via the `Coldata` function.  We can also see that the duration of 4sU 
+has been interpreted and converted to a numeric value (compare "duration.4sU" with "duration.4sU.original"):
 
 ```{r}
 Coldata(sars)
 ```
 
-Additional metadata can be easily added. At 3h post infection, 4sU was added to the cells for 1,2,3 or 4h. The two no4sU samples are also 3h post infection. The infection time point can be added to this table via:
+Additional semantics can also be defined, which is accomplished via the function `DesignSemantics`, that generates a list for the `semantics` parameter of the function `MakeColdata`, which in turn is used to infer metadata from sample names. We briefly explain these mechanisms with an example, but it is important to mention that in most cases, the desired metadata can be added after reading the data, as shown further below.
+
+First, it is important to have a function that takes two parameters (a specific column of the original column metadata table + the name of this column) and returns a dataframe that is then `cbind`ed with the original column metadata table. There is one such predefined function in grandR, which parses labeling durations:
+
+```{r}
+Semantics.time(c("5h","30min","no4sU"),"Test")
+```
+
+We can easily define our own function like this:
+```{r}
+my.semantics.time <- function(s,name) {
+         r<-Semantics.time(s,name)
+         cbind(r,data.frame(hpi=paste0(r[[name]]+3,"hpi")))
+}
+my.semantics.time(c("5h","30min","no4sU"),"Test")
+```
+
+Here, it is important to mention that at 3h post infection, 4sU was added to the cells for 1,2,3 or 4h. The two no4sU samples are also 3h post infection. This function can now be used as `semantics` parameter for `ReadGRAND` like this:
+
+```{r}
+sars.meta <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+                   design=function(names) 
+                     MakeColdata(names,
+                                 c("Cell",Design$dur.4sU,Design$Replicate),
+                                 semantics=DesignSemantics(duration.4sU=my.semantics.time)
+                                 ),
+                 verbose=TRUE)
+```
+
+As mentioned above, it is in most cases easier to add additional metadata after loading.The infection time point can also be added by:
+
 ```{r}
 Coldata(sars,"hpi")<-paste0(Coldata(sars,"duration.4sU")+3,"hpi")
 Coldata(sars)
 ```
 
-There are also some grandR functions, that add metadata, such as `ComputeExpressionPercentage`:
+There are also some build-in grandR functions that add metadata, such as `ComputeExpressionPercentage`:
+
 ```{r}
 sars <- ComputeExpressionPercentage(sars,name = "viral_percentage",genes = GeneInfo(sars,"Type")=="viral")
-ggplot(Coldata(sars),aes(Name,viral_percentage))+geom_bar(stat="identity")+RotatateAxisLabels()+xlab(NULL)
+ggplot(Coldata(sars),aes(Name,viral_percentage))+
+  geom_bar(stat="identity")+
+  RotatateAxisLabels()+
+  xlab(NULL)
 ```
-Note that the 4sU-naive sample shows more viral gene expression, suggesting that 4sU had an effect on viral gene expression.
 
-For Coldata, the `Condition` column has a special meaning. It is used by many functions as a default, e.g. to plot colors in the PCA or to model kinetics per conditions. It can be accessed by it's own function:
+Interestingly the 4sU-naive sample shows more viral gene expression, suggesting that 4sU had an effect on viral gene expression.
+
+Since this is such an important control, there is also a specialized plotting function built into grandR for that:
+```{r}
+PlotTypeDistribution(sars,relative = TRUE)
+```
+
+There is a column in the `Coldata` metadata table that has a special meaning: `Condition`. It is used by many functions as a default, e.g. to plot colors in the PCA or to model kinetics per conditions. It can be accessed by it's own function:
 
 ```{r}
 Condition(sars)
@@ -223,9 +285,5 @@ Condition(sars)
 Condition(sars)<-"saved"                  # set it to one other column from the Coldata
 Condition(sars)
 ```
-
-
-
-
 
 

@@ -8,7 +8,7 @@
 #'
 #' @details This is adapted code from https://github.com/dieterich-lab/ComparisonOfMetabolicLabeling
 #'
-#' @return
+#' @return a new grandR object containing the pulseR analyses in a new analysis table
 #' @export
 #'
 FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
@@ -29,7 +29,27 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
     counts=cbind(l,u)[,use]
     colnames(counts)=conditions$Name
 
-    norms <- pulseR:::findDeseqFactorsSingle(totals)
+    deseq=function (x, loggeomeans)
+    {
+      finitePositive <- is.finite(loggeomeans) & x > 0
+      if (any(finitePositive)) {
+        res <- exp(median((log(x) - loggeomeans)[finitePositive],
+                          na.rm = TRUE))
+      }
+      else {
+        print(utils::head(x))
+        stop("Can't normalise accross a condition.\n         Too many zero expressed genes. ")
+      }
+      res
+    }
+    findDeseqFactorsSingle=function (count_data)
+    {
+      loggeomeans <- rowMeans(log(count_data))
+      deseqFactors <- apply(count_data, 2, deseq, loggeomeans = loggeomeans)
+      deseqFactors
+    }
+
+    norms <- findDeseqFactorsSingle(totals)
     norms=norms[colnames(counts)]
 
     re=lapply(levels(conditions$Condition),function(n) {
@@ -108,7 +128,7 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
  #                     par = re$fit,
  #                     geneIndexes = seq_along(re$fit$d),
  #                     pd = re$pd,
- #                     options = re$opts, confidence = conf.int)
+ #                     options = re$opts, confidence = CI.size)
  #       tp <- unique(re$pd$conditions$time)
     })
 
@@ -184,7 +204,7 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 #' @param type Which method to use (either one of "full","ntr","lm")
 #' @param slot The data slot to take expression values from
 #' @param time The column in the column annotation table representing the labeling duration
-#' @param conf.int A number between 0 and 1 representing the size of the confidence interval
+#' @param CI.size A number between 0 and 1 representing the size of the confidence interval
 #' @param return.fields which statistics to return (see details)
 #' @param return.extra additional statistics to return (see details)
 #' @param ... forwarded to \code{\link{FitKineticsGeneNtr}}, \code{\link{FitKineticsGeneLeastSquares}} or \code{\link{FitKineticsGeneLogSpaceLinear}}
@@ -222,7 +242,7 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 #'
 #' @export
 #'
-FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,return.fields=c("Synthesis","Half-life"),return.extra=NULL,...) {
+FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,CI.size=0.95,return.fields=c("Synthesis","Half-life"),return.extra=NULL,...) {
 
   fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nlls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
 
@@ -230,7 +250,7 @@ FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=
   result=plapply(Genes(data),
                  fun,
                  data=data,
-                 slot=slot,time=time,conf.int=conf.int,
+                 slot=slot,time=time,CI.size=CI.size,
                  ...)
 
   adder=function(cond) {
@@ -263,7 +283,7 @@ FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=
 #' @param gene The gene for which to fit the model
 #' @param slot The data slot to take expression values from
 #' @param time The column in the column annotation table representing the labeling duration
-#' @param conf.int A number between 0 and 1 representing the size of the confidence interval
+#' @param CI.size A number between 0 and 1 representing the size of the confidence interval
 #' @param steady.state either a named list of logical values representing conditions in steady state or not, or a single logical value for all conditions
 #' @param use.old a logical vector to exclude old RNA from specific time points
 #' @param use.new a logical vector to exclude new RNA from specific time points
@@ -320,7 +340,7 @@ FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=
 #'
 #' @export
 #'
-FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,steady.state=NULL,use.old=TRUE,use.new=TRUE, maxiter=250, compute.residuals=TRUE) {
+FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,CI.size=0.95,steady.state=NULL,use.old=TRUE,use.new=TRUE, maxiter=250, compute.residuals=TRUE) {
     # residuals of the functions for usage with nls.lm
     res.fun.equi=function(par,old,new) {
         s=par[1]
@@ -373,7 +393,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
         newdf$Condition="Data"
         if (length(steady.state)==1) names(steady.state)="Data"
     }
-    newdf=dlply(newdf,"Condition",function(s) correct(s))
+    newdf=plyr::dlply(newdf,"Condition",function(s) correct(s))
 
     correct=function(s) {
         if (max(s$Value)==0) s$Value=0.01
@@ -384,7 +404,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
     olddf$use=1:nrow(olddf) %in% (1:nrow(olddf))[use.old]
     olddf$time=olddf[[time]]
     if (is.null(olddf$Condition)) olddf$Condition="Data"
-    olddf=dlply(olddf,"Condition",function(s) correct(s))
+    olddf=plyr::dlply(olddf,"Condition",function(s) correct(s))
 
 
     fit.equi=function(ndf,odf) {
@@ -399,7 +419,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
                        control=minpack.lm::nls.lm.control(maxiter = maxiter))
 
         if (model.p$niter==maxiter) return(list(data=NA,residuals=if (compute.residuals) data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=NA,Relative=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
-        conf.p=try(minpack.lm:::confint.nls.lm(model.p,level=conf.int),silent = TRUE)
+        conf.p=try(confint.nls.lm(model.p,level=CI.size),silent = TRUE)
         if (!is.matrix(conf.p)) conf.p=matrix(c(NA,NA,NA,NA),nrow=2)
         par=setNames(model.p$par,c("s","d"))
         rmse=sqrt(model.p$deviance/(nrow(ndf)+nrow(odf)))
@@ -455,7 +475,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
         if (model.m$niter==maxiter) return(list(data=NA,residuals=if (compute.residuals) data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=NA,Relative=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
         par=setNames(model.m$par,c("s","d"))
         f0=par[3]
-        conf.m=try(minpack.lm:::confint.nls.lm(model.m,level=conf.int),silent = TRUE)
+        conf.m=try(confint.nls.lm(model.m,level=CI.size),silent = TRUE)
         if (!is.matrix(conf.m)) conf.m=matrix(c(NA,NA,NA,NA),nrow=2)
         rmse=sqrt(model.m$deviance/(nrow(ndf)+nrow(odf)))
         fvec=res.fun.nonequi.f0fixed(par,f0,odf,ndf)
@@ -523,7 +543,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
 #' @param gene The gene for which to fit the model
 #' @param slot The data slot to take expression values from
 #' @param time The column in the column annotation table representing the labeling duration
-#' @param conf.int A number between 0 and 1 representing the size of the confidence interval
+#' @param CI.size A number between 0 and 1 representing the size of the confidence interval
 #'
 #' @return
 #' A named list containing the model fit:
@@ -574,7 +594,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
 #'
 #' @export
 #'
-FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95) {
+FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,CI.size=0.95) {
     correct=function(s) {
         if (max(s$Value)==0) s$Value[s$time==1]=0.01
         s$Type="New"
@@ -592,7 +612,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
     olddf$use=1:nrow(olddf) %in% (1:nrow(olddf))
     olddf$time=olddf[[time]]
     if (is.null(olddf$Condition)) olddf$Condition="Data"
-    olddf=dlply(olddf,"Condition",function(s) correct(s))
+    olddf=plyr::dlply(olddf,"Condition",function(s) correct(s))
 
 
     fit.lm=function(odf) {
@@ -602,7 +622,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
 
         par=setNames(c(exp(coef(fit)["(Intercept)"])*-coef(fit)["time"],-coef(fit)["time"]),c("s","d"))
         if (sum(abs(residuals(fit)))>0) {
-            conf.p=confint(fit,level=conf.int)
+            conf.p=confint(fit,level=CI.size)
             conf.p=apply(conf.p,2,function(v) setNames(pmax(0,c(exp(v["(Intercept)"])*par['d'],-v["time"])),c("s","d")))
         } else {
             conf.p=matrix(rep(NaN,4),ncol = 2)
@@ -642,7 +662,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
 #' @param gene The gene for which to fit the model
 #' @param slot The data slot to take expression values from
 #' @param time The column in the column annotation table representing the labeling duration
-#' @param conf.int A number between 0 and 1 representing the size of the confidence interval
+#' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param transformed.NTR.MAP Use the transformed NTR MAP estimator instead of the MAP of the transformed posterior
 #' @param exact.ci compute exact credible intervals (see details)
 #' @param total.fun use this function to summarize the expression values (only relevant for computing the synthesis rate s)
@@ -696,11 +716,11 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
 #'
 #' @export
 #'
-FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,conf.int=0.95,transformed.NTR.MAP=TRUE,exact.ci=FALSE,total.fun=median) {
+FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,CI.size=0.95,transformed.NTR.MAP=TRUE,exact.ci=FALSE,total.fun=median) {
     if (!all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
     steady.state=TRUE
 
-    crit <- qchisq(1-conf.int, df = 2, lower.tail = FALSE) / 2
+    crit <- qchisq(1-CI.size, df = 2, lower.tail = FALSE) / 2
 
     bounds=c(log(2)/48,log(2)/0.01)
 
@@ -761,8 +781,8 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
             upper1=uniroot.save(function(x) ploglik(x)-max+log(1E6),lower = d,upper=pbounds[2])
 
             total.inte=inte(upper1)
-            lower=uniroot.save(function(x) inte(x)/total.inte-(1-conf.int)/2,lower = lower1,upper=d)
-            upper=uniroot.save(function(x) inte(x)/total.inte-(1+conf.int)/2,lower = d,upper=upper1)
+            lower=uniroot.save(function(x) inte(x)/total.inte-(1-CI.size)/2,lower = lower1,upper=d)
+            upper=uniroot.save(function(x) inte(x)/total.inte-(1+CI.size)/2,lower = d,upper=upper1)
         } else {
             lower=uniroot.save(function(x) ploglik(x)-max+crit,lower = pbounds[1],upper=d)
             upper=uniroot.save(function(x) ploglik(x)-max+crit,lower = d,upper=pbounds[2])
@@ -807,7 +827,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #' @param time The column in the column annotation table representing the labeling duration
 #' @param time.name The name in the column annotation table to put the calibrated labeling durations
 #' @param time.conf.name The name in the column annotation table to put the confidence values for the labeling durations (half-size of the confidence interval)
-#' @param conf.int The level for confidence intervals
+#' @param CI.size The level for confidence intervals
 #' @param steady.state either a named list of logical values representing conditions in steady state or not, or a single logical value for all conditions
 #' @param n.estimate the times are calibrated with the top n expressed genes
 #' @param n.iter the maximal number of iterations for the numerical optimization
@@ -837,7 +857,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #'
 #' @export
 #'
-  CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",conf.int=0.95,steady.state=NULL,n.estimate=1000, n.iter=10000, verbose=FALSE,...) {
+  CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",CI.size=0.95,steady.state=NULL,n.estimate=1000, n.iter=10000, verbose=FALSE,...) {
 
     conds=Coldata(data)
     if (is.null(conds$Condition)) {
@@ -856,7 +876,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
         sub=FitKinetics(sub,type='nlls',slot=slot,time=time,return.fields="Half-life")
         HLs=GetAnalysisTable(sub,prefix.by.analysis = FALSE)$`Half-life`
         HL.cat=cut(HLs,c(0,2,4,6,8,Inf),include.lowest = TRUE)
-        fil=plyr::ddply(data.frame(Gene=Genes(sub),totals,HL.cat),.(HL.cat),function(s) {
+        fil=plyr::ddply(data.frame(Gene=Genes(sub),totals,HL.cat),plyr::.(HL.cat),function(s) {
            threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/length(unique(HL.cat))))]
            data.frame(Gene=s$Gene,use=s$totals>=threshold)
         })
@@ -896,7 +916,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
         fit=optim(init[use],fn=opt.fun,hessian=FALSE, control=list(fnscale=-1,maxit=n.iter),method="Nelder-Mead")
         if (fit$convergence!=0) stop(sprintf("Did not converge!"))
         fit$hessian=numDeriv::hessian(opt.fun,fit$par)
-        conf=try(sd.from.hessian(fit$hessian)*qnorm(1-(1-conf.int)/2),silent=TRUE)
+        conf=try(sd.from.hessian(fit$hessian)*qnorm(1-(1-CI.size)/2),silent=TRUE)
 
         tt=init
         tt[use]=fit$par
@@ -921,6 +941,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
 #' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
 #' @param time.name The name in the column annotation table to put the calibrated labeling durations
+#' @param n.estimate the times are calibrated with the top n expressed genes
 #' @param verbose verbose output
 #'
 #' @return
@@ -938,7 +959,7 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 
   totals=rowSums(GetTable(data,type=slot,genes=genes))
   HL.cat=cut(reference.halflives,c(0,2,4,6,8,Inf),include.lowest = TRUE)
-  fil=plyr::ddply(data.frame(Gene=genes,totals,HL.cat),.(HL.cat),function(s) {
+  fil=plyr::ddply(data.frame(Gene=genes,totals,HL.cat),plyr::.(HL.cat),function(s) {
     threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/length(unique(HL.cat))))]
     data.frame(Gene=s$Gene,use=s$totals>=threshold)
   })
@@ -1000,8 +1021,9 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #' @param sample.f0.in.ss whether or not to sample f0 under steady state conditions
 #' @param N the sample size
 #' @param N.max the maximal number of samples (necessary if old RNA > f0); if more are necessary, a warning is generated
-#' @param conf.int A number between 0 and 1 representing the size of the credible interval
+#' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param seed Seed for the random number generator
+#' @param dispersion overdispersion parameter for each gene; if NULL this is estimated from data
 #' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
 #' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
 #' @param verbose Vebose output
@@ -1025,15 +1047,15 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #' \itemize{
 #'  \item{"s"}{the posterior mean synthesis rate}
 #'  \item{"HL"}{the posterior mean RNA half-life}
-#'  \item{"s.cred.lower"}{the lower CI boundary of the synthesis rate)
-#'  \item{"s.cred.upper"}{the uper CI boundary of the synthesis rate)
-#'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life)
-#'  \item{"HL.cred.upper"}{the uper CI boundary of the half-life)
+#'  \item{"s.cred.lower"}{the lower CI boundary of the synthesis rate}
+#'  \item{"s.cred.upper"}{the uper CI boundary of the synthesis rate}
+#'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life}
+#'  \item{"HL.cred.upper"}{the uper CI boundary of the half-life}
 #' }
 #'
 #'
 #' @export
-FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=DefaultSlot(data),conditions=NULL,time.labeling=Design$dur.4sU,time.experiment=NULL, sample.f0.in.ss=TRUE,N=10000,N.max=N*10,conf.int=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
+FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=DefaultSlot(data),conditions=NULL,time.labeling=Design$dur.4sU,time.experiment=NULL, sample.f0.in.ss=TRUE,N=10000,N.max=N*10,CI.size=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
 
@@ -1074,7 +1096,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=
 
     re=plapply(1:nrow(data),function(i) {
       #for (i in 1:nrow(data)) { print (i);
-      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior,return.samples=TRUE,N=N,N.max=N.max,conf.int=conf.int,correct.labeling=correct.labeling)
+      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
       samp.a=fit.A$samples
 
       N=nrow(samp.a)
@@ -1088,8 +1110,8 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=
       ))
       samp.a=samp.a[1:N,,drop=FALSE]
 
-      sc=quantile(samp.a[,'s'],c(0.5-conf.int/2,0.5+conf.int/2))
-      hc=quantile(log(2)/samp.a[,'d'],c(0.5-conf.int/2,0.5+conf.int/2))
+      sc=quantile(samp.a[,'s'],c(0.5-CI.size/2,0.5+CI.size/2))
+      hc=quantile(log(2)/samp.a[,'d'],c(0.5-CI.size/2,0.5+CI.size/2))
 
       return(
         c(
@@ -1131,7 +1153,8 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=
 #' @param return.points return the point estimates per replicate as well?
 #' @param N the posterior sample size
 #' @param N.max the maximal number of posterior samples (necessary if old RNA > f0); if more are necessary, a warning is generated
-#' @param conf.int A number between 0 and 1 representing the size of the credible interval
+#' @param CI.size A number between 0 and 1 representing the size of the credible interval
+#' @param correct.labeling whether to correct labeling times
 #'
 #' @details The kinetic parameters s and d are computed using \link{TransformSnapshot}. For that, the sample either must be in steady state
 #' (this is the case if defined in the reference.columns matrix), or if the levels of reference samples from a specific prior time point are known. This time point is
@@ -1140,11 +1163,11 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=
 #' the perturbation, and the reference samples are unperturbed samples).
 #'
 #' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
-#' that approximates the mixture of betas from the replicate samples. (see \link{beta.approximate.mixture}).
+#' that approximates the mixture of betas from the replicate samples.
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
-#' conveniently build a logical vector (e.g., columns=Condition="x").
+#' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a list containing the posterior mean of s and s, its credible intervals and,
 #' if return.samples=TRUE a data frame containing all posterior samples
@@ -1161,7 +1184,7 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
                              return.samples=FALSE,
                              return.points=FALSE,
                              N=10000,N.max=N*10,
-                             conf.int=0.95,
+                             CI.size=0.95,
                              correct.labeling=FALSE
                              ) {
 
@@ -1209,8 +1232,8 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
         re=list(
             s=NA,
             d=NA,
-            s.conf.int=c(-Inf,Inf),
-            d.conf.int=c(-Inf,Inf)
+            s.CI=c(-Inf,Inf),
+            d.CI=c(-Inf,Inf)
         )
         if (return.samples)
             re$samples=data.frame(s=numeric(0),d=numeric(0),ntr=numeric(0),total=numeric(0),t=numeric(0),t0=numeric(0),f0=numeric(0))
@@ -1308,14 +1331,14 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
     N=nrow(samp)
     if (N==0) return(emptyres())
 
-    sc=quantile(samp[,'s'],c(0.5-conf.int/2,0.5+conf.int/2))
-    dc=quantile(samp[,'d'],c(0.5-conf.int/2,0.5+conf.int/2))
+    sc=quantile(samp[,'s'],c(0.5-CI.size/2,0.5+CI.size/2))
+    dc=quantile(samp[,'d'],c(0.5-CI.size/2,0.5+CI.size/2))
 
     re=list(
         s=mean(samp[,'s']),
         d=mean(samp[,'d']),
-        s.conf.int=sc,
-        d.conf.int=dc
+        s.CI=sc,
+        d.CI=dc
     )
     if (return.samples)
         re$samples=as.data.frame(samp)
@@ -1385,40 +1408,29 @@ TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
 }
 
 
-
-
-#' Plot the abundance of new and old RNA and the fitted model over time for a single gene.
+#' Plot progressive labeling timecourses
 #'
-#' For each \code{\link{Condition}} there will be one panel containing the values and the corresponding model fit.
+#' Plot the abundance of new and old RNA and the fitted model over time for a single gene.
 #'
 #' @param data a grandR object
 #' @param gene the gene to be plotted
 #' @param slot the data slot of the observed abundances
 #' @param time the labeling duration column in the column annotation table
-#' @param title the plot title
 #' @param type how to fit the model (see link{FitKinetics})
-#' @param bare.plot omit axis and main title?
-#' @param exact.tics use axis labels directly corresponding to the labeling durations availanle?
+#' @param exact.tics use axis labels directly corresponding to the available labeling durations?
+#' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
 #' @param return.tables also return the tables used for plotting
 #' @param ... given to the fitting procedures
+#'
+#' @details For each \code{\link{Condition}} there will be one panel containing the values and the corresponding model fit.
 #'
 #' @return either a ggplot object, or a list containing all tables used for plotting and the ggplot object.
 #'
 #' @seealso \link{FitKineticsGeneNtr}, \link{FitKineticsGeneLeastSquares}, \link{FitKineticsGeneLogSpaceLinear}
 #'
 #' @export
-#'
-#' @examples
-#'
-#' # straight-forward plot of a random gene
-#' PlotGeneKinetics(sars,gene,type="ntr")
-#'
-#' # plot four ways of fitting the model: non-linear least squares, ntr fit, nlls fit without using the 3hpi time point for SARS, and nlls fit without assuming steady state for  SARS
-#' (PlotGeneKinetics(sars,"SRSF6",bare.plot=T) |
-#'   PlotGeneKinetics(sars,"SRSF6",type = "ntr",bare.plot=T))  /
-#'    (PlotGeneKinetics(sars,"SRSF6",use.old=Coldata(sars)$Name!="SARS.no4sU.A",bare.plot=T) |
-#'         PlotGeneKinetics(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE),bare.plot=T))
-PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,title=Genes(data,genes=gene), type=c("nlls","ntr","lm"), bare.plot=FALSE,exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
+PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU, type=c("nlls","ntr","lm"),
+                                       exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
     if (length(ToIndex(data,gene))==0) return(NULL)
 
     fit=switch(tolower(type[1]),
@@ -1467,20 +1479,19 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
 
     df$Condition=if ("Condition" %in% names(df)) df$Condition else gene
     tt=seq(0,max(df$time),length.out=100)
-    df.median=ddply(df,c("Condition","Type","duration.4sU","time"),function(s) data.frame(Value=median(s$Value)))
-    fitted=ldply(fit,function(f) data.frame(time=c(tt,tt),Value=c(f.old.nonequi(tt,f$f0,f$Synthesis,f$Degradation),f.new(tt,f$Synthesis,f$Degradation)),Type=rep(c("Old","New"),each=length(tt))),.id="Condition")
+    df.median=plyr::ddply(df,c("Condition","Type","duration.4sU","time"),function(s) data.frame(Value=median(s$Value)))
+    fitted=plyr::ldply(fit,function(f) data.frame(time=c(tt,tt),Value=c(f.old.nonequi(tt,f$f0,f$Synthesis,f$Degradation),f.new(tt,f$Synthesis,f$Degradation)),Type=rep(c("Old","New"),each=length(tt))),.id="Condition")
     breaks=if (exact.tics) sort(unique(df[[time]])) else scales::breaks_extended(5)(df[[time]])
 
-    g=ggplot(df,aes(time,Value,color=Type))
+    g=ggplot(df,aes(time,Value,color=Type))+cowplot::theme_cowplot()
     if (show.CI) g=g+geom_errorbar(mapping=aes(ymin=lower,ymax=upper),width=0.1)
     g=g+geom_point(size=2)+
         geom_line(data=df.median[df.median$Type=="Total",],size=1)+
-        scale_x_continuous(if (bare.plot) NULL else "4sU labeling",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks)),suffix="h"),breaks=breaks)+
-        scale_color_manual("RNA",values=c(Total="gray",New="#e34a33",Old="#2b8cbe"),guide=if (bare.plot) "none" else "legend")+
-        ylab(if (bare.plot) NULL else "Expression")+
+        scale_x_continuous("4sU labeling",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks)),suffix="h"),breaks=breaks)+
+        scale_color_manual("RNA",values=c(Total="gray",New="#e34a33",Old="#2b8cbe"))+
+        ylab("Expression")+
         geom_line(data=fitted,aes(ymin=NULL,ymax=NULL),linetype=2,size=1)
     if (!is.null(Coldata(data)$Condition)) g=g+facet_wrap(~Condition,nrow=1)
-    if (!bare.plot) g=g+ggtitle(title)
     if (return.tables) list(gg=g,df=df,df.median=df.median,fitted=fitted) else g
 }
 
@@ -1512,8 +1523,6 @@ PlotGeneKinetics=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,t
 #'
 #' @examples
 #' SimulateKinetics(hl=2)   # simulate steady state kinetics for an RNA with half-life 2h
-#'
-#' @examples
 #'
 SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=s/d,min.time=-1,max.time=10,N = 1000,name=NULL,out=c("Old","New","Total","NTR")) {
     times=seq(min.time,max.time,length.out=N)
@@ -1556,7 +1565,8 @@ PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
     if (!new) sim.df=sim.df[sim.df$Type!="New",]
     if (!total) sim.df=sim.df[sim.df$Type!="Total",]
     ggplot(sim.df,aes(Time,Value,color=Type))+
-        geom_line(size=1)+
+      cowplot::theme_cowplot()+
+      geom_line(size=1)+
         scale_color_manual(NULL,values=c(Old="#54668d",New="#953f36",Total="#373737",NTR="#e4c534"))+
         facet_wrap(~ifelse(Type=="NTR","NTR","Timecourse"),scales="free_y",ncol=1)+
         ylab(NULL)+

@@ -23,8 +23,15 @@ different scenarios.
 Throughout this vignette, we will be using the GRAND-SLAM processed SLAM-seq data set
 from Finkel et al. 2021 [[3]](https://www.nature.com/articles/s41586-021-03610-3). The data set contains time series (progressive labeling) samples from a human epithelial cell line (Calu3 cells); half of the samples were infected with SARS-CoV-2 for different periods of time. For more on these initial commands see the "Loading data" vignette.
 
+```{r warning=FALSE}
+suppressPackageStartupMessages({
+    library(grandR)
+    library(ggplot2)
+    library(patchwork)
+})
+```
+
 ```{r}
-suppressPackageStartupMessages({library(grandR)})
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c("Condition",Design$dur.4sU,Design$Replicate),
                   classify.genes = GeneType(name.unknown = "Viral"))
@@ -38,7 +45,7 @@ Data is organized in an grandR object in so-called slots:
 ```{r}
 Slots(sars)
 ```
-After loading GRAND-SLAM analysis results, the default slots are "count" (read counts), "ntr" (the new-to-total RNA ratio) and "alpha" and "beta" (the parameters for the Beta approximation of the NTR posterior distribution). Each of these slots contains a gene x columns (columns are either samples or cells, depending on whether your data is bulk or single cell data) matrix of numeric values.
+To learn about metadata, see the [loading data vignette](loading-data.html). After loading GRAND-SLAM analysis results, the default slots are "count" (read counts), "ntr" (the new-to-total RNA ratio) and "alpha" and "beta" (the parameters for the Beta approximation of the NTR posterior distribution). Each of these slots contains a gene x columns (columns are either samples or cells, depending on whether your data is bulk or single cell data) matrix of numeric values.
 
 There is also a default slot, which is used by many functions as default parameter. 
 ```{r}
@@ -46,23 +53,31 @@ DefaultSlot(sars)
 ```
 
 New slots are added by specific grandR functions such as `Normalize` or `NormalizeTPM`, which, by default, also change the default slot:
+
 ```{r}
 sars <- Normalize(sars)
 DefaultSlot(sars)
 sars <- NormalizeTPM(sars,set.to.default = FALSE)
 DefaultSlot(sars)
+```
+
+There are also other grandR functions that add additional slots, but do not update the `DefaultSlot` automatically:
+
+```{r}
 sars <- ComputeNtrCI(sars)
 DefaultSlot(sars)
 Slots(sars)
 ```
+
 # Analyses
 
-In addition to data slots, there is an additional kind of data that is important: analyses.
+In addition to data slots, there is an additional kind of data that is part of a grandR object: analyses.
 
 ```{r}
 Analyses(sars)
 ```
-After loading data there are no analyses, but such data are added e.g. by performing modeling of progressive labeling time courses or analyzing differential gene expression (see the corresponding vignettes for more on these):
+
+After loading data there are no analyses, but such data are added e.g. by performing modeling of progressive labeling time courses or analyzing differential gene expression (see the vignettes [Kinetic modeling](kinetic-modeling.html) and [Differential expression](differential-expression.html) for more on these):
 
 ```{r}
 SetParallel()
@@ -71,17 +86,22 @@ sars <- LFC(sars,contrasts=GetContrasts(sars,contrast = c("duration.4sU.original
                                         group = "Condition",no4sU=TRUE))
 Analyses(sars)
 ```
-Note that both analysis methods, `FitKinetics` and `LFC` added multiple analyses: `FitKinetics` added an analysis for each `Condition` whereas `LFC` added an analysis for each contrast defined by `GetContrasts`.
 
-What is common to data slots and analyses is that both are tables with as many rows as there are genes. What is different is that the columns of data slots always correspond to the samples or cells (depending on whether data are bulk or single cell data), and the columns of analysis tables are arbitrary and depend on the kind of analysis performed. Analysis columns can be retrieved by setting the description parameter to TRUE for `Analyses`:
+Both analysis methods, `FitKinetics` and `LFC` added multiple analyses: `FitKinetics` added an analysis for each `Condition` whereas `LFC` added an analysis for each of many pairwise comparison defined by `GetContrasts` (see [Differential expression](differential-expression.html) for details).
+
+What is common to data slots and analyses is that both are tables with as many rows as there are genes. What is different is that the columns of data slots always correspond to the samples or cells (depending on whether data are bulk or single cell data), and the columns of analysis tables are arbitrary and depend on the kind of analysis performed. 
+
+Analysis columns can be retrieved by setting the description parameter to TRUE for `Analyses`:
 
 ```{r}
 Analyses(sars,description = TRUE)
 ```
 
+We see that the `FitKinetics` function by default creates tables with two columns (`Synthesis` and `Half-life`) corresponding to the synthesis rate and RNA half-life for each gene, and the `LFC` function creates a single column called `LFC` corresponding to the log2 fold change for each gene.
+
 # Retrieving data from slots or analyses
 
-There are essentially three function to be used for retrieving data:
+There are essentially three functions you can use for retrieving slot data:
 
 * `GetTable`: The swiss army knive, returns a data frame with genes as rows and columns made from potentially several slots and/or analyses; usually for all or at least a lot of genes
 * `GetData`: Returns a data frame with the samples or cells as rows and slot data for particular genes in columns; usually for a single or at most very few genes
@@ -89,29 +109,38 @@ There are essentially three function to be used for retrieving data:
 
 
 ## GetTable
-Without any other parameters GetTable data for all genes from the default slot:
+Without any other parameters `GetTable` returns data for all genes from the default slot:
 
 ```{r}
 head(GetTable(sars))
 ```
+
 You can change the slot by specifying another `type` parameter:
+
 ```{r}
 head(GetTable(sars,type="count"))
 ```
-You can use multiple slots:
+
+You can use multiple slots (we only show the column names instead of the `head` of the returned table):
+
 ```{r}
 colnames(GetTable(sars,type=c("norm","count")))
 ```
-By using the `mode.slot` syntax (mode being either of `total`,`new` and `old`), you can also retrieve new counts or new normalized values:
+
+By using the `mode.slot` syntax (mode being either of `total`,`new` and `old`), you can also retrieve new RNA counts or new RNA normalized values:
 
 ```{r}
 head(GetTable(sars,type="new.norm"))
 ```
+
 Note that the no4sU columns only have NA values. You can change this behavior by specifying the `ntr.na` parameter:
+
 ```{r}
 head(GetTable(sars,type="new.norm",ntr.na = FALSE))
 ```
+
 `GetTable` can also be used to retrieve analysis results:
+
 ```{r}
 head(GetTable(sars,type="kinetics"))
 ```
@@ -131,105 +160,154 @@ GetTable(sars,genes=1:3)
 GetTable(sars,genes="MYC")
 ```
 
-Sometimes, it is beneficial to add the `GeneInfo` table:
+Sometimes, it makes sense to add the `GeneInfo` table (for more on gene metadata, see the [loading data vignette](loading-data.html)):
 ```{r warning=FALSE}
 df <- GetTable(sars,type="norm",gene.info = TRUE)
-ggplot(df,aes(`SARS.4h.A`,`SARS.no4sU.A`,color=Type))+geom_point()+scale_x_log10()+scale_y_log10()+geom_abline()
+ggplot(df,aes(`SARS.4h.A`,`SARS.no4sU.A`,color=Type))+
+  geom_point()+
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_abline()
 ```
-Finally, it is also straight-forward to get summarized values:
+
+Finally, it is also straight-forward to get summarized values across samples or cells from the same `Condition`:
+
 ```{r}
 head(GetTable(sars,summarize = TRUE))
 ```
+
 This is accomplished by a "summarize matrix":
+
 ```{r}
 smat <- GetSummarizeMatrix(sars)
 smat
-head(GetTable(sars,summarize = smat))  # instead of specifying TRUE, you can also specify a summarize matrix
 ```
-For summarization, the summarize matrix is matrix-multiplied with the not yet summarized matrix. `GetSummarizeMatrix` will generate a matrix with columns corresponding to conditions:
+
+
+Instead of specifying TRUE for the `summarize` parameter, you can also specify such a matrix:
+
+```{r}
+head(GetTable(sars,summarize = smat))  
+```
+
+For summarization, the summarize matrix is matrix-multiplied with the raw matrix. `GetSummarizeMatrix` will generate a matrix with columns corresponding to `Condition`s:
+
 ```{r}
 Condition(sars)
 ```
-By default, no4sU columns are removed, but the no4sU parameter can change this:
+
+By default, no4sU columns are removed (i.e. zero in the matrix), but the no4sU parameter can change this:
+
 ```{r}
 GetSummarizeMatrix(sars,no4sU = TRUE)
 ```
+
 It is also possible to focus on specific columns (samples or cells) only:
+
 ```{r}
 GetSummarizeMatrix(sars,columns = duration.4sU<4)
 ```
+
 The default behavior is to compute the average, this can be change to computing sums:
+
 ```{r}
 GetSummarizeMatrix(sars,average = FALSE)
 ```
+
 As a final example, to get averaged normalized expression values for the 2h timepoint only:
+
 ```{r}
 head(GetTable(sars,summarize = GetSummarizeMatrix(sars,columns=duration.4sU==2)))
 ```
 
 ## GetData
+
 `GetData` is the little cousin of `GetTable`: It returns a data frame with the samples or cells as rows and slot data for either a single gene or very few genes:
+
 ```{r}
 GetData(sars,genes="MYC")
 ```
-Note that by default, the `Coldata` table is also added. Note that in contrast to `GetTable`, where you can add the `GeneInfo` table, i.e. gene metadata, here it is the columns metadata! This can be changed by using the `coldata` parameter:
+
+Note that by default, the `Coldata` table is also added (for more on column metadata, see the [loading data vignette](loading-data.html)). Note that in contrast to `GetTable`, where you can add the `GeneInfo` table, i.e. gene metadata, here it is the columns metadata! This can be changed by using the `coldata` parameter:
+
 ```{r}
 GetData(sars,genes="MYC",coldata = FALSE)
 ```
 
 It is also possible to retrieve data for multiple genes and/or multiple slots, and to restrict the columns:
+
 ```{r}
 # multiple genes
 GetData(sars,genes=c("MYC","SRSF6"),columns=Condition=="Mock",coldata = FALSE)
 # multiple slots, as above, compute also for no4sU samples instead of NA
-GetData(sars,mode.slot=c("new.norm","old.norm"),genes="MYC",columns=Condition=="Mock",coldata = FALSE, ntr.na = FALSE)
+GetData(sars,mode.slot=c("new.norm","old.norm"),genes="MYC",
+        columns=Condition=="Mock",coldata = FALSE, ntr.na = FALSE)
 # multiple genes and slots
-GetData(sars,mode.slot=c("count","norm"),genes=c("MYC","SRSF6"),columns=Condition=="Mock",coldata = FALSE)
+GetData(sars,mode.slot=c("count","norm"),genes=c("MYC","SRSF6"),
+        columns=Condition=="Mock",coldata = FALSE)
 ```
+
 Finally, it is also possible to append multiple genes (and/or slots) not as columns, but as additional rows:
+
 ```{r}
 GetData(sars,genes=c("MYC","SRSF6"),columns=duration.4sU<2,by.rows = TRUE)
 ```
 
-This can be quite beneficial, which can be seen at the following example: We retrieve total, old and new RNA for SRSF6 (only replicate A), and do this by rows. This way, the data can directly be used for ggplot (note the much shorter half-life, which is the time where the new and old lines cross, for SARS as compared to Mock):
+This can be quite helpful, as for the following example: We retrieve total, old and new RNA for SRSF6 (only replicate A), and do this by rows. This way, the data can directly be used for ggplot to plot the progressive labeling time course (note the much shorter half-life, which is the time where the new and old lines cross, for SARS as compared to Mock):
+
 ```{r warning=FALSE}
-df <- GetData(sars,mode.slot=c("old.norm","new.norm","total.norm"),genes="SRSF6",columns=Replicate=="A",by.rows = TRUE)
-ggplot(df,aes(duration.4sU,Value,color=mode.slot))+geom_line()+facet_wrap(~Condition)
+df <- GetData(sars,mode.slot=c("old.norm","new.norm","total.norm"),genes="SRSF6",
+              columns=Replicate=="A",by.rows = TRUE)
+ggplot(df,aes(duration.4sU,Value,color=mode.slot))+
+  geom_line()+
+  facet_wrap(~Condition)
 ```
 
 ## GetAnalysisTable
 
 As indicated above, `GetTable` can also be used to retrieve analysis results. However, sometimes it is better to be explicit when coding analysis scripts, and you can use `GetAnalysisTable` instead.
-Furthermore, there are two additional benefits of `GetAnalysisTable` over `GetTable`: First, by default, the prefix for each column of the returned table is the analysis name:
+Furthermore, there are two additional benefits of `GetAnalysisTable` over `GetTable`: First, by default, the prefix for each column of the returned table is the analysis name, which cannot be turned off when using `GetTable` (also note that the `GeneInfo` table is added by default for `GetAnalysisTable`, can be turned off by setting the `gene.info` parameter to FALSE)
+
 ```{r}
+head(GetTable(sars,"kinetics.Mock"))
 head(GetAnalysisTable(sars,"kinetics.Mock"))
-```
-Note also that by default, `GetAnalysisTable` adds the gene metadata. Prefixing the analysis name can be turned off when using `GetAnalysisTable`:
-```{r}
 head(GetAnalysisTable(sars,"kinetics.Mock",prefix.by.analysis = FALSE))
 ```
-This might sound like a minor aesthetic surgery, but is very important in some cases. Imaging you want to fit the kinetic model (i) for the full time course (as we have already done) and (ii) for a timecourse after removing some time points:
+Turning off the prefixes might sound like a minor aesthetic surgery, but is quite important in some cases. Imagine you want to fit the kinetic model (i) for the full time course (as we have already done) and (ii) after removing some time points:
 
 ```{r}
 restricted <- subset(sars,columns = duration.4sU!=1)
 restricted <- FitKinetics(restricted,name="restricted",steady.state=c(Mock=TRUE,SARS=FALSE))
 ```
 
-And now, you want to put these analyses back to the original `sars` object for comparison. You can use the `AddAnalysis` function, but here it is important not to add the prefixes for consistency:
+And now you want to put these analyses back into the original `sars` object for comparison. You can use the `AddAnalysis` function, but here it is important not to add the prefixes for consistency:
 ```{r}
-sars <- AddAnalysis(sars,"restricted.Mock",GetAnalysisTable(restricted,analyses="restricted.Mock",prefix.by.analysis = FALSE,gene.info = FALSE))
-sars <- AddAnalysis(sars,"restricted.SARS",GetAnalysisTable(restricted,analyses="restricted.SARS",prefix.by.analysis = FALSE,gene.info = FALSE))
+# we need to omit prefixes and gene info, since the analysis table to be added 
+# should have columns Synthesis and Half-life only
+mock.tab <- GetAnalysisTable(restricted,analyses="restricted.Mock",
+                         prefix.by.analysis = FALSE,gene.info = FALSE)
+sars.tab <- GetAnalysisTable(restricted,analyses="restricted.SARS",
+                         prefix.by.analysis = FALSE,gene.info = FALSE)
+
+sars <- AddAnalysis(sars,"restricted.Mock",mock.tab)
+sars <- AddAnalysis(sars,"restricted.SARS",sars.tab)
 Analyses(sars)
 ```
 
 Now we want to compare the distributions of half-lives with and without removing the 1h timepoint. This can be accomplished by using the `by.row` parameter
+
 ```{r}
-df <- GetAnalysisTable(sars,c("kinetics.Mock","restricted.Mock"),columns = "Half-life",by.rows = TRUE)
+df <- GetAnalysisTable(sars,c("kinetics.Mock","restricted.Mock"),
+                       columns = "Half-life",by.rows = TRUE)
 rbind(head(df,4),tail(df,4))
 ```
 
-We did this, since now we can directly create an ecdf plot from this using ggplot, and we see that there are significant changes for short half-lives:
+Now we can directly create an ecdf plot from this using ggplot, and we see that there are significant changes for short half-lives:
+
 ```{r}
-ggplot(df,aes(`Half-life`,color=Analysis))+stat_ecdf()+scale_x_log10()+coord_cartesian(xlim=c(0.5,24))
+ggplot(df,aes(`Half-life`,color=Analysis))+
+  stat_ecdf()+
+  scale_x_log10()+
+  coord_cartesian(xlim=c(0.5,24))
 ```
 

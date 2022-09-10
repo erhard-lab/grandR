@@ -19,6 +19,20 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=TRUE,...) {
   t
 }
 
+confint.nls.lm=function (object, parm, level = 0.95, ...)
+{
+  cc <- coef(object)
+  if (missing(parm))
+    parm <- seq_along(cc)
+  levs <- c((1 - level)/2, 0.5 + level/2)
+  dfval <- (length(object$fvec) - length(object$par))
+  tdist <- qt(levs[2], dfval)
+  m1 <- outer(sqrt(diag(vcov(object))), c(-1, 1)) * tdist
+  m2 <- sweep(m1, cc, MARGIN = 1, "+")
+  colnames(m2) <- paste(100 * levs, "%", sep = "")
+  m2[parm, ]
+}
+
 
 #' Defer calling a function
 #'
@@ -49,7 +63,7 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=TRUE,...) {
 #' the user clicks onto the heatmap, it is regenerated.
 #'
 #' @examples
-#' Heavy.function <- function(data) rnorm(5,mean=data())
+#' Heavy.function <- function(data) rnorm(5,mean=data)
 #' f1=Defer(Heavy.function)
 #' f2=function(d) Heavy.function(d)
 #' f2(4)
@@ -164,7 +178,21 @@ has.package=function(name) name %in% rownames(installed.packages())
 GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fixed=TRUE),function(v) v[field])
 
 
-psapply=function(...,seed=NULL) simplify2array(plapply(...,seed=seed))
+#' Parallel (s/l)apply
+#'
+#' Depending on whether \link{SetParallel} has been called, execute in parallel or not.
+#'
+#' @param ... forwarded to lapply or parallel::mclapply
+#' @param seed Seed for the random number generator
+#'
+#' @details If the code uses random number specify the seed to make it deterministic
+#'
+#' @return a vector (psapply) or list (plapply)
+#' @export
+#'
+psapply=function(...,seed=NULL) {simplify2array(plapply(...,seed=seed))}
+#' @rdname psapply
+#' @export
 plapply=function(...,seed=NULL) {
   if (!IsParallel()) return(opt$lapply(...))
 
@@ -185,131 +213,35 @@ plapply=function(...,seed=NULL) {
 
 
 opt <- new.env()
-opt$lapply=function(...) lapply2(...)
+opt$lapply=function(...) lapply(...)
 opt$sapply=function(...) simplify2array(opt$lapply(...))
 opt$nworkers=0
+
+
+#' Set parallel execution
+#'
+#' Set the number of cores for parallel execution.
+#'
+#' @param cores number of cores
+#'
+#' @details Whenever \link{psapply} or \link{plapply} are used, they are execute in parallel.
+#'
+#' @return NULL
+#' @export
+#'
 SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
   opt$nworkers=cores
   if (cores>1) {
     if (.Platform$OS.type!="unix") stop("Parallelism is not supported under windows!")
     opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)
   } else {
-    opt$lapply<-function(...) lapply2(...)
+    opt$lapply<-function(...) lapply(...)
   }
 }
-IsParallel=function() opt$nworkers>1
 
-
-#' Wrapper around lapply to track progress
+#' Checks for parallel execution
 #'
-#' @param X         a vector (atomic or list) or an expressions vector. Other
-#'                  objects (including classed objects) will be coerced by
-#'                  as.list
-#' @param FUN       the function to be applied to
-#' @param ...       optional arguments to FUN
-#' @param progress track progress?
-#' @param style    style of progress bar (see txtProgressBar)
-#'
-#' @examples
-#' x <- lapply2(1:1000, function(i, y) Sys.sleep(0.01))
-#' x <- lapply2(1:3, function(i, y) Sys.sleep(1))
-#'
-#' dat <- lapply(1:10, function(x) rnorm(100))
-#' func <- function(x, arg1) mean(x)/arg1
-#' lapply2(dat, func, arg1=10)
-lapply2 <- function(..., progress=FALSE,style=3)
-{
-  if (!progress) return(lapply(...))
+#' @return whether or not parallelism is activated
+#' @export
+IsParallel=function() {opt$nworkers>1}
 
-  l=list(...)
-  X=if ("X" %in% names(l)) l[["X"]] else l[[1]]
-
-  env=environment()
-  s=0
-  progress=txtProgressBar(min = 0, max = length(X), style = style)
-
-  FUN2=function(...){
-    v=get("s", envir = env)
-    assign("s", v+1 ,envir=env)
-    setTxtProgressBar(get("progress", envir=env), v+1)
-    FUN(...)
-  }
-  re=lapply(X, FUN2, ...)
-  close(progress)
-  re
-}
-
-#' Wrapper around mclapply to track progress
-#'
-#' Based on http://stackoverflow.com/questions/10984556
-#'
-#' @param X         a vector (atomic or list) or an expressions vector. Other
-#'                  objects (including classed objects) will be coerced by
-#'                  as.list
-#' @param FUN       the function to be applied to
-#' @param ...       optional arguments to FUN
-#' @param mc.preschedule see mclapply
-#' @param mc.set.seed see mclapply
-#' @param mc.silent see mclapply
-#' @param mc.cores see mclapply
-#' @param mc.cleanup see mclapply
-#' @param mc.allow.recursive see mclapply
-#' @param progress track progress?
-#' @param style    style of progress bar (see txtProgressBar)
-#'
-#' @examples
-#' x <- mclapply2(1:1000, function(i, y) Sys.sleep(0.01))
-#' x <- mclapply2(1:3, function(i, y) Sys.sleep(1), mc.cores=1)
-#'
-#' dat <- lapply(1:10, function(x) rnorm(100))
-#' func <- function(x, arg1) mean(x)/arg1
-#' mclapply2(dat, func, arg1=10, mc.cores=2)
-mclapply2 <- function(X, FUN, ...,
-                      mc.preschedule = TRUE, mc.set.seed = TRUE,
-                      mc.silent = FALSE, mc.cores = getOption("mc.cores", 2L),
-                      mc.cleanup = TRUE, mc.allow.recursive = TRUE,
-                      progress=FALSE, style=3)
-{
-  if (!is.vector(X) || is.object(X)) X <- as.list(X)
-
-  if (progress && Sys.getenv("RSTUDIO") == "1") {
-    if(getOption("RStudio.progress.warning",TRUE)) {
-      warning("Showing progress bars for parallelized  work does not work under rstudio! This message will only be shown once in this session!")
-      options("RStudio.progress.warning"=FALSE)
-    }
-    progress=FALSE
-  }
-
-
-  if (progress) {
-    f <- fifo(tempfile(), open="w+b", blocking=T)
-    p <- parallel:::mcfork()
-    pb <- txtProgressBar(0, length(X), style=style)
-    setTxtProgressBar(pb, 0)
-    progress <- 0
-    if (inherits(p, "masterProcess")) {
-      while (progress < length(X)) {
-        readBin(f, "double")
-        progress <- progress + 1
-        setTxtProgressBar(pb, progress)
-      }
-      cat("\n")
-      parallel:::mcexit()
-    }
-  }
-  tryCatch({
-    result <- parallel::mclapply(X, ..., function(...) {
-      res <- FUN(...)
-      if (progress) writeBin(1, f)
-      res
-    },
-    mc.preschedule = mc.preschedule, mc.set.seed = mc.set.seed,
-    mc.silent = mc.silent, mc.cores = mc.cores,
-    mc.cleanup = mc.cleanup, mc.allow.recursive = mc.allow.recursive
-    )
-
-  }, finally = {
-    if (progress) close(f)
-  })
-  result
-}

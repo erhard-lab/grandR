@@ -1,29 +1,61 @@
 Package: grandR
-Version: 0.1
+Version: 0.2
 Date: 2020-04-01
-Title: Grand3 R package
-Description: Downstream analysis for (sc-) SLAM/TimeLapse/TUC-seq experiments
+Title: grandR package
+Description: Metabolic RNA labeling - nucleotide conversion experiments have been
+  developed to add a temporal dimension to RNA-seq and single-cell RNA seq. Such 
+  experiments require specialized tools for primary processing such as GRAND-SLAM,
+  and specialized tools for downstream analyses. grandR provides a comprehensive toolbox
+  for quality control, kinetic modeling, differential gene expression analysis
+  and visualization of such data.
 Author: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
 Maintainer: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
 License: Apache License (>= 2)
 Depends:
+    R (>= 3.5.0)
+Imports: stats,
     Matrix,
-    stats,
     ggplot2,
-    cowplot,
+    grDevices,
     patchwork,
-    reshape2,
     plyr,
-    lfc
+    parallel,
+    reshape2,
+    MASS,
+    cowplot,
+    minpack.lm,
+    lfc,
+    methods,
+    utils,
+    numDeriv
 Suggests: knitr,
     rmarkdown,
+    circlize,
+    Seurat,
+    ComplexHeatmap,
+    ggrepel,
+    RCurl,
     DESeq2,
     clusterProfiler,
     msigdbr,
     fgsea,
     rclipboard,
-    minpack.lm,
-    parallel,
-    lamW
+    cubature,
+    lamW,
+    DT,
+    RColorBrewer,
+    eulerr,
+    gsl,
+    htmltools,
+    labeling,
+    matrixStats,
+    monocle,
+    VGAM,
+    pulseR,
+    quantreg,
+    rlang,
+    graphics,
+    scales,
+    shiny
 RoxygenNote: 7.2.1
 VignetteBuilder: knitr

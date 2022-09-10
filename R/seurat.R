@@ -33,22 +33,22 @@ as.Seurat.grandR=function(d,modalities=c(RNA="total",newRNA="new"),hls=NULL,mode
   if (!is.null(names(modalities))) names(mats)=names(modalities)
 
   re=switch(mode[1],assay={
-    s=CreateSeuratObject(counts=mats[[1]],assay=names(mats)[1],project=basename(d$prefix))
-    if (length(mats)>1) for (i in 2:length(mats)) s[[names(mats)[i]]]=CreateAssayObject(mats[[i]])
+    s=Seurat::CreateSeuratObject(counts=mats[[1]],assay=names(mats)[1],project=basename(d$prefix))
+    if (length(mats)>1) for (i in 2:length(mats)) s[[names(mats)[i]]]=Seurat::CreateAssayObject(mats[[i]])
     s
   },cells={
     for (i in 1:length(mats)) colnames(mats[[i]])=paste(colnames(mats[[i]]),names(mats)[i],sep=".")
     mat=do.call("cbind",mats)
     mode=do.call("c",lapply(1:length(mats),function(i) rep(names(mats)[i],ncol(mats[[i]]))))
-    s=CreateSeuratObject(counts=mat,project=basename(d$prefix))
+    s=Seurat::CreateSeuratObject(counts=mat,project=basename(d$prefix))
     s[["mode"]]=factor(mode,levels=unique(mode))
     s
   },genes={
     for (i in 1:length(mats)) rownames(mats[[i]])=paste(rownames(mats[[i]]),names(mats)[i],sep=".")
     mat=do.call("rbind",mats)
-    CreateSeuratObject(counts=mat,project=basename(d$prefix))
+    Seurat::CreateSeuratObject(counts=mat,project=basename(d$prefix))
   },list={
-    re=lapply(1:length(mats),function(i) CreateSeuratObject(counts=mats[[i]],project=names(mats)[i]))
+    re=lapply(1:length(mats),function(i) Seurat::CreateSeuratObject(counts=mats[[i]],project=names(mats)[i]))
     names(re)=names(mats)
     re
   })
@@ -76,11 +76,11 @@ as.Seurat.legacy.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NU
     }
   }
   re=switch(mode[1],assay={
-    s=CreateSeuratObject(counts=total.mat,project=basename(d$prefix))
-    if (ntr) s[["NTR"]]=CreateAssayObject(ntr.mat)
-    if (new) s[["newRNA"]]=CreateAssayObject(new.mat)
-    if (old) s[["oldRNA"]]=CreateAssayObject(old.mat)
-    if (prev) s[["prevRNA"]]=CreateAssayObject(prev.mat)
+    s=Seurat::CreateSeuratObject(counts=total.mat,project=basename(d$prefix))
+    if (ntr) s[["NTR"]]=Seurat::CreateAssayObject(ntr.mat)
+    if (new) s[["newRNA"]]=Seurat::CreateAssayObject(new.mat)
+    if (old) s[["oldRNA"]]=Seurat::CreateAssayObject(old.mat)
+    if (prev) s[["prevRNA"]]=Seurat::CreateAssayObject(prev.mat)
     s
   },cells={
     colnames(total.mat)=paste(colnames(total.mat),"total",sep=".")
@@ -105,7 +105,7 @@ as.Seurat.legacy.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NU
       total.mat=cbind(total.mat,prev.mat)
       mode=c(mode,rep(c("prev"),ncol(prev.mat)))
     }
-    s=CreateSeuratObject(counts=total.mat,project=basename(d$prefix))
+    s=Seurat::CreateSeuratObject(counts=total.mat,project=basename(d$prefix))
     s[["mode"]]=factor(mode,levels=unique(mode))
     s
   },genes={
@@ -125,13 +125,13 @@ as.Seurat.legacy.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NU
       rownames(prev.mat)=paste(rownames(prev.mat),"prev",sep=".")
       total.mat=rbind(total.mat,prev.mat)
     }
-    CreateSeuratObject(counts=total.mat,project=basename(d$prefix))
+    Seurat::CreateSeuratObject(counts=total.mat,project=basename(d$prefix))
   },list={
-    s=list(RNA=CreateSeuratObject(counts=total.mat,project="RNA"))
-    if (ntr) s[["NTR"]]=CreateSeuratObject(ntr.mat,project="NTR")
-    if (new) s[["newRNA"]]=CreateSeuratObject(new.mat,project="newRNA")
-    if (old) s[["oldRNA"]]=CreateSeuratObject(old.mat,project="oldRNA")
-    if (prev) s[["prevRNA"]]=CreateSeuratObject(prev.mat,project="prevRNA")
+    s=list(RNA=Seurat::CreateSeuratObject(counts=total.mat,project="RNA"))
+    if (ntr) s[["NTR"]]=Seurat::CreateSeuratObject(ntr.mat,project="NTR")
+    if (new) s[["newRNA"]]=Seurat::CreateSeuratObject(new.mat,project="newRNA")
+    if (old) s[["oldRNA"]]=Seurat::CreateSeuratObject(old.mat,project="oldRNA")
+    if (prev) s[["prevRNA"]]=Seurat::CreateSeuratObject(prev.mat,project="prevRNA")
     s
   })
   append.meta=function(s) {
