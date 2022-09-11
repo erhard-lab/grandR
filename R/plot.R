@@ -435,6 +435,10 @@ PlotScatter=function(data,
     x=xcol
   } else if (is.null(xcol)) {
     A=if (is.character(x) || is.numeric(x)) df[[x]] else eval(x,df,parent.frame())
+    if (length(A)==1 && is.character(A)) {
+      if (A %in% names(df)) A=df[[A]] else stop("Cannot make heads or tails out of the x parameter. Try to use xcol to access a specific column!")
+    }
+    if (length(A)==1) stop("Cannot make heads or tails out of the x parameter. Try to use xcol to access a specific column!")
   } else {
     stop("You must not specify both x and xcol!")
   }
@@ -448,6 +452,10 @@ PlotScatter=function(data,
     y=ycol
   } else if (is.null(ycol)) {
     B=if (is.character(y) || is.numeric(y)) df[[y]] else eval(y,df,parent.frame())
+    if (length(B)==1 && is.character(B)) {
+      if (B %in% names(df)) B=df[[B]] else stop("Cannot make heads or tails out of the y parameter. Try to use xcol to access a specific column!")
+    }
+    if (length(B)!=nrow(df)) stop("Cannot make heads or tails out of the y parameter. Try to use xcol to access a specific column!")
   } else {
     stop("You must not specify both y and ycol!")
   }
@@ -873,7 +881,7 @@ PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TR
 #' @seealso \link{GetData}, \link{PlotGeneTotalVsNtr},\link{PlotGeneOldVsNew},\link{PlotGeneGroupsBars}
 #'
 #' @export
-PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data),
+PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(data),
                               columns=NULL,
                               log=TRUE,
                               show.CI=FALSE,
@@ -882,8 +890,8 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",slot=DefaultSlot(data)
 
   if (length(group)!=1 && !group %in% names(Coldata(data))) stop("Group must be a name in the Coldata table!")
 
-  if (length(slot)!=1) stop("Provide a single slot name!")
-  mode.slot=get.mode.slot(data,slot)
+  if (length(mode.slot)!=1) stop("Provide a single slot name!")
+  mode.slot=get.mode.slot(data,mode.slot)
   slot=mode.slot$slot
   mode=mode.slot$mode
 

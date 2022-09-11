@@ -249,6 +249,7 @@ DefaultSlot <- function(data,value=NULL) {
 #' @rdname DefaultSlot
 #' @export
 `DefaultSlot<-` <- function(data, value) {
+  if (!value %in% names(data$data)) stop("Invalid slot name!")
   data$metadata$default.slot=value
   data
 }

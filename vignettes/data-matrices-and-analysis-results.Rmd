@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 ```{r}
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c("Condition",Design$dur.4sU,Design$Replicate),
-                  classify.genes = GeneType(name.unknown = "Viral"))
+                  classify.genes = ClassifyGenes(name.unknown = "Viral"))
 sars <- FilterGenes(sars) 
 ```
 
@@ -52,13 +52,16 @@ There is also a default slot, which is used by many functions as default paramet
 DefaultSlot(sars)
 ```
 
-New slots are added by specific grandR functions such as `Normalize` or `NormalizeTPM`, which, by default, also change the default slot:
+New slots are added by specific grandR functions such as `Normalize` or `NormalizeTPM`, which, by default, also change the default slot. The default slot can also be set manually:
 
 ```{r}
 sars <- Normalize(sars)
 DefaultSlot(sars)
+DefaultSlot(sars)<-"count"
+DefaultSlot(sars)
 sars <- NormalizeTPM(sars,set.to.default = FALSE)
 DefaultSlot(sars)
+DefaultSlot(sars)<-"norm"
 ```
 
 There are also other grandR functions that add additional slots, but do not update the `DefaultSlot` automatically:
@@ -163,6 +166,7 @@ GetTable(sars,genes="MYC")
 Sometimes, it makes sense to add the `GeneInfo` table (for more on gene metadata, see the [loading data vignette](loading-data.html)):
 ```{r warning=FALSE}
 df <- GetTable(sars,type="norm",gene.info = TRUE)
+head(df)
 ggplot(df,aes(`SARS.4h.A`,`SARS.no4sU.A`,color=Type))+
   geom_point()+
   scale_x_log10()+

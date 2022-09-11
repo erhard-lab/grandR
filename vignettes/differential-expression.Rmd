@@ -17,9 +17,9 @@ vignette: >
 knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
 ```
 
-One of the main applications of metabolic RNA labeling is to identify differentially expressed genes upon some perturbation [1](https://www.nature.com/articles/s41586-019-1369-y). The main benefit of using metabolic RNA labeling is that short-term changes can be resolved much better as compared to standard RNA-seq, since any changes of transcription that indeed happened are masked to some extent by pre-existing RNA. 
+One of the main applications of metabolic RNA labeling is to identify differentially expressed genes upon some perturbation [[1]](https://www.nature.com/articles/s41586-019-1369-y). The main benefit of using metabolic RNA labeling is that short-term changes can be resolved much better as compared to standard RNA-seq, since any changes of transcription that indeed happened are masked to some extent by pre-existing RNA. 
 
-To perform differential analyses for data from [2](https://www.nature.com/articles/s41586-021-03689-8). These are SLAM-seq data from multple time points (1h,2h,4h,6h and 20h) after acute depletion of BANP. BANP is a transcriptional activator that binds to unmethylated CGCG motifs in CpG island promoters. 
+To perform differential analyses for data from [[2]](https://www.nature.com/articles/s41586-021-03689-8). These are SLAM-seq data from multple time points (1h,2h,4h,6h and 20h) after acute depletion of BANP. BANP is a transcriptional activator that binds to unmethylated CGCG motifs in CpG island promoters. 
 
 # Loading data and QC
 
@@ -134,7 +134,7 @@ GetContrasts(banp,contrast=c("has.4sU","4sU","no4sU"),columns=Genotype=="wt",no4
 
 # Differential analysis of 4sU treatment and dTag
 
-Now we can investigate the two unwanted effects mentioned above using differential analysis using the lfc package [3](https://academic.oup.com/bioinformatics/article/34/23/4054/5040306) and DESeq2:
+Now we can investigate the two unwanted effects mentioned above using differential analysis using the lfc package [[3]](https://academic.oup.com/bioinformatics/article/34/23/4054/5040306) and DESeq2:
 
 ```{r}
 contrasts <- cbind(
@@ -185,10 +185,10 @@ This obviously did not add new analysis tables, but since the names matched, it 
 Analyses(banp,description = TRUE)
 ```
 
-Now we can have a lock at a Vulcano plot for the 4sU effect:
+Now we can have a look at a Vulcano plot for the 4sU effect:
 
 ```{r fig.height=3, fig.width=3}
-VulcanoPlot(banp,analysis = "QC.4sU effect",lfc.cutoff = 0.5,ylim=c(-4,50))
+VulcanoPlot(banp,analysis = "QC.4sU effect",lfc.cutoff = 0.5,ylim=c(-9,50))
 ```
 
 We can also create an MA plot:
@@ -297,12 +297,14 @@ ggplot(df,aes(Analysis,LFC,fill=`BANP-Target`))+
   geom_boxplot()
 ```
 
-Let's investigate this further. We first roughly estimate RNA half-lives from steady state samples using the method described in [1](https://doi.org/10.1093/bioinformatics/bty256), and add half-life classes as additional gene annotations:
+Let's investigate this further. We first roughly estimate RNA half-lives from steady state samples using the method described in [[1]](https://doi.org/10.1093/bioinformatics/bty256), and add half-life classes as additional gene annotations:
 
 ```{r}
 banp <- ComputeSteadyStateHalfLives(banp,name="HL",columns = Experimental.time==0)
 GeneInfo(banp,"HL simple") <- rowMeans(GetAnalysisTable(banp,analyses = "HL",gene.info = FALSE))
-GeneInfo(banp,"HL category") <- cut(GeneInfo(banp,"HL simple"),breaks=c(0,2,4,8,Inf),labels=c("0-2h","2-4h","4-8h",">8h"))
+GeneInfo(banp,"HL category") <- cut(GeneInfo(banp,"HL simple"),
+                                    breaks=c(0,2,4,8,Inf),
+                                    labels=c("0-2h","2-4h","4-8h",">8h"))
 table(GeneInfo(banp,"HL category"))
 ```
 
@@ -385,9 +387,19 @@ banp <- EstimateRegulation(banp,"Regulation",
 Now we can compare the estimated synthesis fold changes between the time points:
 
 ```{r fig.height=7, fig.width=7}
-(PlotScatter(banp,x=`Regulation.1h vs 0h.s.log2FC`,y=`Regulation.2h vs 0h.s.log2FC`,xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+geom_abline()|
-  PlotScatter(banp,x=`Regulation.2h vs 0h.s.log2FC`,y=`Regulation.4h vs 0h.s.log2FC`,xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+geom_abline())/
-(PlotScatter(banp,x=`Regulation.4h vs 0h.s.log2FC`,y=`Regulation.6h vs 0h.s.log2FC`,xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+geom_abline()|
-  PlotScatter(banp,x=`Regulation.6h vs 0h.s.log2FC`,y=`Regulation.20h vs 0h.s.log2FC`,xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+geom_abline())
+a<-PlotScatter(banp,x=`Regulation.1h vs 0h.s.log2FC`,y=`Regulation.2h vs 0h.s.log2FC`,
+             xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+
+   geom_abline()
+b<-PlotScatter(banp,x=`Regulation.2h vs 0h.s.log2FC`,y=`Regulation.4h vs 0h.s.log2FC`,
+              xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+
+   geom_abline()
+c<-PlotScatter(banp,x=`Regulation.4h vs 0h.s.log2FC`,y=`Regulation.6h vs 0h.s.log2FC`,
+             xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+
+   geom_abline()
+d<-PlotScatter(banp,x=`Regulation.6h vs 0h.s.log2FC`,y=`Regulation.20h vs 0h.s.log2FC`,
+              xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+
+   geom_abline()
+
+(a|b)/(c|d)
 ```  
 Note that for the first comparison (1h vs 0h against 2h vs 0h) most genes do not scatter around the main diagonal, but the actual BANP targets do. This suggests that there is a lot of noise w.r.t. the x axis (which is not unexpected considering the short labeling time), but the the estimation of synthesis rate fold changes is unbiased for genes that actually change their synthesis rate.

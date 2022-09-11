@@ -140,7 +140,7 @@ sars.mock <- merge(split.list$SARS,split.list$Mock)
 Columns(sars.mock)
 ```
 
-Note that we merged such that now we have first the SARS samples and then the Mock samples. We can reorder by
+Note that we merged such that now we have first the SARS samples and then the Mock samples. We can reorder by slightly abusing `subset` (note that we actually do not omit any columns, but just define a different order):
 
 ```{r}
 mock.sars <- subset(sars.mock,columns = c(7:12,1:6))
@@ -149,7 +149,7 @@ Columns(mock.sars)
 
 ## Gene metadata
 
-Here we see how to work with the metadata for genes. The gene metadata essentially is a table that can be retrieved using the `GeneInfo` function:
+Here we see how to work with metadata for genes. The gene metadata essentially is a table that can be retrieved using the `GeneInfo` function:
 
 ```{r}
 head(GeneInfo(sars), 10)
@@ -166,7 +166,7 @@ Genes(sars,genes = c("MYC","ORF1ab"),use.symbols = FALSE)    # convert to ids
 Genes(sars,genes = "YC", regex = TRUE)           # retrieve all genes matching to the regular expression YC
 ```
 
-For inferring the `Type` column, the `GeneType()` function is used. By default, this will recognize mitochondrial genes (MT prefix of the gene symbol), ERCC spike-ins, and Ensembl gene identifiers (which it will call "cellular"). Here, we also have the viral genes, that are not recognized:
+During reading the data into R using `ReadGRAND`, the `Type` column is inferred using the `ClassifyGenes()` function. By default, this will recognize mitochondrial genes (MT prefix of the gene symbol), ERCC spike-ins, and Ensembl gene identifiers (which it will call "cellular"). Here, we also have the viral genes, which are not properly recognized:
 
 ```{r}
 table(GeneInfo(sars,"Type"))
@@ -178,25 +178,27 @@ If you want to define your own types, you can do this easily be specifying the `
 viral.genes <- c('ORF3a','E','M','ORF6','ORF7a','ORF7b','ORF8','N','ORF10','ORF1ab','S')
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate),
-                  classify.genes = GeneType(viral=function(gene.info) gene.info$Symbol %in% viral.genes))
+                  classify.genes = ClassifyGenes(viral=function(gene.info) gene.info$Symbol %in% viral.genes))
 table(GeneInfo(sars,"Type"))
 ```
 
-Note that each parameter to `GeneType` must be named (`viral`) and must be a function that takes the gene metadata table and returns a logical vector. 
+Note that each parameter to `ClassifyGenes` must be named (`viral`) and must be a function that takes the gene metadata table and returns a logical vector. 
 
-The `GeneType` function has one additional important parameter, which defines how "Unknown" types are supposed to be called. For this data set, a similar behavior as above can be accomplished by:
+The `ClassifyGenes` function has one additional important parameter, which defines how "Unknown" types are supposed to be called. For this data set, a similar behavior as above can be accomplished by:
 
 ```{r warning=FALSE}
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate),
-                  classify.genes = GeneType(name.unknown = "viral"))
+                  classify.genes = ClassifyGenes(name.unknown = "viral"))
 table(GeneInfo(sars,"Type"))
 ```
 
 It is also straight-forward to add additional gene metadata:
 
 ```{r}
-GeneInfo(sars,"length.category") <- cut(GeneInfo(sars,"Length"),breaks=c(0,2000,5000,Inf),labels = c("Short","Medium","Long"))
+GeneInfo(sars,"length.category") <- cut(GeneInfo(sars,"Length"),
+                                        breaks=c(0,2000,5000,Inf),
+                                        labels = c("Short","Medium","Long"))
 table(GeneInfo(sars,"length.category"))
 ```
 
@@ -250,7 +252,8 @@ Coldata(sars)
 There are also some build-in grandR functions that add metadata, such as `ComputeExpressionPercentage`:
 
 ```{r}
-sars <- ComputeExpressionPercentage(sars,name = "viral_percentage",genes = GeneInfo(sars,"Type")=="viral")
+sars <- ComputeExpressionPercentage(sars,name = "viral_percentage",
+                                    genes = GeneInfo(sars,"Type")=="viral")
 ggplot(Coldata(sars),aes(Name,viral_percentage))+
   geom_bar(stat="identity")+
   RotatateAxisLabels()+

@@ -12,7 +12,7 @@
 #' @param name.unknown the type to be used for all genes where no type was identified
 #' @param ... additional functions to define types (see details)
 #'
-#' @details This function returns a function. Usually, you do not use it ourself but \code{GeneType} is usually as \code{classify.genes} parameter
+#' @details This function returns a function. Usually, you do not use it ourself but \code{ClassifyGenes} is usually as \code{classify.genes} parameter
 #' for  \code{\link{ReadGRAND}} to build the \emph{Type} column in the \code{\link{GeneInfo}} table. See the example
 #' to see how to use it directly.
 #'
@@ -31,16 +31,16 @@
 #' viral.genes <- c('ORF3a','E','M','ORF6','ORF7a','ORF7b','ORF8','N','ORF10','ORF1ab','S')
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate),
-#'                   classify.genes=GeneType(`SARS-CoV-2`=
+#'                   classify.genes=ClassifyGenes(`SARS-CoV-2`=
 #'                              function(gene.info) gene.info$Symbol %in% viral.genes),
 #'                   verbose=TRUE)
 #' table(GeneInfo(sars)$Type)
 #'
-#' fun<-GeneType(viral=function(gene.info) gene.info$Symbol %in% viral.genes)
+#' fun<-ClassifyGenes(viral=function(gene.info) gene.info$Symbol %in% viral.genes)
 #' table(fun(GeneInfo(sars)))
 #'
 #' @export
-GeneType=function(...,use.default=TRUE, drop.levels=TRUE, name.unknown="Unknown") {
+ClassifyGenes=function(...,use.default=TRUE, drop.levels=TRUE, name.unknown="Unknown") {
   ll=list(...)
   ll=c(ll,list(
   	mito=function(gene.info) grepl("^MT-",gene.info$Symbol,ignore.case=TRUE),
@@ -222,7 +222,7 @@ MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep
 #' if the RCurl package is installed, this can also be a URL
 #' @param design Either a design vector (see details), or a data.frame providing metadata for all columns (samples/cells),
 #' or a function that is called with the condition name vector and is supposed to return this data.frame.
-#' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{GeneType}
+#' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{ClassifyGenes}
 #' @param read.percent.conv Should the percentage of conversions also be read?
 #' @param verbose Print status updates
 #' @param rename.sample function that is applied to each sample name before parsing (or NULL)
@@ -249,7 +249,7 @@ MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep
 #' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
 #' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
 #'
-#' @seealso \link{ReadGRAND3},\link{GeneType},\link{MakeColdata},\link{DesignSemantics}
+#' @seealso \link{ReadGRAND3},\link{ClassifyGenes},\link{MakeColdata},\link{DesignSemantics}
 #'
 #' @examples
 #' \dontrun{
@@ -261,7 +261,7 @@ MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep
 #'
 ReadGRAND=function(prefix,
                    design=c(Design$Condition,Design$Replicate),
-                   classify.genes=GeneType(),
+                   classify.genes=ClassifyGenes(),
                    read.percent.conv=FALSE,
                    rename.sample=NULL,
                    verbose=FALSE) {
@@ -278,7 +278,7 @@ ReadGRAND=function(prefix,
 
 
 
-ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.genes=GeneType(),verbose=FALSE,sep="\t") {
+ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.genes=ClassifyGenes(),verbose=FALSE,sep="\t") {
 
   tomat=function(m,names,cnames){
     m=as.matrix(m)
@@ -401,7 +401,7 @@ GetTableQC=function(data,name) {
 #' library,sample,barcode design is used for sparse data, and a condition,replicate design for dense data
 #' @param label which nucleoside analog
 #' @param estimator which estimator to use (one of Binom,TbBinom,TbBinomShape)
-#' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{GeneType}
+#' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{ClassifyGenes}
 #' @param read.posterior also read the posterior parameters alpha and beta? if NULL, TRUE for dense data, FALSE for sparse data
 #' @param rename.sample function that is applied to each sample name before parsing (or NULL)
 #' @param verbose Print status updates
@@ -428,7 +428,7 @@ GetTableQC=function(data,name) {
 #' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
 #' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
 #'
-#' @seealso \link{ReadGRAND},\link{GeneType},\link{MakeColdata},\link{DesignSemantics}
+#' @seealso \link{ReadGRAND},\link{ClassifyGenes},\link{MakeColdata},\link{DesignSemantics}
 #'
 #' @examples
 #' \dontrun{
@@ -442,7 +442,7 @@ ReadGRAND3=function(prefix,
                     design=NULL,
                     label="4sU",
                     estimator="Binom",
-                    classify.genes=GeneType(),
+                    classify.genes=ClassifyGenes(),
                     read.posterior=NULL,
                     rename.sample=NULL,
                     verbose=FALSE) {
@@ -466,7 +466,7 @@ ReadGRAND3_sparse=function(prefix,
                            design=c(Design$Library,Design$Sample,Design$Barcode),
                            label="4sU",
                            estimator="Binom",
-                           classify.genes=GeneType(),
+                           classify.genes=ClassifyGenes(),
                            read.posterior=FALSE,
                            rename.sample=NULL,
                            verbose=FALSE) {
@@ -556,7 +556,7 @@ ReadGRAND3_dense=function(prefix,
                           design=c(Design$Condition,Design$Replicate),
                           label="4sU",
                           estimator="Binom",
-                          classify.genes=GeneType(),
+                          classify.genes=ClassifyGenes(),
                           read.posterior=TRUE,
                           rename.sample=NULL,
                           verbose=FALSE) {
@@ -624,7 +624,7 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
 read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),
                              slots,
                              annotations,
-                             classify.genes=GeneType(),
+                             classify.genes=ClassifyGenes(),
                              rename.sample=NULL, verbose=FALSE, description="") {
 
   if (!all(c("count","ntr") %in% slots) || !all(c("Gene","Symbol") %in% annotations)) stop("Invalid call to read.grand.internal!")
