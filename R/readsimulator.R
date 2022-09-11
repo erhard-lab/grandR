@@ -42,11 +42,6 @@
 #' SimulateReadsForSample(num.reads = 10000,rel.abundance = rep(1,5),ntr=0.9,seed=1337)
 #' # the second and third matrix should be equal, the first should be distinct
 #'
-#' mat=SimulateReadsForSample(num.reads = 10000,rel.abundance = rep(1,100),ntr=0.5,beta.approx = TRUE)
-#' plot(ecdf(pbeta(0.5,mat[,3],mat[,4])))
-#' abline(0,1)
-#' # this should roughly be a uniform distibution, which means that the posterior distributions are properly approximated!
-#'
 SimulateReadsForSample=function(num.reads=2E7,
                                 rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),
                                 ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),

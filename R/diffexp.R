@@ -126,12 +126,12 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @export
 #'
 #' @examples
-#' SetParallel()
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
 #' sars <- subset(sars,Coldata(sars,Design$dur.4sU)==2)
 #' sars<-LFC(sars,mode="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
-#' sars<-LFC(sars,mode="new",normalization="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' sars<-LFC(sars,mode="new",normalization="total",
+#'                             contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
 #' head(GetAnalysisTable(sars))
 #'
 LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiLFC, mode="total",
@@ -183,14 +183,16 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' @export
 #'
 #' @examples
-#' SetParallel()
+#' \dontrun{
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
 #' sars <- subset(sars,Coldata(sars,Design$dur.4sU)==2)
-#' sars<-PairwiseDESeq2(sars,mode="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
-#' sars<-PairwiseDESeq2(sars,mode="new",normalization="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' sars<-PairwiseDESeq2(sars,mode="total",
+#'                               contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' sars<-PairwiseDESeq2(sars,mode="new",normalization="total",
+#'                               contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
 #' head(GetAnalysisTable(sars,column="Q"))
-#'
+#' }
 PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode="total",
                         normalization=mode, logFC=FALSE, verbose=FALSE) {
   mode.slot=paste0(mode,".count")
@@ -335,13 +337,18 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #' @export
 #'
 #' @examples
-#' SetParallel()
-#' banp <- readRDS(system.file("extdata", "BANP.rds", package = "grandR"))
-#'
+#' banp <- ReadGRAND(system.file("extdata", "BANP.tsv.gz", package = "grandR"),
+#'           design=c("Cell","Experimental.time","Genotype",
+#'                        Design$dur.4sU,Design$has.4sU,Design$Replicate))
 #' contrasts <- GetContrasts(banp,contrast=c("Experimental.time.original","0h"),name.format="$A")
 #' reference.columns <- FindReferences(banp,reference= Experimental.time==0)
-#' banp <- EstimateRegulation(banp,"Regulation",contrasts=contrasts,reference.columns=reference.columns,time.labeling = "calibrated_time",verbose=TRUE,time.experiment = "Experimental.time",correct.labeling=TRUE,N=0,dispersion=0.1)
-#' # usually we do not set dispersion to a constant, but let EstimateRegulation estimate it from data; note that we also do not sample (N=0)!
+#' banp <- EstimateRegulation(banp,"Regulation",
+#'                              contrasts=contrasts,
+#'                              reference.columns=reference.columns,
+#'                              verbose=TRUE,
+#'                              time.experiment = "Experimental.time",
+#'                              N=0,               # don't sample in the example
+#'                              dispersion=0.1)    # don't estimate dispersion in the example
 #' head(GetAnalysisTable(banp))
 #'
 EstimateRegulation=function(data,name.prefix="Regulation",
@@ -794,10 +801,15 @@ GetSummarizeMatrix.default=function(x,subset=NULL,average=TRUE,...) {
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Condition","Time",Design$Replicate))
 #'
-#' GetContrasts(sars,contrast="Condition")                    # Compare all Mock vs. all SARS
-#' GetContrasts(sars,contrast=c("Condition","SARS","Mock"))   # This direction of the comparison is more reasonable
-#' GetContrasts(sars,contrast=c("Condition","SARS","Mock"),group="Time")   # Compare SARS vs Mock per time point
-#' GetContrasts(sars,contrast=c("Time","no4sU"), group="Condition",name.format="$A vs $B ($GRP)",no4sU=TRUE)   # Compare each sample against the respective no4sU sample
+#' GetContrasts(sars,contrast="Condition")
+#' # Compare all Mock vs. all SARS
+#' GetContrasts(sars,contrast=c("Condition","SARS","Mock"))
+#' # This direction of the comparison is more reasonable
+#' GetContrasts(sars,contrast=c("Condition","SARS","Mock"),group="Time")
+#' # Compare SARS vs Mock per time point
+#' GetContrasts(sars,contrast=c("Time","no4sU"), group="Condition",no4sU=TRUE,
+#'                                                 name.format="$A vs $B ($GRP)")
+#' # Compare each sample against the respective no4sU sample
 #'
 #' # See the differential-expression vignette for more examples!
 #' @export

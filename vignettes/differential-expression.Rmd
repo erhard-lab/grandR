@@ -215,7 +215,7 @@ clusterProfiler::ridgeplot(gsea)
   
 Thus, there are quite some pathways that are affected. 
 
-Technically, `AnalyzeGeneSets` provides a convenient wrapper to perform either GSEA and ORA (overrepresentation analyses) using the [clusterProfiler](https://bioconductor.org/packages/release/bioc/html/clusterProfiler.html) package on a lot of predefined gene sets from the [msigdbr](https://cran.r-project.org/web/packages/msigdbr/index.html) package. You can learn about the gene sets using the `ListGeneSets` function:
+Technically, `AnalyzeGeneSets` provides a convenient wrapper to perform either GSEA and ORA (overrepresentation analyses) using the [clusterProfiler](https://bioconductor.org/packages/release/bioc/html/clusterProfiler.html) package on a lot of predefined gene sets from the [msigdbr](https://CRAN.R-project.org/package=msigdbr) package. You can learn about the gene sets using the `ListGeneSets` function:
 
 ```{r}
 ListGeneSets()
@@ -331,7 +331,7 @@ reference.columns=FindReferences(banp,reference.function=
                                    function(s) Experimental.time==max(c(0,Experimental.time[Experimental.time<s$Experimental.time])))
 # use the previous time point as reference
 
-SetParallel()
+SetParallel(cores = 2)  # increase 2 on your system, or omit the cores = 2 for automatic detection
 Condition(banp) <- "Experimental.time.original"
 banp <- FitKineticsSnapshot(banp,name.prefix = "MAP",reference.columns=reference.columns,
                             verbose=T,time.experiment = "Experimental.time",N=0)

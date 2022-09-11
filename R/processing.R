@@ -215,7 +215,13 @@ ComputeAbsolute=function(data,dilution=4E4,volume=10,slot="tpm",name="absolute")
 Normalize=function(data,genes=Genes(data),name="norm",slot="count",set.to.default=TRUE,size.factors=NULL,return.sf=FALSE) {
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,genes=genes,ntr.na = FALSE,name.by = "Gene"))
-  if (is.null(size.factors)) size.factors=DESeq2::estimateSizeFactorsForMatrix(mat)
+  if (is.null(size.factors)) {
+    loggeomeans=rowMeans(log(mat))
+    size.factors=apply(mat, 2, function(cnts) {
+      exp(stats::median((log(cnts) - loggeomeans)[is.finite(loggeomeans) &
+                                              cnts > 0]))
+    })
+  }
   if (return.sf) return(size.factors)
 
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
@@ -277,9 +283,10 @@ NormalizeTPM=function(data,genes=Genes(data),name="tpm",slot="count",set.to.defa
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
-#' blmat <- FindReferences(sars,reference = duration.4sU==0, group = "Cell")  # the Mock.no4sU or SARS.no4sU sample are the baselines for each sample
-#' sars <- NormalizeBaseline(data,baseline=blmat)
-#' head(GetTable(data,type="baseline"))
+#' blmat <- FindReferences(sars,reference = duration.4sU==0, group = "Cell")
+#' # the Mock.no4sU or SARS.no4sU sample are the baselines for each sample
+#' sars <- NormalizeBaseline(sars,baseline=blmat)
+#' head(GetTable(sars,type="baseline"))
 NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition==levels(Condition)[1]),name="baseline",slot=DefaultSlot(data),set.to.default=FALSE,LFC.fun=lfc::PsiLFC,...) {
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
@@ -358,11 +365,14 @@ Scale=function(data,name="scaled",slot=DefaultSlot(data),set.to.default=FALSE,gr
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #'
-#' nrow(sars)                                        # This is already filtered and has 1045 genes
-#' nrow(FilterGenes(sars,minval=1000))               # There are 966 genes with at least 1000 read counts in half of the samples
-#' nrow(FilterGenes(sars,minval=10000,min.cond=1))   # There are 944 genes with at least 10000 read counts in the Mock or SARS condition
+#' nrow(sars)
+#' # This is already filtered and has 1045 genes
+#' nrow(FilterGenes(sars,minval=1000))
+#' # There are 966 genes with at least 1000 read counts in half of the samples
+#' nrow(FilterGenes(sars,minval=10000,min.cond=1))
+#' # There are 944 genes with at least 10000 read counts in the Mock or SARS condition
 #' nrow(FilterGenes(sars,use=GeneInfo(sars,"Type")!="Cellular"))
-#'                                                   # These are the 11 viral genes.
+#' # These are the 11 viral genes.
 #'
 FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.cond=NULL,use=NULL,keep=NULL,return.genes=FALSE) {
   if (!is.null(use) & !is.null(keep)) stop("Do not specify both use and keep!")

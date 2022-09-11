@@ -80,7 +80,7 @@ Analyses(sars)
 After loading data there are no analyses, but such data are added e.g. by performing modeling of progressive labeling time courses or analyzing differential gene expression (see the vignettes [Kinetic modeling](kinetic-modeling.html) and [Differential expression](differential-expression.html) for more on these):
 
 ```{r}
-SetParallel()
+SetParallel(cores = 2)  # increase 2 on your system, or omit the cores = 2 for automatic detection
 sars <- FitKinetics(sars,name="kinetics",steady.state=c(Mock=TRUE,SARS=FALSE))
 sars <- LFC(sars,contrasts=GetContrasts(sars,contrast = c("duration.4sU.original","no4sU"),
                                         group = "Condition",no4sU=TRUE))

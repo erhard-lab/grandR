@@ -70,8 +70,8 @@ NULL
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
-#'
-#' dim(sars)               # this is the corona data from Finkel et al., Nature 2021, filtered for genes with >=100 reads in the SARS (3hpi) sample
+#' # this is part of the corona data from Finkel et al.
+#' dim(sars)
 #' head(rownames(sars))
 #'
 #' @export
@@ -427,7 +427,8 @@ Columns=function(data,columns=NULL, reorder=FALSE) {
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
 #'
 #' head(GeneInfo(sars))
-#' GeneInfo(sars,"LengthCategory")<-cut(GeneInfo(sars)$Length,c(0,1500,2500,Inf),labels=c("Short","Medium","Long"))
+#' GeneInfo(sars,"LengthCategory")<-cut(GeneInfo(sars)$Length,c(0,1500,2500,Inf),
+#'                                           labels=c("Short","Medium","Long"))
 #' table(GeneInfo(sars)$LengthCategory)
 #'
 #' @export
@@ -478,7 +479,8 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
 #'
 #' head(GeneInfo(sars))
-#' GeneInfo(sars,"LengthCategory")<-cut(GeneInfo(sars)$Length,c(0,1500,2500,Inf),labels=c("Short","Medium","Long"))
+#' GeneInfo(sars,"LengthCategory")<-cut(GeneInfo(sars)$Length,c(0,1500,2500,Inf),
+#'                                           labels=c("Short","Medium","Long"))
 #' table(GeneInfo(sars)$LengthCategory)
 #'
 #' @export
@@ -628,15 +630,19 @@ ToIndex=function(data,gene,regex=FALSE) {
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
-#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #' sars <- Normalize(FilterGenes(sars))
 #'
-#' head(GetTable(sars)) # DefaultSlot values, i.e. size factor normalized read counts for all samples
-#' head(GetTable(sars,summarize=TRUE)) # DefaultSlot values averaged over the two conditions
-#' head(GetTable(sars,type="new.count",columns=!Coldata(sars)$no4sU)) # Estimated counts for new RNA for all samples with 4sU
+#' head(GetTable(sars))
+#' # DefaultSlot values, i.e. size factor normalized read counts for all samples
+#' head(GetTable(sars,summarize=TRUE))
+#' # DefaultSlot values averaged over the two conditions
+#' head(GetTable(sars,type="new.count",columns=!no4sU))
+#' # Estimated counts for new RNA for all samples with 4sU
 #'
-#' sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
-#' head(GetTable(sars,type="kinetics",columns="Half-life")) # Estimated RNA half-lives for both conditions
+#' sars<-LFC(sars,contrasts=GetContrasts(sars,group = "duration.4sU"))
+#' head(GetAnalysisTable(sars,columns="LFC"))
+#' # Estimated fold changes SARS vs Mock for each time point
 #'
 #'
 #'
@@ -829,9 +835,12 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
-#' GetData(sars,mode.slot="ntr",gene="MYC") # one gene, one mode.slot
-#' GetData(sars,mode.slot=c("count","ntr"),gene="MYC",coldata = F) # one gene, multiple mode.slots
-#' GetData(sars,mode.slot=c("count","ntr"),gene=c("SRSF6","MYC"),by.rows=TRUE) # multiple genes, multiple mode.slots, molten
+#' GetData(sars,mode.slot="ntr",gene="MYC")
+#' # one gene, one mode.slot
+#' GetData(sars,mode.slot=c("count","ntr"),gene="MYC",coldata = FALSE)
+#' # one gene, multiple mode.slots
+#' GetData(sars,mode.slot=c("count","ntr"),gene=c("SRSF6","MYC"),by.rows=TRUE)
+#' # multiple genes, multiple mode.slots, by rows
 #'
 #' @export
 #'
@@ -968,15 +977,18 @@ GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=NULL,as.tabl
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
-#' FindReferences(sars,reference=no4sU) # obtain the corresponding no4sU sample for each sample; use the Condition column
-#' FindReferences(sars,Condition=="Mock",group="duration.4sU.original") # obtain for each sample the corresponding sample in the Mock condition
-#' FindReferences(sars,Condition=="Mock",group=c("duration.4sU.original","Replicate")) # obtain for each sample the corresponding sample in the Mock condition, paying attention to replicates
+#' FindReferences(sars,reference=no4sU)
+#' # obtain the corresponding no4sU sample for each sample; use the Condition column
+#' FindReferences(sars,Condition=="Mock",group="duration.4sU.original")
+#' # obtain for each sample the corresponding sample in the Mock condition
+#' FindReferences(sars,Condition=="Mock",group=c("duration.4sU.original","Replicate"))
+#' # obtain for each sample the corresponding Mock sample, paying attention to replicates
 #'
 #' @export
 #'
 FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL, as.list=FALSE,columns=NULL) {
   if (!is.grandR(data)) stop("Data is not a grandR object!")
-  if (!is.null(group) && !group %in% names(Coldata(data))) stop(sprintf("No %s in Coldata!",group))
+  if (!is.null(group) && !all(group %in% names(Coldata(data)))) stop(sprintf("No %s in Coldata!",group))
 
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
@@ -1125,10 +1137,9 @@ match.analyses=function(data,analyses=NULL,regex=TRUE) {
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
-#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
-#' SetParallel()
-#' sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
-#' head(GetAnalysisTable(sars,columns="Half-life"))
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
+#' sars<-LFC(sars,contrasts=GetContrasts(sars,group = "duration.4sU"))
+#' head(GetAnalysisTable(sars,columns="LFC"))
 #'
 #' @export
 #'

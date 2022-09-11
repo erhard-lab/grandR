@@ -1,8 +1,8 @@
 Package: grandR
 Version: 0.2
-Date: 2020-04-01
-Title: grandR package
-Description: Metabolic RNA labeling - nucleotide conversion experiments have been
+Date: 2022-09-01
+Title: Comprehensive Analysis of Nucleotide Conversion Sequencing Data
+Description: Nucleotide conversion sequencing experiments have been
   developed to add a temporal dimension to RNA-seq and single-cell RNA seq. Such 
   experiments require specialized tools for primary processing such as GRAND-SLAM,
   and specialized tools for downstream analyses. grandR provides a comprehensive toolbox
@@ -11,8 +11,6 @@ Description: Metabolic RNA labeling - nucleotide conversion experiments have bee
 Author: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
 Maintainer: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
 License: Apache License (>= 2)
-Depends:
-    R (>= 3.5.0)
 Imports: stats,
     Matrix,
     ggplot2,
@@ -51,7 +49,6 @@ Suggests: knitr,
     matrixStats,
     monocle,
     VGAM,
-    pulseR,
     quantreg,
     rlang,
     graphics,

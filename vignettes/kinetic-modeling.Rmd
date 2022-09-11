@@ -98,10 +98,10 @@ For the virus infected samples ("SARS"), this is not the case. So we specify an 
 PlotGeneProgressiveTimecourse(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 
-Note that the fit actually changed. Now we are ready to fit the model for each gene. For that, we set `SetParallel()` which will set the number of worker threads to "number of cores"-2. We also specify the same `steady.state` parameter to `FitKinetics`:
+Note that the fit actually changed. Now we are ready to fit the model for each gene. For that, we set `SetParallel(cores = 2)` which will set the number of worker threads to 2 (which is the maximal number of cores for vignettes on CRAN). Omit the `cores = 2` paramter for auto-detection ("number of cores"-2). We also specify the same `steady.state` parameter to `FitKinetics`:
 
 ```{r}
-SetParallel()
+SetParallel(cores = 2)  # increase 2 on your system, or omit the cores = 2 for automatic detection
 sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 

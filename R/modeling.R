@@ -82,36 +82,40 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
 
 
         formulas=list(
-            formulas = pulseR::MeanFormulas(
-                unlabelled = exp(mu1) + exp(mu2) + exp(mu3) * (1 + exp(-d * time)),
-                labelled = exp(mu2) + exp(mu3) * (1 - exp(-d * time))),
+            formulas = eval(substitute(alist(
+              unlabelled = exp(mu1) + exp(mu2) + exp(mu3) * (1 + exp(-d * time)),
+              labelled = exp(mu2) + exp(mu3) * (1 - exp(-d * time)))
+            )),
+#              pulseR::MeanFormulas(
+#                unlabelled = exp(mu1) + exp(mu2) + exp(mu3) * (1 + exp(-d * time)),
+#                labelled = exp(mu2) + exp(mu3) * (1 - exp(-d * time))),
             formulaIndexes = list(
                 unlabelled = "unlabelled",
                 labelled = "labelled"))
 
-        pd <- pulseR::PulseData(
+        pd <- do.call(getExportedValue("pulseR","PulseData"),list(
             counts,
             conditions[c("fraction", "time")], #  data.frame; the first column corresponds to the conditions given in formulas
             formulas$formulas,
             formulas$formulaIndexes,
             groups=~fraction+time
-        )
+        ))
         pd$depthNormalisation <- norms1
 
         setOpts <- function(bounds, tolerance, cores = parallel::detectCores()-2, replicates = 5, normFactors = NULL) {
-            opts <- pulseR::setFittingOptions(verbose = "verbose")
+            opts <- do.call(getExportedValue("pulseR","setFittingOptions"),list(verbose = "verbose"))
             opts$cores <- cores
             opts$replicates <- replicates
             ## if rt-conversion data, we do not fit normalisation coefficients, because they
             ## are derived from the DESeq-like normalisation
             if (is.null(normFactors)) { opts$fixedNorms <- TRUE }
-            opts <- pulseR::setBoundaries(bounds, normFactors = normFactors, options = opts)
-            opts <- pulseR::setTolerance(
+            opts <- do.call(getExportedValue("pulseR","setBoundaries"),list(bounds, normFactors = normFactors, options = opts))
+            opts <- do.call(getExportedValue("pulseR","setTolerance"),list(
                 params = tolerance$params,
                 normFactors = tolerance$normFactors,
                 logLik = tolerance$logLik,
                 options = opts
-            )
+            ))
             if (is.null(tolerance$normFactors)) {
                 opts$tolerance$normFactors <- NULL
             }
@@ -121,7 +125,7 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
         opts <- setOpts(boundaries, tolerance)
         initf <- match.fun(init)
         initPars <- initf(pd$counts) # use pulseData here
-        fit <- pulseR::fitModel(pd, initPars, opts)
+        fit <- do.call(getExportedValue("pulseR","fitModel"),list(pd, initPars, opts))
         fit$d
 
  #       cis <- pulseR::ciGene("d",
@@ -230,13 +234,12 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 #' @seealso \link{FitKineticsGeneNtr}, \link{FitKineticsGeneLeastSquares}, \link{FitKineticsGeneLogSpaceLinear}
 #'
 #' @examples
-#' SetParallel()
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
-#' sars <- subset(sars,Coldata(sars)$Cell=="Mock")
+#' sars <- FilterGenes(sars,use=1:10)
 #' sars<-FitKinetics(sars,name="kinetics.ntr",type='ntr')
 #' sars<-Normalize(sars)
-#' sars<-FitKinetics(sars,name="kinetics.nlls",type='full')
+#' sars<-FitKinetics(sars,name="kinetics.nlls",type='nlls')
 #' sars<-FitKinetics(sars,name="kinetics.lm",type='lm')
 #' head(GetAnalysisTable(sars,columns="Half-life"))
 #'
@@ -334,9 +337,7 @@ FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #' sars <- Normalize(sars)
-#' SetParallel()
-#' sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))   # fit per condition
-#' head(GetAnalysisTable(sars,columns="Half-life"))
+#' FitKineticsGeneLeastSquares(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
 #'
 #' @export
 #'
@@ -588,9 +589,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #' sars <- Normalize(sars)
-#' SetParallel()
-#' sars<-FitKinetics(sars,type='lm',name = "kinetics")    # fit per condition
-#' head(GetAnalysisTable(sars,columns="Half-life"))
+#' FitKineticsGeneLogSpaceLinear(sars,"SRSF6")   # fit per condition
 #'
 #' @export
 #'
@@ -708,11 +707,10 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
-#'                   design=c("Cell",Design$dur.4sU,Design$Replicate))
-#' sars <- subset(sars,Coldata(sars)$Cell=="Mock")         # we don't normalize, we are only interested in the Half-life
-#' SetParallel()
-#' sars<-FitKinetics(sars,type='ntr',name = "kinetics")    # note that Condition(sars)=NULL
-#' head(GetAnalysisTable(sars,columns="Half-life"))
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
+#' sars <- Normalize(sars)
+#' sars <- subset(sars,columns=Condition=="Mock")
+#' FitKineticsGeneNtr(sars,"SRSF6")
 #'
 #' @export
 #'
@@ -846,14 +844,6 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #' @details It is impossible to obtain a perfect absolute calibration, i.e. all durations might be off by a factor.
 #'
 #' @seealso \link{FitKinetics}
-#'
-#' @examples
-#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
-#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
-#' sars <- Normalize(sars)
-#' SetParallel()
-#' sars<-CalibrateEffectiveLabelingTimeKineticFit(sars,steady.state=list(Mock=TRUE,SARS=FALSE))
-#' Coldata(sars)
 #'
 #' @export
 #'
@@ -1522,7 +1512,7 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
 #' @seealso \link{PlotSimulation} for plotting the simulation
 #'
 #' @examples
-#' SimulateKinetics(hl=2)   # simulate steady state kinetics for an RNA with half-life 2h
+#' head(SimulateKinetics(hl=2))   # simulate steady state kinetics for an RNA with half-life 2h
 #'
 SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=s/d,min.time=-1,max.time=10,N = 1000,name=NULL,out=c("Old","New","Total","NTR")) {
     times=seq(min.time,max.time,length.out=N)
