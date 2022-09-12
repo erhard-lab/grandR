@@ -115,7 +115,7 @@ These data consist of a timecourse of several snapshots. There is also another k
 ```{r}
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c("Condition",Design$dur.4sU,Design$Replicate),
-                  classify.genes = GeneType(name.unknown = "Viral"))
+                  classify.genes = ClassifyGenes(name.unknown = "Viral"))
 sars <- FilterGenes(sars) 
 sars <- Normalize(sars)
 sars <- ComputeNtrCI(sars) # creates data slots "lower" and "upper"
