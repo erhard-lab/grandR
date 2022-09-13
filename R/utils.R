@@ -77,13 +77,13 @@ Defer=function(FUN,...,add=NULL, cache=TRUE) {
     pp=list(...)
     if (length(pp)>0) {
       re=do.call(FUN,c(list(data),param,pp))
-      if (!is.null(add)) for (e in if (class(add)=="list") add else list(add)) re=re+e
+      if (!is.null(add)) for (e in if (is(add,"gg")) list(add) else add) re=re+e
       return(re)
     }
 
     if (is.null(value)) {
       value<<-do.call(FUN,c(list(data),param))
-      if (!is.null(add)) for (e in if (class(add)=="list") add else list(add)) value<<-value+e
+      if (!is.null(add)) for (e in if (is(add,"gg")) list(add) else add) value<<-value+e
     }
     value
   }
@@ -232,7 +232,10 @@ opt$nworkers=0
 SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
   opt$nworkers=cores
   if (cores>1) {
-    if (.Platform$OS.type!="unix") stop("Parallelism is not supported under windows!")
+    if (.Platform$OS.type!="unix") {
+      warning("Parallelism is not supported under windows. Will use single thread!")
+      return()
+    }
     opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)
   } else {
     opt$lapply<-function(...) lapply(...)

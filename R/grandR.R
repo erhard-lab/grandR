@@ -1052,7 +1052,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 #' Slots(sars)
 #' DefaultSlot(sars)
 #' sars <- DropSlot(sars,"norm")
-#' sars                        # note that the defauls slot reverted to count
+#' sars                        # note that the default slot reverted to count
 #'
 #' @describeIn Analyses Obtain the analyses names
 #' @export
