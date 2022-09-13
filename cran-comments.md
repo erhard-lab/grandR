@@ -18,7 +18,7 @@ Found the following (possibly) invalid URLs:
     From: inst/doc/differential-expression.html                                                                                                                               
     Message: Invalid URI scheme                                                                                                                                               
 
-> these are not URLs but database identifier
+> these are not URLs but database identifiers
     
 * checking R code for possible problems ... NOTE                                                                                                                            
 <many "no visible binding for global variable">

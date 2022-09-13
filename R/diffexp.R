@@ -110,7 +110,7 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @param mode compute LFCs for "total", "new", or "old" RNA
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param verbose print status messages?
-#' @param ... further arguments forwarded to LFC.funpatchwork,
+#' @param ... further arguments forwarded to LFC.fun
 
 #'
 #' @details Both \link[lfc]{PsiLFC} and  \link[lfc]{NormLFC}) by default perform normalization by subtracting the median log2 fold change from all log2 fold changes.
@@ -297,7 +297,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param seed Seed for the random number generator
 #' @param dispersion overdispersion parameter for each gene; if NULL this is estimated from data
-#' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
+#' @param hierarchical Take the NTR from the hierarchical Bayesian model (see details)
 #' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
 #' @param verbose Print status messages
 #'
@@ -311,7 +311,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #' is NULL, then the labeling time of the A or B samples is used (e.g. useful if labeling was started concomitantly with the perturbation, and the steady state samples
 #' are unperturbed samples).
 #'
-#' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
+#' @details By default, the hierarchical Bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
 #' that approximates the mixture of betas from the replicate samples.
 #'
 #' @details if N is set to 0, then no sampling from the posterior is performed, but the transformed MAP estimates are returned
@@ -324,11 +324,11 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #'  \item{"HL.B"}{the posterior mean RNA half-life for sample B from the comparison}
 #'  \item{"s.log2FC"}{the posterior mean synthesis rate log2 fold change}
 #'  \item{"s.cred.lower"}{the lower CI boundary of the synthesis rate log2 fold change}
-#'  \item{"s.cred.upper"}{the uper CI boundary of the synthesis rate log2 fold change}
+#'  \item{"s.cred.upper"}{the upper CI boundary of the synthesis rate log2 fold change}
 #'  \item{"s.ROPE"}{the signed ROPE probability (negative means downregulation) for the synthesis rate fold change}
 #'  \item{"HL.log2FC"}{the posterior mean half-life log2 fold change}
 #'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life log2 fold change}
-#'  \item{"HL.cred.upper"}{the uper CI boundary of the half-life log2 fold change}
+#'  \item{"HL.cred.upper"}{the upper CI boundary of the half-life log2 fold change}
 #'  \item{"HL.ROPE"}{the signed ROPE probability (negative means downregulation) for the half-life fold change}
 #' }
 #'
@@ -702,7 +702,7 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
 #' @return A matrix to be multiplied with a count table
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
 #' @details The method for grandR object simply calls the general method
@@ -790,7 +790,7 @@ GetSummarizeMatrix.default=function(x,subset=NULL,average=TRUE,...) {
 #' @details The method for grandR objects simply calls the general method
 #'
 #' @details For grandR objects, columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
 #' @return A contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}

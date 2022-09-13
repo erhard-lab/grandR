@@ -12,7 +12,7 @@
 #' @param name.unknown the type to be used for all genes where no type was identified
 #' @param ... additional functions to define types (see details)
 #'
-#' @details This function returns a function. Usually, you do not use it ourself but \code{ClassifyGenes} is usually as \code{classify.genes} parameter
+#' @details This function returns a function. Usually, you do not use it yourself but \code{ClassifyGenes} is usually as \code{classify.genes} parameter
 #' for  \code{\link{ReadGRAND}} to build the \emph{Type} column in the \code{\link{GeneInfo}} table. See the example
 #' to see how to use it directly.
 #'
@@ -128,7 +128,7 @@ DesignSemantics=function(...) {
 #' @param s original column
 #' @param name the column name
 #'
-#' @return a data frame with a single numeric column, where <x>h froms is replaced by x, <x>min is replaced by
+#' @return a data frame with a single numeric column, where <x>h from s is replaced by x, <x>min is replaced by
 #' x/60, and no4sU is replaced by 0
 #'
 #' @export

@@ -43,7 +43,7 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 
 
 #' Make a PCA plot
-#' @param data the grandr object that contains the data to plot
+#' @param data the grandR object that contains the data to plot
 #' @param mode.slot the mode and slot of data to plot; slot in the grandr object (eg "count")
 #' @param ntop how many genes to use
 #' @param aest parameter to set the visual attributes
@@ -52,7 +52,7 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #' @param columns which columns (i.e. samples or cells) to perform PCA on (see details)
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a PCA plot
@@ -370,7 +370,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' less stringently. remove.outlier can also be set to FALSE (no outlier filtering). If xlim or ylim are set, this overrides outlier filtering. Points outside of the limits
 #' (i.e. outliers or points outside of xlim or ylim) are set to infinity (such that they are shown at the border of the plot in gray)
 #'
-#' @details By default, all genes are shown. This can be restricted using the \code{genes} parameter (see \link{ToIndex}). It is also possibe to highlight a subset of the genes
+#' @details By default, all genes are shown. This can be restricted using the \code{genes} parameter (see \link{ToIndex}). It is also possible to highlight a subset of the genes
 #' using \code{highlight}. This parameter either describes a subset of the genes (either numeric indices, gene names, gene symbols or a logical vector), in which case these genes
 #' are plotted in red and with larger points size, or it can be a list of such vectors. The names of this list must be valid colors. Genes can also be labeled (make sure that this
 #' is really only a small subset of the genes).
@@ -753,7 +753,7 @@ setup.default.aes=function(data,aest) {
 #' @details By default, aest is set to aes(color=Condition,shape=Replicate) (if both Condition and Replicate are names in the Coldata table).
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a ggplot object.
@@ -815,7 +815,7 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE
 #' @details By default, aest is set to aes(color=Condition,shape=Replicate) (if both Condition and Replicate are names in the Coldata table).
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a ggplot object.
@@ -876,7 +876,7 @@ PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TR
 #' @details By default, aest is set to aes(color=Condition,shape=Replicate) (if both Condition and Replicate are names in the Coldata table).
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a ggplot object.
@@ -946,12 +946,12 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
 #' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
 #' @param xlab The names to show at the x axis;
 #'
-#' @details xlab can be given as acharacter vector or an expression that evaluates into a character vector.
+#' @details xlab can be given as a character vector or an expression that evaluates into a character vector.
 #' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently it.
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a ggplot object.
@@ -1014,7 +1014,7 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.C
 #' @details By default, aest is set to aes(color=Condition,shape=Replicate) (if both Condition and Replicate are names in the Coldata table).
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a ggplot object.

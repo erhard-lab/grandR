@@ -341,7 +341,7 @@ Scale=function(data,name="scaled",slot=DefaultSlot(data),set.to.default=FALSE,gr
 #' @param mincol the minimal number of columns (i.e. samples or cells) a gene has to have a value >= minval
 #' @param min.cond if not NULL, do not compare values per column, but per condition (see details)
 #' @param use if not NULL, defines the genes directly that are supposed to be retained (see details)
-#' @param keep if not NULL, defines genes directly, that should be kept even though they do not adhere to the filtering critera (see details)
+#' @param keep if not NULL, defines genes directly, that should be kept even though they do not adhere to the filtering criteria (see details)
 #' @param return.genes if TRUE, return the gene names instead of a new grandR object
 #'
 #' @details By default genes are retained, if they have 100 read counts in at least half of the columns (i.e. samples or cells).

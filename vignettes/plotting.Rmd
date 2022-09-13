@@ -79,7 +79,7 @@ PlotGeneGroupsPoints(banp,"Tubgcp5",mode.slot="new.norm",show.CI = TRUE,aest=aes
   scale_color_manual(values=c(wt='gray50',dTag='red'))
 ```
 
-The last of the basic visualizations shows old (gray) and new (red) RNA as bars (and here we change the way the samples are labeled onn the x axis):
+The last of the basic visualizations shows old (gray) and new (red) RNA as bars (and here we change the way the samples are labeled on the x axis):
 
 ```{r fig.width=6}
 PlotGeneGroupsBars(banp,"Tubgcp5",xlab=paste(Condition,Replicate,sep="."))
@@ -149,7 +149,7 @@ PlotScatter(banp,x="mESC.0h.dTag.2h.4sU.A",y="mESC.0h.dTag.2h.4sU.B")
 
 Note that `PlotScatter` automatically cuts outliers (shown at the upper right corner in gray) to focus on the bulk of the genes (see below how to modify this behavior), and that it shows dense regions (with many genes) by brighter colors. 
 
-`PlotScatter` can also display results from analyses (see the [differential expression](differential-expression.html) and [kinetic modeling](kinetic-modeling.html) vignettes for more information on analyses). To demostrate, we first create some analyses results:
+`PlotScatter` can also display results from analyses (see the [differential expression](differential-expression.html) and [kinetic modeling](kinetic-modeling.html) vignettes for more information on analyses). To demonstrate, we first create some analyses results:
 
 ```{r}
 contrasts <- GetContrasts(banp,contrast=c("Experimental.time.original","0h"))
@@ -339,7 +339,7 @@ banp <- AddGlobalPlot(banp,"2h vs 6h",plotfun.global)
 ServeGrandR(banp)
 ```
 ![Shiny screenshot](shiny2.png)
-In addition to this first page, the web interface now has a second tab pabel to show the scatter plot. This lets you select genes by drawing rectangles with the mouse:
+In addition to this first page, the web interface now has a second tab to show the scatter plot. This lets you select genes by drawing rectangles with the mouse:
 
 ![Shiny screenshot](shiny3.png)
 
@@ -378,7 +378,7 @@ data <- PairwiseDESeq2(data,name.prefix = "new",contrasts = contrasts,mode="new"
 tar <- readLines("https://zenodo.org/record/6976391/files/targets.genes")
 GeneInfo(data,"BANP-Target")<-factor(ifelse(Genes(data) %in% tar,"yes","no"),levels=c("yes","no"))
 ```
-2. Create an analysis table named "ServerGrandR" as appropriate:
+2. Create an analysis table named "ServeGrandR" as appropriate:
 
 ```{r}
 tab <- GetAnalysisTable(data,analyses = "total.[26]h",columns = "LFC|Q")[,-1:-4]
@@ -498,7 +498,7 @@ print(object.size(plot.reg),units="Mb")
 ```
 This object is surprisingly large in memory, which means also surprisingly large when written to a rds file, which means also surprisingly slow to load whenever shiny displays the website.
 
-However, it is of course not necessary to precompute it, it can of course be computed on the fly (since all necessay data is there!). A solution would therefore be to just store a function that generates the ggplot:
+However, it is of course not necessary to precompute it, it can of course be computed on the fly (since all necessary data is there!). A solution would therefore be to just store a function that generates the ggplot:
 
 ```{r}
 f1 <- function() PlotScatter(data,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,

@@ -19,7 +19,7 @@ NULL
 #'   \item{several data matrices for read counts, normalized expression values, NTRs, etc. (genes x samples or genes x cells; stored in so-called \emph{slots})}
 #'   \item{potentially several analysis output tables (for kinetic modeling, differential gene expression testing)}
 #' }
-#' Usually, this contructor is not invoked directly (but by \code{\link{ReadGRAND}} or \code{\link{SimulateTimeCourse}}).
+#' Usually, this constructor is not invoked directly (but by \code{\link{ReadGRAND}} or \code{\link{SimulateTimeCourse}}).
 #'
 #' @param prefix Can either be the prefix used to call GRAND-SLAM with, or the main output file ($prefix.tsv.gz);
 #' if the RCurl package is installed, this can also be a URL
@@ -454,7 +454,7 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 
 #' Get the column annotation table or add additional columns to it
 #'
-#' The colums of a grandR object are samples or cells.
+#' The columns of a grandR object are samples or cells.
 #' The column annotation table contains meta information for the columns of a grandR object.
 #' When loaded from the GRAND-SLAM output, this this constructed from the sample/cell names by
 #' \code{\link{MakeColdata}}

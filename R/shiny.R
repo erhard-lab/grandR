@@ -11,7 +11,7 @@
 #' @param plot.global  a list of global plots; can be NULL, then the stored global plots are used (see \link{Plots})
 #' @param df.identifier the main identifier (column name) from the table; this is used when calling the gene plot functions;
 #' @param title the title to show in the header of the website
-#' @param show.sessionInfo wether to show session info
+#' @param show.sessionInfo whether to show session info
 #' @param help a list of characters that is shown as help text at the beginning (when no gene plot is shown); should describe the contents of your table
 #'
 #' @details If the table parameter is NULL, either an analysis table named "ServeGrandR" is

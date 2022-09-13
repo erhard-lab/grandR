@@ -229,7 +229,7 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 #'   \item{\link{FitKineticsGeneNtr}: maximum a posteriori fit on the NTR posterior transformed to the degradation rate; as it is based on the NTR only, it is independent on proper normalization; assumes steady state; theoretically well justified}
 #' }
 #'
-#' @details This function is flexible in what to put in the analysis table. You can specifiy the statistics using return.fields and return.extra (see \code{\link{kinetics2vector}})
+#' @details This function is flexible in what to put in the analysis table. You can specify the statistics using return.fields and return.extra (see \code{\link{kinetics2vector}})
 #'
 #' @seealso \link{FitKineticsGeneNtr}, \link{FitKineticsGeneLeastSquares}, \link{FitKineticsGeneLogSpaceLinear}
 #'
@@ -296,7 +296,7 @@ FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=
 #' @return
 #' A named list containing the model fit:
 #' \itemize{
-#'   \item{data: a data frame containing the observed value used for fittin}
+#'   \item{data: a data frame containing the observed value used for fitting}
 #'   \item{residuals: the computed residuals if compute.residuals=TRUE, otherwise NA}
 #'   \item{Synthesis: the synthesis rate (in U/h, where U is the unit of the slot)}
 #'   \item{Degradation: the degradation rate (in 1/h)}
@@ -549,7 +549,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
 #' @return
 #' A named list containing the model fit:
 #' \itemize{
-#'   \item{data: a data frame containing the observed value used for fittin}
+#'   \item{data: a data frame containing the observed value used for fitting}
 #'   \item{Synthesis: the synthesis rate (in U/h, where U is the unit of the slot)}
 #'   \item{Degradation: the degradation rate (in 1/h)}
 #'   \item{Half-life: the RNA half-life (in h, always equal to log(2)/degradation-rate}
@@ -669,7 +669,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
 #' @return
 #' A named list containing the model fit:
 #' \itemize{
-#'   \item{data: a data frame containing the observed value used for fittin}
+#'   \item{data: a data frame containing the observed value used for fitting}
 #'   \item{Synthesis: the synthesis rate (in U/h, where U is the unit of the slot)}
 #'   \item{Degradation: the degradation rate (in 1/h)}
 #'   \item{Half-life: the RNA half-life (in h, always equal to log(2)/degradation-rate}
@@ -1014,7 +1014,7 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param seed Seed for the random number generator
 #' @param dispersion overdispersion parameter for each gene; if NULL this is estimated from data
-#' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
+#' @param hierarchical Take the NTR from the hierarchical Bayesian model (see details)
 #' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
 #' @param verbose Vebose output
 #'
@@ -1028,7 +1028,7 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #' is NULL, then the labeling time of the A or B samples is used (e.g. useful if labeling was started concomitantly with the perturbation, and the steady state samples
 #' are unperturbed samples).
 #'
-#' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
+#' @details By default, the hierarchical Bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
 #' that approximates the mixture of betas from the replicate samples.
 #'
 #' @details if N is set to 0, then no sampling from the posterior is performed, but the transformed MAP estimates are returned
@@ -1038,9 +1038,9 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #'  \item{"s"}{the posterior mean synthesis rate}
 #'  \item{"HL"}{the posterior mean RNA half-life}
 #'  \item{"s.cred.lower"}{the lower CI boundary of the synthesis rate}
-#'  \item{"s.cred.upper"}{the uper CI boundary of the synthesis rate}
+#'  \item{"s.cred.upper"}{the upper CI boundary of the synthesis rate}
 #'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life}
-#'  \item{"HL.cred.upper"}{the uper CI boundary of the half-life}
+#'  \item{"HL.cred.upper"}{the upper CI boundary of the half-life}
 #' }
 #'
 #'
@@ -1137,7 +1137,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=
 #' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
 #' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
 #' @param sample.f0.in.ss whether or not to sample f0 under steady state conditions
-#' @param hierarchical Take the NTR from the hierarchical bayesian model (see details)
+#' @param hierarchical Take the NTR from the hierarchical Bayesian model (see details)
 #' @param beta.prior The beta prior for the negative binomial used to sample counts, if NULL, a beta distribution is fit to all expression values and given dispersions
 #' @param return.samples return the posterior samples of the parameters?
 #' @param return.points return the point estimates per replicate as well?
@@ -1152,11 +1152,11 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=
 #' \code{time.experiment} is NULL, then the labeling time of the samples is used (e.g. useful if labeling was started concomitantly with
 #' the perturbation, and the reference samples are unperturbed samples).
 #'
-#' @details By default, the hierarchical bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
+#' @details By default, the hierarchical Bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
 #' that approximates the mixture of betas from the replicate samples.
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
-#' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
 #' @return a list containing the posterior mean of s and s, its credible intervals and,
