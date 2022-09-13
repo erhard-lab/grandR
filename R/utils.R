@@ -218,13 +218,13 @@ opt$sapply=function(...) simplify2array(opt$lapply(...))
 opt$nworkers=0
 
 
-#' Set parallel execution
+#' Set up parallel execution
 #'
 #' Set the number of cores for parallel execution.
 #'
 #' @param cores number of cores
 #'
-#' @details Whenever \link{psapply} or \link{plapply} are used, they are execute in parallel.
+#' @details Whenever \link{psapply} or \link{plapply} are used, they are executed in parallel.
 #'
 #' @return NULL
 #' @export
@@ -234,9 +234,10 @@ SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
   if (cores>1) {
     if (.Platform$OS.type!="unix") {
       warning("Parallelism is not supported under windows. Will use single thread!")
-      return()
+      opt$nworkers=0
+    } else {
+      opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)
     }
-    opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)
   } else {
     opt$lapply<-function(...) lapply(...)
   }
