@@ -76,13 +76,13 @@ Defer=function(FUN,...,add=NULL, cache=TRUE) {
     pp=list(...)
     if (length(pp)>0) {
       re=do.call(FUN,c(list(data),param,pp))
-      if (!is.null(add)) for (e in if (is(add,"gg")) list(add) else add) re=re+e
+      if (!is.null(add)) for (e in if (methods::is(add,"gg")) list(add) else add) re=re+e
       return(re)
     }
 
     if (is.null(value)) {
       value<<-do.call(FUN,c(list(data),param))
-      if (!is.null(add)) for (e in if (is(add,"gg")) list(add) else add) value<<-value+e
+      if (!is.null(add)) for (e in if (methods::is(add,"gg")) list(add) else add) value<<-value+e
     }
     value
   }
