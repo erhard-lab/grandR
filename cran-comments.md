@@ -22,7 +22,7 @@
 
 * \dontrun{} in examples:
 
-> The example for ReadGRAND takes > 5 sec to execute and is therefore wrapped into \dontrun; it only shows the usage, but does not really produce informative outputs
+> The example for ReadGRAND takes > 5 sec to execute and is therefore wrapped into \dontrun
 > The example for PairwiseDESeq2 also takes > 5 sec to execute and is therefore wrapped into \dontrun
 
 
