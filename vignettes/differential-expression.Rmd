@@ -297,7 +297,7 @@ ggplot(df,aes(Analysis,LFC,fill=`BANP-Target`))+
   geom_boxplot()
 ```
 
-Let's investigate this further. We first roughly estimate RNA half-lives from steady state samples using the method described in [[1]](https://doi.org/10.1093/bioinformatics/bty256), and add half-life classes as additional gene annotations:
+Let's investigate this further. We first roughly estimate RNA half-lives from steady state samples using the method described in [[1]](https://academic.oup.com/bioinformatics/article/34/13/i218/5045735), and add half-life classes as additional gene annotations:
 
 ```{r}
 banp <- ComputeSteadyStateHalfLives(banp,name="HL",columns = Experimental.time==0)
@@ -329,9 +329,13 @@ As indicated above, the 1h and 2h samples are not directly comparable to the oth
 For checking, we fit our model per experimental time. We use `N=0` because we do not want to draw samples from the posterior, but we are happy with transforming the MAP estimates for this check:
 
 ```{r}
+# Restrict to 1000 genes to execute this vignette much faster
+set.seed(42)
+banp<-FilterGenes(banp,use=sample.int(nrow(banp),1000))
+
+# use the previous time point as reference
 reference.columns=FindReferences(banp,reference.function=
                                    function(s) Experimental.time==max(c(0,Experimental.time[Experimental.time<s$Experimental.time])))
-# use the previous time point as reference
 
 SetParallel(cores = 2)  # increase 2 on your system, or omit the cores = 2 for automatic detection
 Condition(banp) <- "Experimental.time.original"

@@ -1,8 +1,7 @@
 
 
 read.tsv=function(t,verbose=FALSE,stringsAsFactors=TRUE,...) {
-
-  if (has.package("RCurl") && RCurl::url.exists(t)) {
+  if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
     file <- tempfile()
     if (verbose) cat("Downloading file...\n")
     download.file(url, file, quiet=!verbose)
@@ -173,8 +172,6 @@ estimate.dispersion=function(ss) {
   disp
 }
 
-has.package=function(name) name %in% rownames(installed.packages())
-
 GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fixed=TRUE),function(v) v[field])
 
 
@@ -226,14 +223,14 @@ opt$nworkers=0
 #'
 #' @details Whenever \link{psapply} or \link{plapply} are used, they are executed in parallel.
 #'
-#' @return NULL
+#' @return No return value, called for side effects
 #' @export
 #'
 SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
   opt$nworkers=cores
   if (cores>1) {
     if (.Platform$OS.type!="unix") {
-      warning("Parallelism is not supported under windows. Will use single thread!")
+      warning("Parallelism is not supported under windows. Will use a single thread!")
       opt$nworkers=0
     } else {
       opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)

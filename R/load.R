@@ -25,6 +25,8 @@
 #' and Ensembl gene identifiers (which it will call "cellular"). These three are the last functions to be checked (in case a user defined type via ...) also
 #' matches to, e.g., an Ensembl gene).
 #'
+#' @return a function that takes the original \link{GeneInfo} table and adds the Type column
+#'
 #' @seealso \link{ReadGRAND}
 #' @examples
 #'
@@ -94,6 +96,9 @@ Design=list(
 #' @details Semantics.time is such a predefined function: Contents such as 3h or 30min are converted into a numerical value (in hours), and no4sU is converted into 0.
 #'
 #' @details By default, this is used for the names duration.4sU and Experimental.time
+#'
+#' @return a named list; the names should correspond to column names in the \link{Coldata} table,
+#' and the values are functions to add semantics to this table
 #'
 #' @seealso \link{MakeColdata}
 #' @examples
@@ -297,7 +302,8 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 
   prefix=file
   url=NULL
-  if (has.package("RCurl")) {
+
+  if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
     if (RCurl::url.exists(prefix)) {
       url=prefix
     } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
@@ -430,11 +436,6 @@ GetTableQC=function(data,name) {
 #'
 #' @seealso \link{ReadGRAND},\link{ClassifyGenes},\link{MakeColdata},\link{DesignSemantics}
 #'
-#' @examples
-#' \dontrun{
-#' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
-#'                       design=c("Cell",Design$dur.4sU,Design$Replicate), verbose=TRUE)
-#' }
 #'
 #' @export
 #'
@@ -641,7 +642,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   do.callback=function() {}
 
   url=NULL
-  if (has.package("RCurl")) {
+  if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
     if (RCurl::url.exists(prefix)) {
       url=prefix
     } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {

@@ -18,13 +18,13 @@ knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
 ```
 
 grandR is an R package for the analysis of RNA-seq experiments involving 
-metabolic RNA labeling with nucleotide conversion, such as SLAM-seq experiments [[1]](https://doi.org/10.1038/nmeth.4435). In such experiments, nucleoside analogs such as 4sU are added to 
+metabolic RNA labeling with nucleotide conversion, such as SLAM-seq experiments [[1]](https://www.nature.com/articles/nmeth.4435). In such experiments, nucleoside analogs such as 4sU are added to 
 living cells, which take it up and incorporate it into newly synthesized RNA. Before sequencing, 4sU is converted into a cytosin analog. Reads covering 4sU sites therefore 
 have characteristic T-to-C mismatches after read mapping, in principle providing the opportunity to differentiate newly synthesized (during the time of labeling) from pre-existing RNA. 
 
 Confounders such as sequencing errors or reads that originate from newly synthesized RNA but, by chance, do not cover sites of 4sU incorporation (usually 20-80% of all "new reads") can
 be handled using specialized methods such as GRAND-SLAM 
-[[2]](https://doi.org/10.1093/bioinformatics/bty256).
+[[2]](https://academic.oup.com/bioinformatics/article/34/13/i218/5045735).
 
 # Reading in the data
 

@@ -623,12 +623,16 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
 }
 
 #' Make a Vulcano plot
+#'
+#' Plot log2 fold changes against -log10 multiple testing adjusted P values
+#'
 #' @param data the grandR object that contains the data to be plotted
 #' @param analysis the analysis to plot (default: first analysis)
 #' @param p.cutoff p-value cutoff (default: 0.05)
 #' @param lfc.cutoff log fold change cutoff (default: 1)
 #' @param label.numbers if TRUE, label the number of genes
 #' @param ... further parameters passed to \link{PlotScatter}
+#' @return a ggplot object
 #' @export
 VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
                      label.numbers=TRUE,...) {
@@ -651,6 +655,9 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
 
 
 #' Make an MA plot
+#'
+#' Plot average expression vs. log2 fold changes
+#'
 #' @param data the grandR object that contains the data to be plotted
 #' @param analysis the analysis to plot (default: first analysis)
 #' @param aest parameter to set visual attributes of the plot
@@ -660,6 +667,7 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
 #' @param highlight highlight these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
 #' @param label label these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
 #' @param label.repel force to repel labels from points and each other (increase if labels overlap)
+#' @return a ggplot object
 #' @export
 MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
                 lfc.cutoff=1,
