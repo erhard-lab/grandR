@@ -29,7 +29,7 @@ library(grandR)
 
 First have a look at the [Getting started](https://grandR.erhard-lab.de/articles/getting-started.html) vignette.
 
-Then, go through the [Differential expression](https://grandR.erhard-lab.de/articles/web/differential-expression.html) or the [Kinetic modeling](https://grandR.erhard-lab.de/articles/kinetic-modeling.html) vignette, which provide a comprehensive walk-through of the two main settings of nucleotide conversion experiments.
+Then, go through the [Differential expression](https://grandR.erhard-lab.de/articles/web/differential-expression.html) or the [Kinetic modeling](https://grandR.erhard-lab.de/articles/web/kinetic-modeling.html) vignette, which provide a comprehensive walk-through of the two main settings of nucleotide conversion experiments.
 
 There are also additional vignettes:
 
