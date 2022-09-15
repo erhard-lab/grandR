@@ -1,17 +1,11 @@
 ---
 title: "Loading data and working with grandR objects"
 output: 
-  rmarkdown::html_vignette:
+  html_document:
     toc: true
     df_print: kable
     fig_width: 7
     fig_height: 6
-      
-vignette: >
-  %\VignetteIndexEntry{Loading data and working with grandR objects}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
-  
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
@@ -275,7 +269,7 @@ Condition(sars)
 
 and it can be set either directly:
 
-```{r}
+```{r, layout="l-body-outset"}
 Coldata(sars,"saved")<-Condition(sars)                  # save it for later use!
 Condition(sars)<-rep(c("control","infected"),each=6)    # set new conditions directly
 Coldata(sars)

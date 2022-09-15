@@ -11,6 +11,7 @@
 #' @return a new grandR object containing the pulseR analyses in a new analysis table
 #' @export
 #'
+#' @concept kinetics
 FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
 
 
@@ -187,6 +188,7 @@ FitKineticsPulseR=function(data,name="pulseR",time=Design$dur.4sU) {
 #'  # so old and new RNA are not equal at t=HL (if it is not at steady state at t=0)
 #'
 #' @export
+#' @concept kinetics
 f.old.equi=function(t,s,d) s/d*exp(-t*d)
 
 #' @describeIn f.old.equi abundance of old RNA without assuming steady state
@@ -245,6 +247,7 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 #'
 #' @export
 #'
+#' @concept kinetics
 FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=DefaultSlot(data),time=Design$dur.4sU,CI.size=0.95,return.fields=c("Synthesis","Half-life"),return.extra=NULL,...) {
 
   fun=switch(tolower(type[1]),ntr=FitKineticsGeneNtr,nlls=FitKineticsGeneLeastSquares,lm=FitKineticsGeneLogSpaceLinear)
@@ -341,6 +344,7 @@ FitKinetics=function(data,name.prefix="kinetics",type=c("nlls","ntr","lm"),slot=
 #'
 #' @export
 #'
+#' @concept kinetics
 FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,CI.size=0.95,steady.state=NULL,use.old=TRUE,use.new=TRUE, maxiter=250, compute.residuals=TRUE) {
     # residuals of the functions for usage with nls.lm
     res.fun.equi=function(par,old,new) {
@@ -593,6 +597,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
 #'
 #' @export
 #'
+#' @concept kinetics
 FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,CI.size=0.95) {
     correct=function(s) {
         if (max(s$Value)==0) s$Value[s$time==1]=0.01
@@ -714,6 +719,7 @@ FitKineticsGeneLogSpaceLinear=function(data,gene,slot=DefaultSlot(data),time=Des
 #'
 #' @export
 #'
+#' @concept kinetics
 FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU,CI.size=0.95,transformed.NTR.MAP=TRUE,exact.ci=FALSE,total.fun=median) {
     if (!all(c("alpha","beta") %in% Slots(data))) stop("Beta approximation data is not available in grandR object!")
     steady.state=TRUE
@@ -847,7 +853,8 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #'
 #' @export
 #'
-  CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",CI.size=0.95,steady.state=NULL,n.estimate=1000, n.iter=10000, verbose=FALSE,...) {
+#' @concept recalibration
+CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",CI.size=0.95,steady.state=NULL,n.estimate=1000, n.iter=10000, verbose=FALSE,...) {
 
     conds=Coldata(data)
     if (is.null(conds$Condition)) {
@@ -942,6 +949,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #'
 #' @export
 #'
+#' @concept recalibration
 CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=NULL,reference.columns=NULL,slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL,time.name="calibrated_time",n.estimate=1000,verbose=FALSE) {
 
   if (any(is.na(Genes(data,names(reference.halflives))))) stop("Not all names of reference.halflives are known gene names!")
@@ -1045,6 +1053,7 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #'
 #'
 #' @export
+#' @concept snapshot
 FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=DefaultSlot(data),conditions=NULL,time.labeling=Design$dur.4sU,time.experiment=NULL, sample.f0.in.ss=TRUE,N=10000,N.max=N*10,CI.size=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
@@ -1164,6 +1173,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns,slot=
 #'
 #' @export
 #'
+#' @concept snapshot
 FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
                              reference.columns=NULL,
                              dispersion=NULL,
@@ -1356,6 +1366,7 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
 #'
 #' @export
 #'
+#' @concept snapshot
 TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
     if (is.null(f0)) {
         d=-1/t*log(1-ntr)
@@ -1419,6 +1430,7 @@ TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
 #' @seealso \link{FitKineticsGeneNtr}, \link{FitKineticsGeneLeastSquares}, \link{FitKineticsGeneLogSpaceLinear}
 #'
 #' @export
+#' @concept geneplot
 PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU, type=c("nlls","ntr","lm"),
                                        exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
     if (length(ToIndex(data,gene))==0) return(NULL)
@@ -1514,6 +1526,7 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
 #' @examples
 #' head(SimulateKinetics(hl=2))   # simulate steady state kinetics for an RNA with half-life 2h
 #'
+#' @concept kinetics
 SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=s/d,min.time=-1,max.time=10,N = 1000,name=NULL,out=c("Old","New","Total","NTR")) {
     times=seq(min.time,max.time,length.out=N)
     ode.new=function(t,s,d) ifelse(t<0,0,s/d*(1-exp(-t*d)))
@@ -1549,6 +1562,7 @@ SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=s/d,min.time=-1,max.time=1
 #'
 #' @examples
 #' PlotSimulation(SimulateKinetics(hl=2))
+#' @concept kinetics
 PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
     if (!ntr) sim.df=sim.df[sim.df$Type!="NTR",]
     if (!old) sim.df=sim.df[sim.df$Type!="Old",]

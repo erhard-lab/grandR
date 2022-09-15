@@ -76,6 +76,7 @@ NULL
 #'
 #' @export
 #'
+#' @concept grandr
 grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$data,coldata=parent$coldata,metadata=parent$metadata,analyses=NULL,plots=NULL,parent=NULL) {
   info=list()
   info$prefix=prefix
@@ -140,6 +141,7 @@ print.grandR=function(x,...) {
 #'
 #' @details The additional parameters are provided to each of the functions.
 #' @return A new grandR object
+#' @concept helper
 data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
   re=list()
   for (l1 in names(data$data)) {
@@ -239,6 +241,7 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
 #'
 #' @export
 #'
+#' @concept grandr
 DefaultSlot <- function(data,value=NULL) {
   if (is.null(value)) data$metadata$default.slot else {
     DefaultSlot(data)=value
@@ -276,6 +279,7 @@ DefaultSlot <- function(data,value=NULL) {
 #' @describeIn Slots Obtain the slot names
 #' @export
 #'
+#' @concept grandr
 Slots=function(data) names(data$data)
 
 #' @describeIn Slots Remove one or several slots from this grandR object
@@ -336,6 +340,7 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE) {
 #'
 #' @export
 #'
+#' @concept grandr
 Condition <- function(data,value=NULL) {
   if (is.null(value)) data$coldata$Condition else {
     Condition(data)<-value
@@ -396,6 +401,7 @@ Condition <- function(data,value=NULL) {
 #'
 #' @export
 #'
+#' @concept grandr
 Genes=function(data, genes=NULL, use.symbols=TRUE,regex=FALSE) data$gene.info[[if (use.symbols) "Symbol" else "Gene"]][ToIndex(data,genes,regex=regex)]
 #' @rdname Genes
 #' @export
@@ -434,6 +440,7 @@ Columns=function(data,columns=NULL, reorder=FALSE) {
 #'
 #' @export
 #'
+#' @concept grandr
 GeneInfo=function(data,column=NULL,value=NULL) {
   if (is.null(column)) {
     data$gene.info
@@ -486,6 +493,7 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 #'
 #' @export
 #'
+#' @concept grandr
 Coldata=function(data,column=NULL,value=NULL) {
   if (is.null(column)) {
     data$coldata
@@ -520,6 +528,7 @@ Coldata=function(data,column=NULL,value=NULL) {
 #'
 #' @return Whether or not the given name is valid and unique for the grandR object
 #'
+#' @concept helper
 check.analysis=function(data,analyses,regex) {
   if (!regex) return(is.logical(analyses) || is.numeric(analyses) || all(analyses %in% Analyses(data)))
   sapply(analyses,function(pattern) any(grepl(pattern,Analyses(data),fixed=!regex)))
@@ -547,6 +556,7 @@ check.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
 #'
 #' @return a named list with elements mode and slot (or only slot in case of \emph{ntr},\emph{alpha} or \emph{beta})
 #'
+#' @concept helper
 get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
   if (length(mode.slot)!=1) stop("mode.slot must be a vector of length 1")
   if (!check.mode.slot(data,mode.slot,allow.ntr = allow.ntr)) stop("Invalid mode.slot")
@@ -582,6 +592,7 @@ get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
 #'
 #' @export
 #'
+#' @concept helper
 ToIndex=function(data,gene,regex=FALSE) {
   if (any(is.na(gene))) {
     warning("There were NA genes, removed!");
@@ -649,6 +660,7 @@ ToIndex=function(data,gene,regex=FALSE) {
 #'
 #' @export
 #'
+#' @concept data
 GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol") {
 
   genes=ToIndex(data,genes)
@@ -747,6 +759,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #'
 #' @export
 #'
+#' @concept data
 GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),name.by="Symbol") {
 
   if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(data,mode.slot)],collapse=",")))
@@ -845,6 +858,7 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
 #'
 #' @export
 #'
+#' @concept data
 GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),by.rows=FALSE,coldata=TRUE,ntr.na=TRUE,name.by="Symbol") {
   if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(data,mode.slot)],collapse=",")))
 
@@ -914,6 +928,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 #' sars<-LFC(sars,mode="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
 #' GetSignificantGenes(sars,criteria=LFC>1)
 #'
+#' @concept diffexp
 GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=NULL,as.table=FALSE,use.symbols=TRUE,gene.info=TRUE) {
   analysis=match.analyses(data,analysis,regex)
   criteria=substitute(criteria)
@@ -987,6 +1002,7 @@ GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=NULL,as.tabl
 #'
 #' @export
 #'
+#' @concept snapshot
 FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL, as.list=FALSE,columns=NULL) {
   if (!is.grandR(data)) stop("Data is not a grandR object!")
   if (!is.null(group) && !all(group %in% names(Coldata(data)))) stop(sprintf("No %s in Coldata!",group))
@@ -1057,6 +1073,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 #' @describeIn Analyses Obtain the analyses names
 #' @export
 #'
+#' @concept grandr
 Analyses=function(data, description=FALSE) {
   if (!description) {
     names(data$analysis)
@@ -1144,6 +1161,7 @@ match.analyses=function(data,analyses=NULL,regex=TRUE) {
 #'
 #' @export
 #'
+#' @concept data
 GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes(data),by.rows=FALSE,gene.info=TRUE,name.by="Symbol",prefix.by.analysis=TRUE) {
   analyses=match.analyses(data,analyses,regex)
   genes=ToIndex(data,genes)
@@ -1212,6 +1230,7 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
 #' @describeIn Plots Obtain the plot names
 #' @export
 #'
+#' @concept grandr
 Plots=function(data) {
   re=list()
   if (!is.null(data$plots$gene)) re=c(re,list(gene=names(data$plots$gene)))

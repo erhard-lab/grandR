@@ -5,6 +5,7 @@
 #'
 #' @param data a grandR object
 #'
+#'
 #' @return a list with
 #' \itemize{
 #'  \item{orientation: Sense or Antisense, only relevant to mismatches for strand unspecific data}
@@ -15,6 +16,7 @@
 #' }
 #' @export
 #'
+#' @concept diagnostics
 GetDiagnosticParameters=function(data) {
   tab=GetTableQC(data,"mismatch.raw.position")
   orients = unique(as.character(factor(c("Antisense","Sense")[tab$Sense+1],levels=c("Sense","Antisense"))))
@@ -58,6 +60,7 @@ GetDiagnosticParameters=function(data) {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NULL)  {
   tab=GetTableQC(data,"mismatch.raw.position")
   clip=GetTableQC(data,"clip")
@@ -136,6 +139,7 @@ PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NUL
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category=NULL) {
   tab=GetTableQC(data,"mismatch.raw.position")
   clip=GetTableQC(data,"clip")
@@ -206,6 +210,7 @@ PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotConversionFreq=function(data,category,max.columns=120) {
 if (is.null(category)) stop("No category defined; see GetDiagnosticParameters(data)$category for choices!")
   tab=GetTableQC(data,"conversion.freq")
@@ -252,6 +257,7 @@ if (is.null(category)) stop("No category defined; see GetDiagnosticParameters(da
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelNtr=function(data,label="4sU",estimator="Separate",model="Binom") {
   tab=GetTableQC(data,"model.parameters")
 
@@ -309,6 +315,7 @@ PlotModelNtr=function(data,label="4sU",estimator="Separate",model="Binom") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelConv=function(data,label="4sU",estimator="Separate",model="Binom") {
 
   tab=GetTableQC(data,"model.parameters")
@@ -375,6 +382,7 @@ PlotModelConv=function(data,label="4sU",estimator="Separate",model="Binom") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelErr=function(data,label="4sU",estimator="Separate",model="Binom") {
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
@@ -416,6 +424,7 @@ PlotModelErr=function(data,label="4sU",estimator="Separate",model="Binom") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelShape=function(data,label="4sU",estimator="Separate") {
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
@@ -451,6 +460,7 @@ PlotModelShape=function(data,label="4sU",estimator="Separate") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelLabelTimeCourse=function(data,label="4sU",estimator="Separate") {
   tab=GetTableQC(data,"model.parameters")
   e=GetTableQC(data,"experimentalDesign")
@@ -498,6 +508,7 @@ PlotModelLabelTimeCourse=function(data,label="4sU",estimator="Separate") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelCompareErrPrior=function(data,label="4sU",estimator="Separate",model="Binom") {
 
   tab=GetTableQC(data,"model.parameters")
@@ -534,6 +545,7 @@ PlotModelCompareErrPrior=function(data,label="4sU",estimator="Separate",model="B
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelCompareNtr=function(data,label="4sU",estimator="Separate") {
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
@@ -563,6 +575,7 @@ PlotModelCompareNtr=function(data,label="4sU",estimator="Separate") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelCompareErr=function(data,label="4sU",estimator="Separate") {
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
@@ -593,6 +606,7 @@ PlotModelCompareErr=function(data,label="4sU",estimator="Separate") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelCompareConv=function(data,label="4sU",estimator="Separate") {
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
@@ -621,6 +635,7 @@ PlotModelCompareConv=function(data,label="4sU",estimator="Separate") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotModelCompareLL=function(data,label="4sU",estimator="Separate") {
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
@@ -651,6 +666,7 @@ PlotModelCompareLL=function(data,label="4sU",estimator="Separate") {
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
+#' @concept diagnostics
 PlotProfileLikelihood=function(data,label="4sU",sample=NULL,subread=NULL) {
 
   if (is.null(sample)) stop("No sample defined; see GetDiagnosticParameters(data)$sample for choices!")

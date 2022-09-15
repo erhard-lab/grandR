@@ -1,0 +1,31 @@
+citHeader("To cite grandR or GRAND-SLAM in publications, please use:")
+
+citEntry(entry = "article",
+         author = personList(as.person("Christopher Jürges"),
+                             as.person("Lars Dölken"),
+                             as.person("Florian Erhard")),
+         title = "Dissecting newly transcribed and old RNA using GRAND-SLAM",
+         journal = "Bioinformatics",
+         year = "2018",
+         doi = "10.1093/bioinformatics/bty256",
+         url = "https://doi.org/10.1093/bioinformatics/bty256",
+         textVersion = "Jürges et al. Dissecting newly transcribed and old RNA using GRAND-SLAM. Bioinformatics (2018) [GRAND-SLAM]"
+)
+
+citEntry(entry = "article",
+         author = personList(as.person("Florian Erhard"),
+                             as.person("Marisa Baptista"),
+                             as.person("Tobias Krammer"),
+                             as.person("Thomas Hennig"),
+                             as.person("Marius Lange"),
+                             as.person("Panagiota Arampatzi"),
+                             as.person("Fabian Theis"),
+                             as.person("Antoine-Emmanuel Saliba"),
+                             as.person("Lars Dölken")),
+         title = "scSLAM-seq reveals core features of transcription dynamics in single cells",
+         journal = "Nature",
+         year = "2019",
+         doi = "10.1038/s41586-019-1369-y",
+         url = "https://doi.org/10.1038/s41586-019-1369-y",
+         textVersion = "Erhard et al. scSLAM-seq reveals core features of transcription dynamics in single cells. Nature (2019) [scSLAM-seq]"
+)

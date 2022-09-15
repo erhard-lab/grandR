@@ -20,6 +20,7 @@
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #' Findno4sUPairs(sars)
 #'
+#' @concept toxicity
 Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
   grp=NULL
   if (paired.replicates && Design$Replicate %in% names(Coldata(data))) grp=c(grp,Design$Replicate)
@@ -294,6 +295,7 @@ PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr
 #' @seealso \link{Findno4sUPairs},\link{Defer}
 #'
 #' @name toxicity
+#' @concept toxicity
 NULL
 #> NULL
 

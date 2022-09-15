@@ -24,6 +24,7 @@
 #'
 #' @return a shiny web server
 #' @export
+#' @concept shiny
 ServeGrandR=function(data,
                    table=NULL,
                    sizes=NA,height=400,

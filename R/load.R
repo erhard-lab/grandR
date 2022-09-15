@@ -42,6 +42,8 @@
 #' table(fun(GeneInfo(sars)))
 #'
 #' @export
+#'
+#' @concept load
 ClassifyGenes=function(...,use.default=TRUE, drop.levels=TRUE, name.unknown="Unknown") {
   ll=list(...)
   ll=c(ll,list(
@@ -67,6 +69,7 @@ ClassifyGenes=function(...,use.default=TRUE, drop.levels=TRUE, name.unknown="Unk
 #' It is good practise to use these names if sensible.
 #'
 #' @export
+#' @concept load
 Design=list(
   has.4sU="has.4sU",
   conc.4sU="concentration.4sU",
@@ -118,6 +121,7 @@ Design=list(
 #' Coldata(sars)
 #'
 #' @export
+#' @concept load
 DesignSemantics=function(...) {
   ll=list(...)
   if (!"duration.4sU" %in% names(ll)) ll=c(ll,list(duration.4sU=Semantics.time))
@@ -138,6 +142,7 @@ DesignSemantics=function(...) {
 #'
 #' @export
 #'
+#' @concept load
 Semantics.time=function(s,name) {
   time=rep(NA,length(s))
 
@@ -192,6 +197,7 @@ Semantics.time=function(s,name) {
 #' coldata <- MakeColdata(c("Mock.0h.A","Mock.0h.B","Mock.2h.A","Mock.2h.B"),
 #'                                    design=c("Cell",Design$dur.4sU,Design$Replicate))
 #'
+#' @concept load
 MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep.originals=TRUE) {
   coldata=data.frame(Name=factor(names,levels=unique(names)),check.names=FALSE,stringsAsFactors = FALSE)
   spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
@@ -264,6 +270,7 @@ MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep
 #'
 #' @export
 #'
+#' @concept load
 ReadGRAND=function(prefix,
                    design=c(Design$Condition,Design$Replicate),
                    classify.genes=ClassifyGenes(),
@@ -439,6 +446,7 @@ GetTableQC=function(data,name) {
 #'
 #' @export
 #'
+#' @concept load
 ReadGRAND3=function(prefix,
                     design=NULL,
                     label="4sU",

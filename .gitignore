@@ -42,3 +42,4 @@ man/*.Rd
 # R Environment Variables
 .Renviron
 inst/doc
+docs

@@ -1,17 +1,11 @@
 ---
 title: "Working with data matrices and analysis results"
 output: 
-  rmarkdown::html_vignette:
+  html_document:
     toc: true
     df_print: kable
     fig_width: 7
     fig_height: 6
-      
-vignette: >
-  %\VignetteIndexEntry{Working with data matrices and analysis results}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
-  
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))

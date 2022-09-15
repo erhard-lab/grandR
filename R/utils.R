@@ -69,6 +69,8 @@ confint.nls.lm=function (object, parm, level = 0.95, ...)
 #' f2(4) # these are not equal, as rnorm is called twice
 #' f1(4)
 #' f1(4) # these are equal, as the result of rnorm is cached
+#'
+#' @concept helper
 Defer=function(FUN,...,add=NULL, cache=TRUE) {
   param=list(...)
   value=NULL
@@ -110,6 +112,7 @@ Defer=function(FUN,...,add=NULL, cache=TRUE) {
 #' print(fit)
 #' kinetics2vector(fit)
 #'
+#' @concept helper
 structure2vector=function(d,return.fields=NULL,return.extra=NULL) {
   r=list()
   if (!is.null(return.fields)) r=c(r,d[return.fields])
@@ -163,6 +166,7 @@ cnt=function(m) {
 #' @return a vector of dispersion parameters (to be used as size=1/dispersion for Xnbinom functions)
 #' @export
 #'
+#' @concept helper
 estimate.dispersion=function(ss) {
   dds=DESeq2::DESeqDataSetFromMatrix(countData = cnt(ss),colData=data.frame(rep(1,ncol(ss))),design = ~1)
   dds=DESeq2::estimateSizeFactors(dds)
@@ -187,6 +191,7 @@ GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fix
 #' @return a vector (psapply) or list (plapply)
 #' @export
 #'
+#' @concept helper
 psapply=function(...,seed=NULL) {simplify2array(plapply(...,seed=seed))}
 #' @rdname psapply
 #' @export
@@ -226,6 +231,7 @@ opt$nworkers=0
 #' @return No return value, called for side effects
 #' @export
 #'
+#' @concept helper
 SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
   opt$nworkers=cores
   if (cores>1) {
@@ -244,5 +250,6 @@ SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
 #'
 #' @return whether or not parallelism is activated
 #' @export
+#' @concept helper
 IsParallel=function() {opt$nworkers>1}
 

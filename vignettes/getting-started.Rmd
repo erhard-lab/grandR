@@ -1,0 +1,69 @@
+---
+title: "Getting started"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    df_print: kable
+    fig_width: 7
+    fig_height: 6
+      
+vignette: >
+  %\VignetteIndexEntry{Getting started}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+  
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
+```
+
+Here we will show a very basic example how to use grandR to perform differential gene expression analysis. For much more vignettes, see the [grandR website](https://grandr.erhard-lab.de).
+
+We will use data from [[1]](https://www.nature.com/articles/s41586-021-03689-8). These are SLAM-seq data from multiple time points (1h,2h,4h,6h and 20h) after acute depletion of BANP. BANP is a transcriptional activator that binds to unmethylated CGCG motifs in CpG island promoters. 
+
+We first load the grandR package and the read the GRAND-SLAM output table directly from zenodo:
+
+```{r warning=FALSE}
+suppressPackageStartupMessages({
+    library(grandR)
+    library(ggplot2)
+    library(patchwork)
+})
+data <- ReadGRAND("https://zenodo.org/record/6976391/files/BANP.tsv.gz",
+                  design=c("Cell","Experimental.time","Genotype",Design$dur.4sU,Design$has.4sU,Design$Replicate))
+```
+
+The GRAND-SLAM output contains any gene with at least 1 read, so let's filter this (by default: at least 100 reads in half of the samples)
+
+```{r}
+data <- FilterGenes(data)
+```
+
+Let's do a quick quality control and check the principal component analysis. We have to setup the `Condition` first to get nice colors:
+```{r}
+Condition(data) <- c("Genotype","Experimental.time.original","has.4sU")
+PlotPCA(data)
+```
+
+Now we perform differential gene expression analysis:
+```{r}
+# differential expression, see differential expression vignette
+contrasts <- GetContrasts(data,contrast=c("Experimental.time.original","0h"),columns = Genotype=='dTag')
+data <- LFC(data,name.prefix = "total",contrasts = contrasts)
+data <- PairwiseDESeq2(data,name.prefix = "total",contrasts = contrasts)
+data <- LFC(data,name.prefix = "new",contrasts = contrasts,mode="new", normalization = "total")
+data <- PairwiseDESeq2(data,name.prefix = "new",contrasts = contrasts,mode="new", normalization = "total")
+```
+
+The MA plots indicate that changes in new RNA are much more pronounced than changes in total RNA, even after 4h:
+
+```{r fig.height=3, fig.width=6, warning=FALSE}
+MAPlot(data,analysis = "total.4h vs 0h")|
+  MAPlot(data,analysis = "new.4h vs 0h")
+```
+
+We can easily obtain significantly differentially regulated genes (by default: Q<0.05 & abs(LFC)>=1):
+```{r}
+genes <- GetSignificantGenes(data,analysis = "new.4h vs 0h", criteria = Q<0.05 & LFC< -1)
+GetAnalysisTable(data,analyses = "4h vs 0h",genes = genes, columns = "LFC|Q", gene.info = FALSE)
+```

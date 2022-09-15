@@ -42,6 +42,7 @@
 #' SimulateReadsForSample(num.reads = 10000,rel.abundance = rep(1,5),ntr=0.9,seed=1337)
 #' # the second and third matrix should be equal, the first should be distinct
 #'
+#' @concept simulation
 SimulateReadsForSample=function(num.reads=2E7,
                                 rel.abundance=setNames(rlnorm(1E4,meanlog = 4.5,sdlog = 1),paste0("Gene",1:1E4)),
                                 ntr=setNames(rbeta(1E4,1.5,3),paste0("Gene",1:1E4)),
@@ -120,6 +121,7 @@ SimulateReadsForSample=function(num.reads=2E7,
 #' @return a grandR object containing the simulated data in its data slots and the true parameters in the gene annotation table
 #' @export
 #'
+#' @concept simulation
 SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,s.variation=1, d.variation=1, dispersion,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,conversion.reads=FALSE,verbose=TRUE,seed=NULL,...) {
 
   if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))

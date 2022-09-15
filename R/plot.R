@@ -13,6 +13,7 @@
 #' @return a density value for each point
 #' @export
 #'
+#' @concept helper
 density2d=function(x, y, facet=NULL, n=100, margin='n') {
   bandwidth.nrd.ex=function (x)
   {
@@ -57,6 +58,8 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #'
 #' @return a PCA plot
 #' @export
+#'
+#' @concept globalplot
 PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,columns=NULL) {
 
   aest=setup.default.aes(data,aest)
@@ -126,6 +129,7 @@ Transform=function(name,label=NULL){
 #'
 #' @export
 #'
+#' @concept globalplot
 Transform.no=function(label=" ") function(m) {re=m; attr(re,"label")=label; re}
 #' @rdname Transform.no
 #' @export
@@ -212,6 +216,7 @@ Transform.logFC=function(label="log2 FC",LFC.fun=lfc::PsiLFC,columns=NULL,...) {
 #'
 #' @export
 #'
+#' @concept globalplot
 PlotHeatmap=function(data,
                      type=DefaultSlot(data),
                      columns=NULL,
@@ -310,6 +315,7 @@ PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
 #' fun <- FormatCorrelation(method="spearman",p.format="%.4g")
 #' fun(data$x,data$y)
 #'
+#' @concept globalplot
 FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g") {
   function(x,y) {
     if (length(x)!=length(y)) stop("Cannot compute correlation, unequal lengths!")
@@ -383,6 +389,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @return a ggplot object with the data frame used as the df attribute
 #' @export
 #'
+#' @concept globalplot
 PlotScatter=function(data,
                      x=NULL, y=NULL, xcol=NULL,ycol=NULL, xlab=NULL, ylab=NULL,
                      log=FALSE, log.x=log, log.y=log,
@@ -614,6 +621,7 @@ PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=lfc::PsiLFC,hl.
 #' @param ... passed further to plot.fun
 #' @return ggplot objects
 #' @export
+#' @concept globalplot
 PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
   lapply(analyses,function(analysis) {
     re=plot.fun(data,analysis=analysis,...)
@@ -634,6 +642,7 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
 #' @param ... further parameters passed to \link{PlotScatter}
 #' @return a ggplot object
 #' @export
+#' @concept globalplot
 VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
                      label.numbers=TRUE,...) {
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
@@ -669,6 +678,7 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
 #' @param label.repel force to repel labels from points and each other (increase if labels overlap)
 #' @return a ggplot object
 #' @export
+#' @concept globalplot
 MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
                 lfc.cutoff=1,
                 label.numbers=TRUE,
@@ -720,6 +730,7 @@ MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
 #' @return a ggplot object
 #'
 #' @export
+#' @concept globalplot
 PlotTypeDistribution=function(data,mode.slot=DefaultSlot(data),relative=FALSE) {
 	df=GetTable(data,type=mode.slot)
 	df=sapply(levels(data$gene.info$Type),function(type) colSums(df[ data$gene.info$Type==type,]))
@@ -769,6 +780,7 @@ setup.default.aes=function(data,aest) {
 #' @seealso \link{GetData}, \link{PlotGeneTotalVsNtr},\link{PlotGeneGroupsPoints},\link{PlotGeneGroupsBars}
 #'
 #' @export
+#' @concept geneplot
 PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE,show.CI=FALSE,
                           aest=NULL,size=2) {
   aest=setup.default.aes(data,aest)
@@ -831,6 +843,7 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE
 #' @seealso \link{GetData}, \link{PlotGeneOldVsNew},\link{PlotGeneGroupsPoints},\link{PlotGeneGroupsBars}
 #'
 #' @export
+#' @concept geneplot
 PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE,show.CI=FALSE,
                             aest=NULL,size=2) {
   aest=setup.default.aes(data,aest)
@@ -892,6 +905,7 @@ PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TR
 #' @seealso \link{GetData}, \link{PlotGeneTotalVsNtr},\link{PlotGeneOldVsNew},\link{PlotGeneGroupsBars}
 #'
 #' @export
+#' @concept geneplot
 PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(data),
                               columns=NULL,
                               log=TRUE,
@@ -967,6 +981,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
 #' @seealso \link{GetData}, \link{PlotGeneTotalVsNtr},\link{PlotGeneOldVsNew},\link{PlotGeneGroupsBars}
 #'
 #' @export
+#' @concept geneplot
 PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.CI=FALSE,xlab=NULL) {
   if (length(slot)!=1) stop("Provide a single slot name!")
   slot=get.mode.slot(data,slot,allow.ntr = FALSE)$slot
@@ -1030,6 +1045,7 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.C
 #' @seealso \link{GetData}, \link{PlotGeneOldVsNew},\link{PlotGeneGroupsPoints},\link{PlotGeneGroupsBars}
 #'
 #' @export
+#' @concept geneplot
 PlotGeneSnapshotTimecourse=function(data,gene,time=Design$dur.4sU,
                             mode.slot=DefaultSlot(data),
                             columns=NULL,
@@ -1098,6 +1114,7 @@ PlotGeneSnapshotTimecourse=function(data,gene,time=Design$dur.4sU,
 #' @return a ggplot theme object
 #' @export
 #'
+#' @concept helper
 RotatateAxisLabels=function(angle=90) {
   theme(axis.text.x = element_text(angle = angle, vjust = if (abs(angle-90)<10) 0.5 else 1, hjust=1))
 }

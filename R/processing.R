@@ -51,6 +51,7 @@ comp.rpm=function(cmat,subset=NULL) {
 #' @return a new grandR object containing an additional slot
 #' @export
 #'
+#' @concept preprocess
 ComputeNtrPosteriorQuantile=function(data,quantile,name) {
   a=as.matrix(GetTable(data,type="alpha",name.by = "Gene"))
   b=as.matrix(GetTable(data,type="beta",name.by = "Gene"))
@@ -96,6 +97,7 @@ ComputeNtrPosteriorUpper=function(data,CI.size=0.95,name="upper") ComputeNtrPost
 #' @return a new grandR object with an additional slot or analysis
 #' @export
 #'
+#' @concept snapshot
 ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name, columns=NULL, max.HL=48, CI.size=0.95, compute.CI=FALSE, as.analysis=FALSE) {
   if (is.character(time) && length(time)==1) time=Coldata(data,time)
 
@@ -152,6 +154,7 @@ ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name, columns=NULL
 #' @return a new grandR object with an additional slot
 #' @export
 #'
+#' @concept preprocess
 ComputeAbsolute=function(data,dilution=4E4,volume=10,slot="tpm",name="absolute") {
   fd=data.frame(gene_short_name=Genes(data))
   rownames(fd)=Genes(data)
@@ -212,6 +215,7 @@ ComputeAbsolute=function(data,dilution=4E4,volume=10,slot="tpm",name="absolute")
 #'
 #' sars <- Normalize(sars)
 #' DefaultSlot(sars)
+#' @concept preprocess
 Normalize=function(data,genes=Genes(data),name="norm",slot="count",set.to.default=TRUE,size.factors=NULL,return.sf=FALSE) {
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,genes=genes,ntr.na = FALSE,name.by = "Gene"))
@@ -287,6 +291,7 @@ NormalizeTPM=function(data,genes=Genes(data),name="tpm",slot="count",set.to.defa
 #' # the Mock.no4sU or SARS.no4sU sample are the baselines for each sample
 #' sars <- NormalizeBaseline(sars,baseline=blmat)
 #' head(GetTable(sars,type="baseline"))
+#' @concept preprocess
 NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition==levels(Condition)[1]),name="baseline",slot=DefaultSlot(data),set.to.default=FALSE,LFC.fun=lfc::PsiLFC,...) {
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
@@ -316,6 +321,7 @@ NormalizeBaseline=function(data,baseline=FindReferences(data,reference=Condition
 #' @return a new grandR object with a new slot
 #' @export
 #'
+#' @concept preprocess
 Scale=function(data,name="scaled",slot=DefaultSlot(data),set.to.default=FALSE,group=NULL,center=TRUE,scale=TRUE) {
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
@@ -374,6 +380,7 @@ Scale=function(data,name="scaled",slot=DefaultSlot(data),set.to.default=FALSE,gr
 #' nrow(FilterGenes(sars,use=GeneInfo(sars,"Type")!="Cellular"))
 #' # These are the 11 viral genes.
 #'
+#' @concept preprocess
 FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.cond=NULL,use=NULL,keep=NULL,return.genes=FALSE) {
   if (!is.null(use) & !is.null(keep)) stop("Do not specify both use and keep!")
 
@@ -415,6 +422,7 @@ FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.c
 #' @return a new grandR object having the expression percentage in its Coldata table
 #' @export
 #'
+#' @concept data
 ComputeExpressionPercentage=function(data,name,genes,mode.slot=DefaultSlot(data),multiply.by.100=TRUE) {
   gof=colSums(GetTable(data,type=mode.slot,ntr.na = FALSE,genes = genes))
   total=colSums(GetTable(data,type=mode.slot,ntr.na = FALSE))

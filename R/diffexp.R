@@ -30,6 +30,7 @@
 #'
 #' @export
 #'
+#' @concept diffexp
 LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,target=~Condition,background=~1,no4sU=FALSE,columns=NULL,verbose=FALSE) {
   mode.slot=paste0(mode,".count")
   normalization=paste0(normalization,".count")
@@ -85,6 +86,7 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
 #'
 #' @export
 #'
+#' @concept helper
 ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbose=FALSE,FUN,...) {
   if (is.null(mode.slot)) stop("Need to specify mode.slot!")
 
@@ -134,6 +136,7 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #'                             contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
 #' head(GetAnalysisTable(sars))
 #'
+#' @concept diffexp
 LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiLFC, mode="total",
              normalization=NULL,
              verbose=FALSE,...) {
@@ -193,6 +196,8 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #'                               contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
 #' head(GetAnalysisTable(sars,column="Q"))
 #' }
+#'
+#' @concept diffexp
 PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode="total",
                         normalization=mode, logFC=FALSE, verbose=FALSE) {
   mode.slot=paste0(mode,".count")
@@ -351,6 +356,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #'                              dispersion=0.1)    # don't estimate dispersion in the example
 #' head(GetAnalysisTable(banp))
 #'
+#' @concept diffexp
 EstimateRegulation=function(data,name.prefix="Regulation",
                             contrasts,reference.columns,
                             slot=DefaultSlot(data),
@@ -596,6 +602,7 @@ hierarchical.beta.posterior=function(a,b,
 #' @seealso \link{AnalyzeGeneSets}
 #' @export
 #'
+#' @concept genesets
 ListGeneSets=function() {
   descr=c(
     H="Hallmark gene sets  are coherently expressed signatures derived by aggregating many MSigDB gene sets to represent well-defined biological states or processes.",
@@ -651,6 +658,7 @@ ListGeneSets=function() {
 #' # See the differential-expression vignette!
 #'
 #' @export
+#' @concept genesets
 AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
                          species = NULL, category = NULL, subcategory = NULL,
                          verbose=TRUE, minSize=10, maxSize=500,
@@ -721,6 +729,7 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
 #'
 #' @export
 #'
+#' @concept data
 GetSummarizeMatrix <- function (x, ...) {
   UseMethod("GetSummarizeMatrix", x)
 }
@@ -814,6 +823,7 @@ GetSummarizeMatrix.default=function(x,subset=NULL,average=TRUE,...) {
 #' # See the differential-expression vignette for more examples!
 #' @export
 #'
+#' @concept diffexp
 GetContrasts <- function (x, ...) {
   UseMethod("GetContrasts", x)
 }
