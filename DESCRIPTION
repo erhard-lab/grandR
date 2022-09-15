@@ -9,7 +9,7 @@ Authors@R: c(
 Description: Nucleotide conversion sequencing experiments have been
   developed to add a temporal dimension to RNA-seq and single-cell RNA-seq. Such 
   experiments require specialized tools for primary processing such as GRAND-SLAM,
-  (see Jürges et al <doi:10.1093/bioinformatics/bty256>) and specialized tools for 
+  (see 'Jürges et al' <doi:10.1093/bioinformatics/bty256>) and specialized tools for 
   downstream analyses. 'grandR' provides a comprehensive toolbox for quality control,
   kinetic modeling, differential gene expression analysis and visualization of such data.
 Author: Florian Erhard [aut, cre] (<https://orcid.org/0000-0002-3574-6983>),

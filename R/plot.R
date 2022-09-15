@@ -282,6 +282,9 @@ PlotHeatmap=function(data,
 }
 
 PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
+  # R CMD check guard for non-standard evaluation
+  name <- NULL
+
   mat=GetAnalysisTable(data,gene.info=FALSE,genes=names,columns='^Q$')
 	df=setNames(as.data.frame(mat<alpha & !is.na(mat)),gsub(".Q$","",names(mat)))
 	pl=switch(type[1],euler=eulerr::euler(df),venn=eulerr::venn(df))
@@ -595,7 +598,10 @@ PlotScatter=function(data,
 
 
 PlotExpressionTest=function(data,w4sU,no4sU,ylim=c(-1,1),LFC.fun=lfc::PsiLFC,hl.quantile=0.8) {
-	w=GetTable(data,type="count",columns=w4sU)[,1]
+  # R CMD check guard for non-standard evaluation
+  M <- lfc <- NULL
+
+  w=GetTable(data,type="count",columns=w4sU)[,1]
 	nn=no4sU
 	n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else GetTable(data,type="count",columns=nn)[,1]
 	use=!is.na(w+n)
@@ -645,6 +651,9 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
 #' @concept globalplot
 VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
                      label.numbers=TRUE,...) {
+  # R CMD check guard for non-standard evaluation
+  Q <- NULL
+
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",names(df)))
   g=PlotScatter(df,x=LFC,y=-log10(Q),remove.outlier = FALSE,...)+
@@ -685,6 +694,9 @@ MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
                 highlight=NULL,
                 label=NULL,
                 label.repel=1) {
+  # R CMD check guard for non-standard evaluation
+  M <- Q <- NULL
+
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
   if (is.numeric(analysis)) analysis=Analyses(data)[analysis]
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",gsub(".*.M","M",names(df))))
@@ -732,7 +744,10 @@ MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
 #' @export
 #' @concept globalplot
 PlotTypeDistribution=function(data,mode.slot=DefaultSlot(data),relative=FALSE) {
-	df=GetTable(data,type=mode.slot)
+  # R CMD check guard for non-standard evaluation
+  value <- Type <- NULL
+
+  df=GetTable(data,type=mode.slot)
 	df=sapply(levels(data$gene.info$Type),function(type) colSums(df[ data$gene.info$Type==type,]))
 	df=df[,colSums(df)>0]
 	if (relative) {
@@ -746,6 +761,9 @@ PlotTypeDistribution=function(data,mode.slot=DefaultSlot(data),relative=FALSE) {
 
 
 setup.default.aes=function(data,aest) {
+  # R CMD check guard for non-standard evaluation
+  Replicate <- NULL
+
   if (is.null(aest)) aest=aes()
   if (!is.null(Condition(data))) aest=utils::modifyList(aes(color=Condition),aest)
   if (!is.null(Coldata(data)$Replicate)) aest=utils::modifyList(aes(shape=Replicate),aest)
@@ -846,6 +864,9 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE
 #' @concept geneplot
 PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE,show.CI=FALSE,
                             aest=NULL,size=2) {
+  # R CMD check guard for non-standard evaluation
+  lower <- upper <- NULL
+
   aest=setup.default.aes(data,aest)
   if (length(slot)!=1) stop("Provide a single slot name!")
   slot=get.mode.slot(data,slot,allow.ntr = FALSE)$slot
@@ -911,6 +932,9 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
                               log=TRUE,
                               show.CI=FALSE,
                               aest=NULL,size=2) {
+  # R CMD check guard for non-standard evaluation
+  lower <- upper <- NULL
+
   aest=setup.default.aes(data,aest)
 
   if (length(group)!=1 && !group %in% names(Coldata(data))) stop("Group must be a name in the Coldata table!")
@@ -983,6 +1007,9 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
 #' @export
 #' @concept geneplot
 PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.CI=FALSE,xlab=NULL) {
+  # R CMD check guard for non-standard evaluation
+  Name <- Value <- mode.slot <- NULL
+
   if (length(slot)!=1) stop("Provide a single slot name!")
   slot=get.mode.slot(data,slot,allow.ntr = FALSE)$slot
 
@@ -1053,6 +1080,9 @@ PlotGeneSnapshotTimecourse=function(data,gene,time=Design$dur.4sU,
                             exact.tics=TRUE,
                             log=TRUE,
                             show.CI=FALSE,aest=NULL,size=2) {
+  # R CMD check guard for non-standard evaluation
+  x <- colour <- group <- Value <- ntr <- lower <- upper <- NULL
+
   aest=setup.default.aes(data,aest)
   if (length(slot)!=1) stop("Provide a single slot name!")
 

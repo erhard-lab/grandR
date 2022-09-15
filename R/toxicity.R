@@ -22,6 +22,9 @@
 #'
 #' @concept toxicity
 Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
+  # R CMD check guard for non-standard evaluation
+  no4sU <- NULL
+
   grp=NULL
   if (paired.replicates && Design$Replicate %in% names(Coldata(data))) grp=c(grp,Design$Replicate)
   if (Design$Condition %in% names(Coldata(data))) grp=c(grp,Design$Condition)
@@ -254,6 +257,9 @@ PlotToxicityTestLengthDeferAll=function(data,pairs=NULL,TU.len="TU.len",...) {
   setNames(lapply(names(pairs),function(n) Defer(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],TU.len = TU.len,add=ggtitle(n),height=4,...)),names(pairs))
 }
 PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",TU.len="TU.len") {
+  # R CMD check guard for non-standard evaluation
+  tulen <- lfc <- NULL
+
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=1,TU.len = TU.len)
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
@@ -328,6 +334,9 @@ PlotToxicityTestRankDeferAll=function(data,pairs=NULL,...) {
 #' @rdname toxicity
 #' @export
 PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",correction=1) {
+  # R CMD check guard for non-standard evaluation
+  covar <- lfc <- NULL
+
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(v) rank(v),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
@@ -352,6 +361,9 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
 #' @rdname toxicity
 #' @export
 PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,correction=1) {
+  # R CMD check guard for non-standard evaluation
+  covar <- lfc <- NULL
+
   time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   df=df[df$covar<quantile(df$covar[is.finite(df$covar)],hl.quantile) & df$ntr<1 & df$ntr>0,]

@@ -159,7 +159,10 @@ ReadOldMixMatrices=function(data,types=c("binom","binomOverlap"),...) {
 }
 
 ReadMixMatrices=function(data,...) {
-	t=read.tsv(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
+  # R CMD check guard for non-standard evaluation
+  Subread <- Label <- NULL
+
+  t=read.tsv(paste0(data$prefix,".conversion.knmatrix.tsv.gz"))
 	l=plyr::dlply(t,plyr::.(Condition,Subread,Label),function(s) {
 		m=reshape2::acast(k~n,data=s[,c("n","k","Count")],value.var="Count")
 		m[is.na(m)]=0
@@ -581,7 +584,10 @@ shape.adjust=function(ntr,global.par) {
 }
 
 PlotShapeAdjust=function(...) {
-    make.df=function(g) {
+  # R CMD check guard for non-standard evaluation
+  ntr <- shape.adj <- name <- gntr <- shape <- NULL
+
+  make.df=function(g) {
         df=data.frame(ntr=seq(0,0.99,by=0.01))
         df$shape.adj=shape.adjust(df$ntr,g)
         df$name=sprintf("ntr=%.2f shape=%.1f",g$ntr,g$shape)

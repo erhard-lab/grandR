@@ -61,6 +61,9 @@ ServeGrandR=function(data,
 
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
 	server=function(input, output,session) {
+	  # R CMD check guard for non-standard evaluation
+	  ddf <- NULL
+
 	  dttab=DT::datatable(df,
 	                      callback = DT::JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#downloadraw')); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
 	                      selection = 'single',

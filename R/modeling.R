@@ -1433,7 +1433,10 @@ TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
 #' @concept geneplot
 PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU, type=c("nlls","ntr","lm"),
                                        exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
-    if (length(ToIndex(data,gene))==0) return(NULL)
+  # R CMD check guard for non-standard evaluation
+  Value <- Type <- lower <- upper <- NULL
+
+  if (length(ToIndex(data,gene))==0) return(NULL)
 
     fit=switch(tolower(type[1]),
                ntr=FitKineticsGeneNtr(data,gene,slot=slot,time=time,...),
@@ -1564,7 +1567,10 @@ SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=s/d,min.time=-1,max.time=1
 #' PlotSimulation(SimulateKinetics(hl=2))
 #' @concept kinetics
 PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
-    if (!ntr) sim.df=sim.df[sim.df$Type!="NTR",]
+  # R CMD check guard for non-standard evaluation
+  Time <- Value <- Type <- NULL
+
+  if (!ntr) sim.df=sim.df[sim.df$Type!="NTR",]
     if (!old) sim.df=sim.df[sim.df$Type!="Old",]
     if (!new) sim.df=sim.df[sim.df$Type!="New",]
     if (!total) sim.df=sim.df[sim.df$Type!="Total",]

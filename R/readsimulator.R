@@ -123,6 +123,8 @@ SimulateReadsForSample=function(num.reads=2E7,
 #'
 #' @concept simulation
 SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,s.variation=1, d.variation=1, dispersion,num.reads=1E7,timepoints=c(0,0,0,1,1,1,2,2,2,4,4,4),beta.approx=FALSE,conversion.reads=FALSE,verbose=TRUE,seed=NULL,...) {
+  # R CMD check guard for non-standard evaluation
+  Name <- NULL
 
   if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))
 

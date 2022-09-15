@@ -62,6 +62,9 @@ GetDiagnosticParameters=function(data) {
 #'
 #' @concept diagnostics
 PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NULL)  {
+  # R CMD check guard for non-standard evaluation
+  x <- `Mismatch frequency` <- SenseCat <- Corrected <- NULL
+
   tab=GetTableQC(data,"mismatch.raw.position")
   clip=GetTableQC(data,"clip")
   clip=setNames(clip[,2],clip[,1])
@@ -141,6 +144,9 @@ PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NUL
 #'
 #' @concept diagnostics
 PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category=NULL) {
+  # R CMD check guard for non-standard evaluation
+  Sample <- x <- `Mismatch frequency` <- Corrected <- NULL
+
   tab=GetTableQC(data,"mismatch.raw.position")
   clip=GetTableQC(data,"clip")
   clip=setNames(clip[,2],clip[,1])
@@ -212,7 +218,10 @@ PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category
 #'
 #' @concept diagnostics
 PlotConversionFreq=function(data,category,max.columns=120) {
-if (is.null(category)) stop("No category defined; see GetDiagnosticParameters(data)$category for choices!")
+  # R CMD check guard for non-standard evaluation
+  Category <- Semantic <- Genomic <- Read <- Frequency <- NULL
+
+  if (is.null(category)) stop("No category defined; see GetDiagnosticParameters(data)$category for choices!")
   tab=GetTableQC(data,"conversion.freq")
   subr=GetTableQC(data,"subread")
   subr$Semantic=factor(as.character(subr$Semantic),levels=subr$Semantic)
@@ -426,6 +435,9 @@ PlotModelErr=function(data,label="4sU",estimator="Separate",model="Binom") {
 #'
 #' @concept diagnostics
 PlotModelShape=function(data,label="4sU",estimator="Separate") {
+  # R CMD check guard for non-standard evaluation
+  `TB-Binom shape` <- Subread <- `Lower TB-Binom shape` <- `Upper TB-Binom shape` <- NULL
+
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
   ncond=length(cond)
@@ -462,6 +474,9 @@ PlotModelShape=function(data,label="4sU",estimator="Separate") {
 #'
 #' @concept diagnostics
 PlotModelLabelTimeCourse=function(data,label="4sU",estimator="Separate") {
+  # R CMD check guard for non-standard evaluation
+  Time <- `Labeling efficiency` <- Subread <- NULL
+
   tab=GetTableQC(data,"model.parameters")
   e=GetTableQC(data,"experimentalDesign")
   cond=unique(tab$Condition)
@@ -547,6 +562,9 @@ PlotModelCompareErrPrior=function(data,label="4sU",estimator="Separate",model="B
 #'
 #' @concept diagnostics
 PlotModelCompareNtr=function(data,label="4sU",estimator="Separate") {
+  # R CMD check guard for non-standard evaluation
+  `Binom ntr` <- `TB-Binom ntr` <- Subread <- NULL
+
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
   ncond=length(cond)
@@ -577,6 +595,9 @@ PlotModelCompareNtr=function(data,label="4sU",estimator="Separate") {
 #'
 #' @concept diagnostics
 PlotModelCompareErr=function(data,label="4sU",estimator="Separate") {
+  # R CMD check guard for non-standard evaluation
+  `Binom p.err` <- `TB-Binom p.err` <- Subread <- NULL
+
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
   ncond=length(cond)
@@ -608,6 +629,9 @@ PlotModelCompareErr=function(data,label="4sU",estimator="Separate") {
 #'
 #' @concept diagnostics
 PlotModelCompareConv=function(data,label="4sU",estimator="Separate") {
+  # R CMD check guard for non-standard evaluation
+  `Binom p.conv` <- `TB-Binom p.err` <- `TB-Binom p.mconv` <- `TB-Binom shape` <- Subread <- NULL
+
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
   ncond=length(cond)
@@ -637,6 +661,9 @@ PlotModelCompareConv=function(data,label="4sU",estimator="Separate") {
 #'
 #' @concept diagnostics
 PlotModelCompareLL=function(data,label="4sU",estimator="Separate") {
+  # R CMD check guard for non-standard evaluation
+  `Binom log likelihood` <- `TB-Binom log likelihood` <- Subread <- NULL
+
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
   ncond=length(cond)
