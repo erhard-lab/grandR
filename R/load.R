@@ -263,7 +263,7 @@ MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep
 #' @seealso \link{ReadGRAND3},\link{ClassifyGenes},\link{MakeColdata},\link{DesignSemantics}
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
 #'                       design=c("Cell",Design$dur.4sU,Design$Replicate), verbose=TRUE)
 #' }

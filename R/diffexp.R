@@ -186,7 +186,7 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' @export
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
 #' sars <- subset(sars,Coldata(sars,Design$dur.4sU)==2)
