@@ -14,7 +14,7 @@ Install grandR using the following commands on the R console:
 
 ```
 install.packages("grandR")
-library(Seurat)
+library(grandR)
 ```
 
 You can also install the development version from github:
