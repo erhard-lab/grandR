@@ -1,4 +1,4 @@
-# grandR
+# grandR <a href='https://grandr.erhard-lab.de'><img src='man/figures/logo.png' align="right" height="138" /></a>
 
 Nucleotide conversion sequencing experiments have been
 developed to add a temporal dimension to RNA-seq and single-cell RNA seq. Such 
