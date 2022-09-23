@@ -94,7 +94,7 @@ grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$dat
 #' @rdname grandR
 #' @export
 VersionString=function() {
-  "grandR v0.1.0"
+  "grandR v0.2.0"
 }
 
 
