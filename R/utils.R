@@ -54,7 +54,8 @@ confint.nls.lm=function (object, parm, level = 0.95, ...)
 #' if \code{f} is called a second time, the previous result is returned. This makes sense if the parameter \code{d} is constant (like a grandR object)
 #' and if \code{Heavy.function} is deterministic.
 #'
-#' @details If additional parameters are provided to \code{f}, caching is disabled. Be careful if \code{Heavy.function} is not deterministic (see examples).
+#' @details If additional parameters are provided to \code{f}, caching is disabled. If any of these additional parameters has the same name as the parameters
+#' given to \code{Defer()}, the parameters given to \code{Defer()} are overwritten. Be careful if \code{Heavy.function} is not deterministic (see examples).
 #'
 #' @details Use case scenario: You want to produce a heatmap from a grandR object to be used as \code{plot.static} in the shiny web interface.
 #' \code{\link{PlotHeatmap}} takes some time, and the resulting object is pretty large in memory. Saving the heatmap object to disk is very
@@ -77,7 +78,7 @@ Defer=function(FUN,...,add=NULL, cache=TRUE) {
   function(data,...) {
     pp=list(...)
     if (length(pp)>0) {
-      re=do.call(FUN,c(list(data),param,pp))
+      re=do.call(FUN,c(list(data),utils::modifyList(param,pp)))
       if (!is.null(add)) for (e in if (methods::is(add,"gg")) list(add) else add) re=re+e
       return(re)
     }
