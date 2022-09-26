@@ -187,10 +187,10 @@ You might have noticed that the outlier filtering for one of the plots above (th
 ```{r fig.height=6, fig.width=6}
 x="total.6h vs 0h.LFC"
 y="total.2h vs 0h.LFC"
-(PlotScatter(banp,xcol=x,ycol=y,xlab="",ylab="") | 
-   PlotScatter(banp,xcol=x,ycol=y,xlab="",ylab="",remove.outlier = 10)) /
-  (PlotScatter(banp,xcol=x,ycol=y,xlab="",ylab="",remove.outlier = FALSE) | 
-     PlotScatter(banp,xcol=x,ycol=y,xlab="",ylab="",xlim=c(-2,0.5),ylim=c(-1,0.5)))
+(PlotScatter(banp,x=x,y=y,xlab="",ylab="") | 
+   PlotScatter(banp,x=x,y=y,xlab="",ylab="",remove.outlier = 10)) /
+  (PlotScatter(banp,x=x,y=y,xlab="",ylab="",remove.outlier = FALSE) | 
+     PlotScatter(banp,x=x,y=y,xlab="",ylab="",xlim=c(-2,0.5),ylim=c(-1,0.5)))
 ```
 
 A specific subset of genes (e.g., BANP targets found by ChIP-seq) can be highlighted and specific genes can be labeled:
