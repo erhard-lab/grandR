@@ -370,10 +370,11 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param layers.below list of ggplot geoms to add before adding the layer containing the points
 #'
 #' @details Both the x and y parameter are either expressions or names. Names are either sample (or cell, in case of single cell experiments) names or
-#' fully qualified analysis results (analysis name followed by a dot and the analysis result table column). These names can be used within expressions.
+#' fully qualified analysis results (analysis name followed by a dot and the analysis result table column). These names can be used within expressions using non-standard evaluation.
 #' Defining by names only works with character literals like "kinetics.Synthesis", but if you give an expression (e.g. a variable name that contains a character),
-#' this won't work, since PlotScatter will try to evaluate this for defining the values, not the name of the column. If you wanna define names, and use
-#' some expression for this, you need to use the xcol and ycol parameters instead of the x and y parameters!
+#' the situation is more complicated, since PlotScatter will try to evaluate this for defining the values, not the name of the column. If the expression evaluates
+#' into a singl character string that is equal to a name (see above!), PlotScatter knows what to do. For more complicated situations that cannot be resolved by this,
+#' you can use the xcol and ycol parameters instead of the x and y parameters!
 #'
 #' @details By default the limits of x and y axis are chosen after removing outliers (using the same algorithm used for \link{boxplot}). Thus, larger numbers filter
 #' less stringently. remove.outlier can also be set to FALSE (no outlier filtering). If xlim or ylim are set, this overrides outlier filtering. Points outside of the limits
