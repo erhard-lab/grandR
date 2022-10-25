@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
 
 One of the main applications of metabolic RNA labeling is to identify differentially expressed genes upon some perturbation [[1]](https://www.nature.com/articles/s41586-019-1369-y). The main benefit of using metabolic RNA labeling is that short-term changes can be resolved much better as compared to standard RNA-seq, since any changes of transcription that indeed happened are masked to some extent by pre-existing RNA. 
 
-To perform differential analyses for data from [[2]](https://www.nature.com/articles/s41586-021-03689-8). These are SLAM-seq data from multiple time points (1h,2h,4h,6h and 20h) after acute depletion of BANP. BANP is a transcriptional activator that binds to unmethylated CGCG motifs in CpG island promoters. 
+To perform differential analyses for data from [[2]](https://www.nature.com/articles/s41586-021-03689-8). These are SLAM-seq data from multiple time points (1h,2h,4h,6h and 20h) after acute depletion of BANP. BANP is a transcriptional activator that binds to unmethylated CGCG motifs in CpG island promoters. All code from this vignette runs within <3 minutes on a modern laptop (Ryzen Pro 7, 1TB Ram).
 
 # Loading data and QC
 
@@ -43,7 +43,7 @@ By default GRAND-SLAM will report data on all genes (with at least one mapped re
 ```{r}
 banp
 ```
-Thus, we filter to only include genes that have at least 100 reads in at least 6 samples:
+Thus, we filter to only include genes that have at least 100 reads in at least 11 samples:
 ```{r}
 banp <- FilterGenes(banp,minval = 100, mincol = 11) # as 100 reads and half of the sample is the default, this is identical to banp <- FilterGenes(banp)
 banp

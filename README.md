@@ -25,6 +25,23 @@ devtools::install_github("erhard-lab/grandR")
 library(grandR)
 ```
 
+# System Requirements
+grandR should be compatible with Windows, Mac, and Linux operating systems, but we recommend using grandR on a Linux machine, where it has been extensively tested (Ubuntu 22.04). Due to restrictions of the `parallel` package, parallelization (`SetParallel()`) does not work under Windows. grandR runs on standard laptops (multi-core CPUs are recommended and memory requirements depend on the size of your data sets). 
+
+Installing it via `install.packages` or `devtools::install_github` will make sure that the following packages are available:
+
+```
+stats, Matrix, ggplot2, grDevices, patchwork, plyr, parallel, reshape2, MASS, cowplot, minpack.lm, lfc, methods, utils, numDeriv
+```
+
+Additional packages are optional and important for particular functions:
+
+```
+knitr, rmarkdown, circlize, Seurat, ComplexHeatmap, ggrepel, RCurl, DESeq2, clusterProfiler, msigdbr, fgsea, rclipboard, cubature, lamW, DT, RColorBrewer, eulerr, gsl, htmltools, labeling, matrixStats, monocle, VGAM, quantreg, rlang, graphics, scales, shiny
+```
+
+With all dependencies available, installation of grandR typically takes less than a minute.
+
 # How to get started
 
 First have a look at the [Getting started](https://grandR.erhard-lab.de/articles/getting-started.html) vignette.

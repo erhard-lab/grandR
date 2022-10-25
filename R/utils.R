@@ -1,17 +1,20 @@
 
 
 read.tsv=function(t,verbose=FALSE,stringsAsFactors=TRUE,...) {
+
+  readit=function(file,...) if (requireNamespace("data.table",quietly = TRUE)) as.data.frame(data.table::fread(file = file,stringsAsFactors=FALSE,check.names=FALSE,...))
+
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
     file <- tempfile()
     if (verbose) cat("Downloading file...\n")
     download.file(url, file, quiet=!verbose)
     if (verbose) cat("Reading file...\n")
-    t=read.delim(file,stringsAsFactors=FALSE,check.names=FALSE,...)
+    t=readit(file,...)
     if (verbose) cat("Deleting temporary file...\n")
     unlink(file)
   } else {
     if (verbose) cat("Reading file...\n")
-    t=read.delim(t,stringsAsFactors=FALSE,check.names=FALSE,...)
+    t=readit(t,...)
   }
 
   if (stringsAsFactors==TRUE) t=as.data.frame(lapply(t,function(c) if (is.character(c)) factor(c,levels=unique(c)) else c),check.names=FALSE)

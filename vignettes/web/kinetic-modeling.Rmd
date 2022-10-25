@@ -19,7 +19,7 @@ $$
 $$
 Here $\sigma$ is the net synthesis rate of RNA and $\delta$ is the degradation rate. This differential equation can be solved analytically (see e.g. [[1]](https://academic.oup.com/bioinformatics/article/34/13/i218/5045735)). Based on this, there are several ways implemented in grandR to estimate both $\sigma$ and $\delta$. Here, we will see how to fit this model using non-linear least squares (NLLS) regression on the estimated new and old RNA levels [[2]](https://www.cell.com/molecular-cell/fulltext/S1097-2765(21)00496-2).
 
-To perform an analysis of the RNA dynamics for data from [3](https://www.nature.com/articles/s41586-021-03610-3), we first load the grandR package and the read the GRAND-SLAM output table directly from zenodo:
+To perform an analysis of the RNA dynamics for data from [3](https://www.nature.com/articles/s41586-021-03610-3), we first load the grandR package and then read the GRAND-SLAM output table directly from zenodo. All code from this vignette runs within <3 minutes on a modern laptop (Ryzen Pro 7, 1TB Ram).
 
 ```{r warning=FALSE}
 suppressPackageStartupMessages({
@@ -172,7 +172,7 @@ PlotGeneProgressiveTimecourse(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALS
 For both Mock and SARS, we see that new RNA from 1h is well below the model fit, i.e. has negative residual. This indicates that the effective labeling time was much lower than the nominal labeling time of 1h for these samples, i.e. that actually, these samples should move to the left. This can be rectified by temporal recalibration:
 
 ```{r}
-#sars <- CalibrateEffectiveLabelingTimeKineticFit(sars,steady.state=list(Mock=TRUE,SARS=FALSE),name.init = "init_time")
+#sars <- CalibrateEffectiveLabelingTimeKineticFit(sars,steady.state=list(Mock=TRUE,SARS=FALSE))
 # this takes a long time, we just use the optimized timepoint directly; feel free to uncomment and compare!
 Coldata(sars,"calibrated_time") <- c(0.0000000,0.2857464,1.6275374,1.4987246,2.5506585,4.0000000,0.0000000,0.3842279,2.0826150,1.8797744,2.9423108,4.0000000)
 ```
