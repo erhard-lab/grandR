@@ -25,9 +25,8 @@ GetDiagnosticParameters=function(data) {
   tab=GetTableQC(data,"model.parameters")
   labels=unique(as.character(tab$Label))
 
-  tab=GetTableQC(data,"model.profile")
-  samples=unique(as.character(tab$Condition))
-  subreads=unique(as.character(tab$Subread))
+  samples=unique(as.character(GetTableQC(data,"conversion.perr")$Condition))
+  subreads=as.character(GetTableQC(data,"subread")$Semantic)
 
   list(
      sample=samples,
@@ -35,7 +34,7 @@ GetDiagnosticParameters=function(data) {
      category=cats,
      label=labels,
      model=c("Binom","TB-Binom"),
-     estimator=c("Separate","Joint"),
+     estimator=c("Separate","Joint","MaskedError"),
      subread=subreads
     )
 }
@@ -211,13 +210,14 @@ PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category
 #'
 #' @param data the grandR object
 #' @param category show a specific category (see \link{GetDiagnosticParameters}); cannot be NULL
+#' @param sample compare subreads for a specific sample; can be NULL, then compare all samples per subread
 #' @param max.columns if there are more columns (samples for bulk, cells for single cell) than this, show boxplots instead of points
 #'
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
 #' @concept diagnostics
-PlotConversionFreq=function(data,category,max.columns=120) {
+PlotConversionFreq=function(data,category,sample=NULL,max.columns=120) {
   # R CMD check guard for non-standard evaluation
   Category <- Semantic <- Genomic <- Read <- Frequency <- NULL
 
@@ -231,19 +231,33 @@ PlotConversionFreq=function(data,category,max.columns=120) {
   tab=tab[tab$Category==category,]
 	ncond=nrow(tab)/nrow(unique(data.frame(tab$Genomic,tab$Read,tab$Semantic)))
 
-	if (ncond>=max.columns) {
-		max=max(plyr::ddply(tab,plyr::.(Category,Condition,Semantic,Genomic,Read),function(s) c(max=quantile(s$Frequency,0.99)))$max)
-		if (length(unique(tab$Condition))<ncond/100) {
-			g=ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,fill=Condition))+cowplot::theme_cowplot()+
-		    geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.4,outlier.size = 0.1)+facet_grid(Semantic~.,scales="free_y")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)+scale_fill_brewer(NULL,palette="Set2")+coord_cartesian(ylim=c(0,max))
-		} else {
-			g=ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency))+cowplot::theme_cowplot()+
-		    geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.8)+facet_grid(Semantic~.,scales="free_y")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)+coord_cartesian(ylim=c(0,max))
-		}
+	if (is.null(sample)) {
+	  if (ncond>=max.columns) {
+	    max=max(plyr::ddply(tab,plyr::.(Category,Condition,Semantic,Genomic,Read),function(s) c(max=quantile(s$Frequency,0.99)))$max)
+	    if (length(unique(tab$Condition))<ncond/100) {
+	      g=ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,fill=Condition))+cowplot::theme_cowplot()+
+	        geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.4,outlier.size = 0.1)+facet_grid(Semantic~.,scales="free_y")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)+scale_fill_brewer(NULL,palette="Set2")+coord_cartesian(ylim=c(0,max))
+	    } else {
+	      g=ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency))+cowplot::theme_cowplot()+
+	        geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.8)+facet_grid(Semantic~.,scales="free_y")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)+coord_cartesian(ylim=c(0,max))
+	    }
+	  } else {
+	    g=ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,color=Condition))+cowplot::theme_cowplot()+
+	      geom_hline(yintercept=0,linetype=2)+geom_point(position=position_dodge(width=0.7))+facet_grid(Semantic~.,scales="free_y")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)
+	  }
 	} else {
-		g=ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,color=Condition))+cowplot::theme_cowplot()+
-	    geom_hline(yintercept=0,linetype=2)+geom_point(position=position_dodge(width=0.7))+facet_grid(Semantic~.,scales="free_y")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)
+	  tab=tab[tab$Condition==sample,]
+	  if (ncond>=max.columns) {
+	    max=max(plyr::ddply(tab,plyr::.(Category,Semantic,Genomic,Read),function(s) c(max=quantile(s$Frequency,0.99)))$max)
+      g=ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,fill=Semantic))+cowplot::theme_cowplot()+
+        geom_hline(yintercept=0,linetype=2)+geom_boxplot(width=0.4,outlier.size = 0.1)+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)+scale_fill_brewer(NULL,palette="Set2")+coord_cartesian(ylim=c(0,max))
+	  } else {
+	    g=ggplot(tab,aes(paste0(Genomic,"->",Read),Frequency,color=Semantic))+cowplot::theme_cowplot()+
+	      geom_hline(yintercept=0,linetype=2)+geom_point(position=position_dodge(width=0.7))+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+xlab(NULL)+ggtitle(category)
+	  }
+
 	}
+
   list(plot=g,
        description="Show the percentage of all conversion types for all samples. In contrast to mismatches (see PlotMismatchPositionForSample and PlotMismatchPositionForType), the correct strand is already inferred for conversions, i.e. conversions refer to actual conversion events on RNA, whereas mismatches are observed events in mapped reads.",
        size=c(width=if (ncond>=max.columns) 10 else 5+ncond,height=7)
@@ -686,6 +700,7 @@ PlotModelCompareLL=function(data,label="4sU",estimator="Separate") {
 #' Shows the profile likelihoods for all parameters of the tbbinom model.
 #'
 #' @param data a grandR object
+#' @param label which estimator to consider (see \link{GetDiagnosticParameters}); cannot be NULL
 #' @param label which label to consider (see \link{GetDiagnosticParameters}); cannot be NULL
 #' @param sample which sample to consider (see \link{GetDiagnosticParameters}); cannot be NULL
 #' @param subread which subread to consider (see \link{GetDiagnosticParameters}); cannot be NULL
@@ -694,14 +709,15 @@ PlotModelCompareLL=function(data,label="4sU",estimator="Separate") {
 #' @export
 #'
 #' @concept diagnostics
-PlotProfileLikelihood=function(data,label="4sU",sample=NULL,subread=NULL) {
+PlotProfileLikelihood=function(data,label="4sU",estimator=NULL,sample=NULL,subread=NULL) {
 
+  if (is.null(estimator)) stop("No estimator defined; see GetDiagnosticParameters(data)$estimator for choices!")
   if (is.null(sample)) stop("No sample defined; see GetDiagnosticParameters(data)$sample for choices!")
   if (is.null(subread)) stop("No subread defined; see GetDiagnosticParameters(data)$subread for choices!")
 
 
-  tab=GetTableQC(data,"model.profile")
-  tab=tab[tab$Condition==sample & tab$Subread==subread & tab$Label==label,]
+  tab=if (is.data.frame(data)) data else GetTableQC(data,"model.profile")
+  tab=tab[tab$Condition==sample & tab$Subread==subread & tab$Label==label & tab$Estimator==estimator,]
 
 	plot1=function(x,y,ylab=y,xlab=NULL) {
 		t=tab[tab$Parameter==x,]
@@ -749,4 +765,123 @@ PlotProfileLikelihood=function(data,label="4sU",sample=NULL,subread=NULL) {
 	)
 }
 
+#' Convencience methods for creating QC pdfs
+#'
+#' These methods are invoked by GRAND3 to generate pdfs.
+#'
+#' @param data a grandR object
+#' @param labels which label to consider (see \link{GetDiagnosticParameters}); if NULL, all available estimators are used
+#' @param estimators which estimator to consider (see \link{GetDiagnosticParameters}); if NULL, all available estimators are used
+#'
+#' @return NULL
+#' @export
+#'
+#' @concept diagnostics
+#' @describeIn CreatePdfs Create all pdfs
+CreatePdfs=function(data,labels=NULL,estimators=NULL) {
+  CreatePdfsParameters(data,labels,estimators)
+  CreatePdfsComparison(data,labels,estimators)
+  CreatePdfsProfiles(data,labels,estimators)
+  invisible(NULL)
+}
 
+#' @describeIn CreatePdfs Create pdfs visualizing the estimated parameters
+#' @export
+CreatePdfsParameters=function(data,labels=NULL,estimators=NULL) {
+
+  tab=GetTableQC(data,"model.parameters")
+
+  cond=unique(tab$Condition)
+  ncond=length(cond)
+
+  if (!is.null(labels)) tab=tab[tab$Label %in% labels,]
+  if (!is.null(estimators)) tab=tab[tab$Estimator %in% estimators,]
+
+  for (lab in unique(tab$Label)) {
+    for (estimator in unique(tab$Estimator)) {
+
+      pdf(sprintf("%s.model.parameters.%s.%s.pdf",prefix,lab,estimator),width=3+ncond/2,height=7)
+      print(PlotModelNtr(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
+      print(PlotModelErr(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
+      print(PlotModelConv(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
+      if ("TB-Binom ntr" %in% names(tab)) {
+        print(PlotModelNtr(data,label=lab,estimator=estimator,model="TB-Binom")$plot+ggtitle(paste(lab," (tbbinom)")))
+        print(PlotModelErr(data,label=lab,estimator=estimator,model="TB-Binom")$plot+ggtitle(paste(lab," (tbbinom)")))
+        print(PlotModelConv(data,label=lab,estimator=estimator,model="TB-Binom")$plot+ggtitle(paste(lab," (tbbinom)")))
+        print(PlotModelShape(data,label=lab,estimator=estimator)$plot+ggtitle(paste(lab," (tbbinom")))
+        print(PlotModelLabelTimeCourse(data,label=lab,estimator=estimator)$plot+ggtitle(paste(lab," (tbbinom")))
+      }
+      g=dev.off()
+    }}
+
+  invisible(NULL)
+}
+
+#' @describeIn CreatePdfs Create pdfs comparing the estimated parameters
+#' @export
+CreatePdfsComparison=function(data,labels=NULL,estimators=NULL) {
+
+  tab=GetTableQC(data,"model.parameters")
+
+  cond=unique(tab$Condition)
+  ncond=length(cond)
+
+  if (!is.null(labels)) tab=tab[tab$Label %in% labels,]
+  if (!is.null(estimators)) tab=tab[tab$Estimator %in% estimators,]
+
+  for (lab in unique(tab$Label)) {
+    for (estimator in unique(tab$Estimator)) {
+
+      pdf(sprintf("%s.model.comparison.%s.%s.pdf",prefix,lab,estimator),width=9,height=7)
+      print(PlotModelCompareErrPrior(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
+      if ("TB-Binom ntr" %in% names(tab)) {
+        print(PlotModelCompareErrPrior(data,label=lab,estimator=estimator,model="TB-Binom")$plot+ggtitle(paste(lab," (tbbinom)")))
+        print(PlotModelCompareNtr(data,label=lab,estimator=estimator)$plot+ggtitle(lab))
+        print(PlotModelCompareErr(data,label=lab,estimator=estimator)$plot+ggtitle(lab))
+        print(PlotModelCompareConv(data,label=lab,estimator=estimator)$plot+ggtitle(lab))
+        print(PlotModelCompareLL(data,label=lab,estimator=estimator)$plot+ggtitle(lab))
+      }
+      g=dev.off()
+
+    }}
+
+  invisible(NULL)
+}
+
+
+
+#' @describeIn CreatePdfs Create pdfs visualizing the profile likelihoods
+#' @export
+CreatePdfsProfiles=function(data,labels=NULL,estimators=NULL) {
+
+  para=GetTableQC(data,"model.parameters")
+  tab=GetTableQC(data,"model.profile")
+  if (is.null(tab)) return(invisible(NULL))
+
+  cond=unique(para$Condition)
+  ncond=length(cond)
+
+  if (!is.null(labels)) tab=tab[tab$Label %in% labels,]
+  if (!is.null(estimators)) tab=tab[tab$Estimator %in% estimators,]
+  para = para[para$Label %in% unique(tab$Label),]
+  para = para[para$Estimator %in% unique(tab$Estimator),]
+  # only para has the right order!
+
+  subs=GetDiagnosticParameters(data)$subread
+
+  for (lab in unique(para$Label)) {
+    for (estimator in unique(para$Estimator)) {
+
+      pdf(sprintf("%s.model.profile.%s.%s.pdf",prefix,lab,estimator),width=21,height=16)
+      for (cond in unique(tab$Condition)) {
+        for (subread in subs) {
+          if (sum(tab$Label==lab & tab$Condition==cond & tab$Subread==subread & tab$Estimator==estimator)>0) {
+            print(PlotProfileLikelihood(tab,lab,estimator,cond,subread)$plot)
+          }
+        }
+      }
+      g=dev.off()
+    }}
+
+  invisible(NULL)
+}

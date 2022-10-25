@@ -447,9 +447,9 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
             #norm.fac=daply(df,.(Name),function(sub) s/d / sum(sub$Value))
             #modifier=data.frame(Name=names(norm.fac),Time=time,Norm.factor=norm.fac)
 
-            resi=res.fun.equi(model.p$par,odf[odf$use,],ndf[ndf$use,])
-            modval=c(odf[odf$use,"Value"],ndf[ndf$use,"Value"])-resi
-            residuals=data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=resi,Relative=resi/modval)
+            resi=res.fun.equi(model.p$par,odf,ndf)
+            modval=c(odf[,"Value"],ndf[,"Value"])-resi
+            residuals=data.frame(Name=c(as.character(odf$Name),as.character(ndf$Name)),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=resi,Relative=resi/modval)
         }
         total=sum(ndf$Value)+sum(odf$Value)
         list(data=df,
@@ -505,9 +505,9 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
             #})
             #
             #modifier=data.frame(Name=names(norm.fac),Time=time,Norm.factor=norm.fac)
-            resi=res.fun.nonequi(model.m$par,odf[odf$use,],ndf[ndf$use,])
-            modval=c(odf[odf$use,"Value"],ndf[ndf$use,"Value"])-resi
-            residuals=data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=resi,Relative=resi/modval)
+            resi=res.fun.nonequi(model.m$par,odf,ndf)
+            modval=c(odf[,"Value"],ndf[,"Value"])-resi
+            residuals=data.frame(Name=c(as.character(odf$Name),as.character(ndf$Name)),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=resi,Relative=resi/modval)
         }
         total=sum(ndf$Value)+sum(odf$Value)
         list(data=df,

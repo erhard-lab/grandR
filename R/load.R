@@ -394,6 +394,7 @@ GetTableQC=function(data,name) {
     if (!file.exists(fn2)) stop(paste0("Cannot find QC table ",fn," or ",fn2))
     fn = fn2
   }
+  if (!file.exists(fn)) return(NULL)
 
   header = !name %in% c("clip","strandness")
   read.tsv(fn,header=header)

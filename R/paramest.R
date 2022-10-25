@@ -347,13 +347,27 @@ ComputeCombinationLogLikelihood=function(llold,llnew) {
 	re=re-lchoose(length(a),0:length(a))
 	re
 }
-
+mask.MixMat=function(m,p_err=4E-4,max.frac=0.01) {
+  an=GetMixMatn(m)
+  ak=GetMixMatk(m)
+  re=sapply(an,function(n) {
+    re=unclass(m[0:n,n])[,1]
+    s=sum(re)
+    E=dbinom(0:n,prob = p_err,size=n)*s
+    first=min(c(which(E<max.frac*re),length(re)+1))
+    re[1:(first-1)]=NA
+    c(re,rep(0,max(ak)))[1:max(ak+1)]
+  })
+  rownames(re)=0:max(ak)
+  colnames(re)=an
+  structure(re[ak+1,],class="MixMatrix")
+}
 logLik.MixMat=function(m,fun,...) {
 	an=GetMixMatn(m)
 	ak=GetMixMatk(m)
 	re=sum(sapply(an,function(n) {
 		hak=ak[ak<=n]
-		sum(fun(hak,n,log=T,...)*unclass(m[hak,n]))
+		sum(fun(hak,n,log=T,...)*unclass(m[hak,n]),na.rm = TRUE)
 	}))
 	re
 }
@@ -427,32 +441,102 @@ binom.optim=function(mixmat,par,fix=c(F,F,F)) {
 
 
 tbbinom.optim=function(mixmat,par,fix=c(F,F,F,F)) {
-	fix=fix[1:4]
-	pp=unlist(par[c("ntr","p.err","p.mconv","shape")])
-	first=rep(0,length(fix))
-	first[!fix]=1:sum(!fix)
-	sel=function(p,i) if (fix[i]) pp[i] else p[first[i]]
+  fix=fix[1:4]
+  pp=unlist(par[c("ntr","p.err","p.mconv","shape")])
+  first=rep(0,length(fix))
+  first[!fix]=1:sum(!fix)
+  sel=function(p,i) if (fix[i]) pp[i] else p[first[i]]
 
-	start=0
-	optfun=function(p) logLik.MixMat(mixmat,dtbbinommix,ntr=sel(p,1),p.err=sel(p,2),p.mconv=sel(p,3),shape=sel(p,4))-start
-	start=optfun(pp[!fix])
+  start=0
+  optfun=function(p) logLik.MixMat(mixmat,dtbbinommix,ntr=sel(p,1),p.err=sel(p,2),p.mconv=sel(p,3),shape=sel(p,4))-start
+  start=optfun(pp[!fix])
 
-	if (sum(!fix)==1) {
-		l=c(0,0,0,-10)
-		u=c(1,MAX_ERR,1,10)
-		opt=optimize(optfun,maximum=TRUE,lower=l[!fix],upper=u[!fix])
-		re=list(convergence=0,par=setNames(opt$maximum,names(pp)[!fix]),value=opt$objective)
-	} else {
-		ui=cbind(c(1,-1,0,0,0,0),c(0,0,1,-1,0,0),c(0,0,0,0,1,-1),c(0,0,0,0,0,0))
-		ci=c(0,-1,0,-MAX_ERR,0,-1)
-		ui=ui[,!fix,drop=FALSE]
-		use=apply(ui!=0,1,any)
-		ui=ui[use,,drop=FALSE]
-		ci=ci[use]
-		re=constrOptim(pp[!fix],f=optfun,grad=NULL,ui=ui,ci=ci,control=list(fnscale=-1))
-	}
-	re$value=re$value+start
-	re
+  if (sum(!fix)==1) {
+    l=c(0,0,0,-10)
+    u=c(1,MAX_ERR,1,10)
+    opt=optimize(optfun,maximum=TRUE,lower=l[!fix],upper=u[!fix])
+    re=list(convergence=0,par=setNames(opt$maximum,names(pp)[!fix]),value=opt$objective)
+  } else {
+    ui=cbind(c(1,-1,0,0,0,0),c(0,0,1,-1,0,0),c(0,0,0,0,1,-1),c(0,0,0,0,0,0))
+    ci=c(0,-1,0,-MAX_ERR,0,-1)
+    ui=ui[,!fix,drop=FALSE]
+    use=apply(ui!=0,1,any)
+    ui=ui[use,,drop=FALSE]
+    ci=ci[use]
+    re=constrOptim(pp[!fix],f=optfun,grad=NULL,ui=ui,ci=ci,control=list(fnscale=-1))
+  }
+  re$value=re$value+start
+  re
+}
+
+
+binom.optim2=function(mixmat,par) {
+  p_err=unlist(par["p.err"])
+  mixmat=mask.MixMat(mixmat,p_err=p_err)
+  pp=unlist(par[c("p.conv")])
+
+  mlsse=function(v) if (length(v)==0) 0 else lsse(v)
+  ll=function(p) {
+    a=logLik.MixMat(mixmat,dbinom,prob=p)
+    b=sum(sapply(GetMixMatn(mixmat),function(n) {
+      v=unclass(mixmat[0:n,n])[,1]
+      mlsse(dbinom((0:n)[!is.na(v)],size=n,prob=p,log=TRUE))*sum(v[!is.na(v)])
+     }
+    ))
+    a-b
+  }
+  start=0
+  optfun=function(p) ll(p=p)-start
+  start=optfun(pp)
+
+  opt=optimize(optfun,maximum=TRUE,lower=0,upper=1)
+  re=list(convergence=0,par=setNames(opt$maximum,names(pp)),value=opt$objective)
+
+  re$value=re$value+start
+  re
+}
+
+
+tbbinom.optim2=function(mixmat,par,fix=c(F,F)) {
+  p_err=unlist(par["p.err"])
+  mixmat=mask.MixMat(mixmat,p_err=p_err)
+  fix=fix[1:2]
+  pp=unlist(par[c("p.mconv","shape")])
+  first=rep(0,length(fix))
+  first[!fix]=1:sum(!fix)
+  sel=function(p,i) if (fix[i]) pp[i] else p[first[i]]
+
+  #ll=function(p,D,kmin=2) sum(dbinom(D[D>=kmin],size=20,prob=p,log = TRUE) - lsse(dbinom(kmin:20,size=20,prob=p,log=TRUE)))
+  mlsse=function(v) if (length(v)==0) 0 else lsse(v)
+  ll=function(p,shape) {
+    a=logLik.MixMat(mixmat,dtbbinom,l=p_err,u=p,shape=shape)
+    b=sum(sapply(GetMixMatn(mixmat),function(n) {
+      v=unclass(mixmat[0:n,n])[,1]
+      mlsse(dtbbinom((0:n)[!is.na(v)],size=n,l=p_err,u=p,shape=shape,log=TRUE))*sum(v[!is.na(v)])
+    }
+    ))
+    a-b
+  }
+  start=0
+  optfun=function(p) ll(p=sel(p,1),shape=sel(p,2))-start
+  start=optfun(pp[!fix])
+
+  if (sum(!fix)==1) {
+    l=c(0,-10)
+    u=c(1,10)
+    opt=optimize(optfun,maximum=TRUE,lower=l[!fix],upper=u[!fix])
+    re=list(convergence=0,par=setNames(opt$maximum,names(pp)[!fix]),value=opt$objective)
+  } else {
+    ui=cbind(c(1,-1),c(0,0))
+    ci=c(0,-1)
+    ui=ui[,!fix,drop=FALSE]
+    use=apply(ui!=0,1,any)
+    ui=ui[use,,drop=FALSE]
+    ci=ci[use]
+    re=constrOptim(pp[!fix],f=optfun,grad=NULL,ui=ui,ci=ci,control=list(fnscale=-1))
+  }
+  re$value=re$value+start
+  re
 }
 
 

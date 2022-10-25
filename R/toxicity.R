@@ -61,6 +61,16 @@ MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],tran
 }
 
 
+#' Title
+#'
+#' @param data
+#' @param pairs
+#' @param TU.len
+#' @param ...
+#'
+#' @return
+#' @export
+#'
 ComputeBiasCorrectionFactors=function(data,pairs=Findno4sUPairs(data),TU.len=NULL,...) {
   if (is.null(TU.len)) {
     sapply(names(pairs),function(n) EstimateTranscriptionLoss(data,n,pairs[[n]],...))
