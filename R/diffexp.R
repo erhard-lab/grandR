@@ -1,4 +1,67 @@
 
+
+#' Compute the Bayesian information criterion (BIC)
+#'
+#' Compute the delta BIC for a list of potential models
+#'
+#' @param data A grandR object
+#' @param name the user defined analysis name to store the results
+#' @param mode either "total", "new" or "old"
+#' @param normalization normalize on "total", "new", or "old" (see details)
+#' @param formulas list of formulas specifying the models (you can use any column name from the \code{\link{Coldata}(data)})
+#' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
+#' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
+#' @param verbose Print status updates
+#'
+#' @details DESeq2 by default performs size factor normalization. When computing differential expression of new RNA,
+#' it might be sensible to normalize w.r.t. to total RNA, i.e. use the size factors computed from total RNA instead of computed from new RNA.
+#' This can be accomplished by setting mode to "new", and normalization to "total"!
+#'
+#' @return a new grandR object including a new analysis table. The columns of the new analysis table are named as <name in list>.dBIC
+#'
+#' @export
+#'
+#' @concept diffexp
+DESeq2BIC=function(data,name="BIC",mode="total",normalization=mode,formulas=list(Condition=~Condition, Background=~1),no4sU=FALSE,columns=NULL,verbose=FALSE) {
+  mode.slot=paste0(mode,".count")
+  normalization=paste0(normalization,".count")
+  if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
+
+  columns=if (is.null(columns)) no4sU | !Coldata(data)$no4sU else columns&(no4sU | !Coldata(data)$no4sU)
+
+  colData=droplevels(Coldata(data)[columns,])
+  mat=GetTable(data,type=mode.slot,columns = columns,ntr.na = FALSE)
+
+  norm.mat=as.matrix(GetTable(data,type=normalization,columns = columns))
+
+  colData=as.data.frame(lapply(colData,function(c) {
+    if (is.factor(c)) levels(c)=make.names(levels(c),unique = TRUE)
+    c
+  }))
+
+  df=sapply(names(formulas),function(name) {
+    formula=formulas[[name]]
+    if (verbose) cat(sprintf("Fitting %s...\n",name))
+    model.mat = stats::model.matrix.default(formula, data = Coldata(data))
+
+    dds <- DESeq2::DESeqDataSetFromMatrix(countData = cnt(mat),colData=colData,design = formula)
+    DESeq2::sizeFactors(dds)<-DESeq2::estimateSizeFactorsForMatrix(norm.mat)
+    dds <- DESeq2::DESeq(dds,quiet=!verbose)
+    #data.frame(
+    #  deviance = S4Vectors::mcols(dds)$deviance,
+    #  AIC = S4Vectors::mcols(dds)$deviance + ncol(model.mat)*2,
+    #  BIC = S4Vectors::mcols(dds)$deviance + ncol(model.mat)*ncol(mat)
+    #)
+    S4Vectors::mcols(dds)$deviance + ncol(model.mat)*ncol(mat)
+  })
+  df=as.data.frame(df-apply(df,1,min))
+  colnames(df)=paste0(colnames(df),'.dBIC')
+  rownames(df)=rownames(mat)
+  AddAnalysis(data,name = name,table = df)
+}
+
+
+
 #' Compute a likelihood ratio test.
 #'
 #' The test is computed on any of total/old/new counts using DESeq2 based on two nested models
@@ -10,7 +73,6 @@
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param target formula specifying the target model (you can use any column name from the \code{\link{Coldata}(data)})
 #' @param background formula specifying the background model (you can use any column name from the \code{\link{Coldata}(data)})
-#' @param no4sU Use no4sU columns (TRUE) or not (FALSE)
 #' @param columns logical vector of which columns (samples or cells) to use (or NULL: use all)
 #' @param verbose Print status updates
 #'
@@ -31,15 +93,18 @@
 #' @export
 #'
 #' @concept diffexp
-LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,target=~Condition,background=~1,no4sU=FALSE,columns=NULL,verbose=FALSE) {
+LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,target=~Condition,background=~1,columns=NULL,verbose=FALSE) {
   mode.slot=paste0(mode,".count")
   normalization=paste0(normalization,".count")
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
 
-  columns=if (is.null(columns)) no4sU | !Coldata(data)$no4sU else columns&(no4sU | !Coldata(data)$no4sU)
+  columns=substitute(columns)
+  columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
+  columns=Columns(data,columns)
+
 
 	colData=droplevels(Coldata(data)[columns,])
-	mat=GetTable(data,type=mode.slot,columns = columns)
+	mat=GetTable(data,type=mode.slot,columns = columns,ntr.na = FALSE)
 
 	norm.mat=as.matrix(GetTable(data,type=normalization,columns = columns))
 
@@ -51,16 +116,16 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,tar
 
 	dds <- DESeq2::DESeqDataSetFromMatrix(countData = cnt(mat),colData=colData,design = target)
 	DESeq2::sizeFactors(dds)<-DESeq2::estimateSizeFactorsForMatrix(norm.mat)
-	dds.tot <- DESeq2::DESeq(dds,test="LRT", reduced=background,quiet=!verbose)
-	res.tot <- DESeq2::results(dds.tot)
+	dds <- DESeq2::DESeq(dds,test="LRT", reduced=background,quiet=!verbose)
+	res <- DESeq2::results(dds)
 
 	df=data.frame(
-    M=res.tot$baseMean,
-    S=res.tot$stat,
-    P=res.tot$pvalue,
-    Q=p.adjust(res.tot$pvalue,method="BH")
+    M=res$baseMean,
+    S=res$stat,
+    P=res$pvalue,
+    Q=p.adjust(res$pvalue,method="BH")
   )
-
+  rownames(df)=rownames(mat)
   AddAnalysis(data,name = name,table = df)
 }
 
@@ -100,6 +165,43 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
   data
 }
 
+
+#' Log2 fold changes and Wald tests for differential expression
+#'
+#' This function is a shortcut for first calling \link{PairwiseDESeq2()} and then \link{LFC()}.
+#'
+#' @param data the grandR object
+#' @param name.prefix the prefix for the new analysis name; a dot and the column names of the contrast matrix are appended; can be NULL (then only the contrast matrix names are used)
+#' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
+#' @param LFC.fun function to compute log fold changes (default: \link[lfc]{PsiLFC}, other viable option: \link[lfc]{NormLFC})
+#' @param mode compute LFCs for "total", "new", or "old" RNA
+#' @param normalization normalize on "total", "new", or "old" (see details)
+#' @param verbose print status messages?
+#'
+#' @details Both \link[lfc]{PsiLFC} and  \link[lfc]{NormLFC}) by default perform normalization by subtracting the median log2 fold change from all log2 fold changes.
+#' When computing LFCs of new RNA, it might be sensible to normalize w.r.t. to total RNA, i.e. subtract the median log2 fold change of total RNA from all the log2 fold change of new RNA.
+#' This can be accomplished by setting mode to "new", and normalization to "total"!
+#'
+#' @return a new grandR object including a new analysis table. The columns of the new analysis table are
+#' \itemize{
+#'  \item{"M"}{the base mean}
+#'  \item{"S"}{the log2FoldChange divided by lfcSE}
+#'  \item{"P"}{the Wald test P value}
+#'  \item{"Q"}{same as P but Benjamini-Hochberg multiple testing corrected}
+#'  \item{"LFC"}{the log2 fold change}
+#' }
+#' @seealso \link{PairwiseDESeq2},\link{GetContrasts}
+#' @export
+#'
+Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, mode="total",
+               normalization=mode,
+               verbose=FALSE) {
+  data=LFC(data,name.prefix = name.prefix, contrasts = contrasts, LFC.fun = LFC.fun, mode=mode,normalization = normalization,verbose=verbose)
+  data=PairwiseDESeq2(data,name.prefix = name.prefix, contrasts = contrasts, mode=mode,normalization = normalization,verbose=verbose)
+  data
+
+}
+
 #' Estimation of log2 fold changes
 #'
 #' Estimate the log fold changes based on a contrast matrix, requires the LFC package.
@@ -113,7 +215,6 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param verbose print status messages?
 #' @param ... further arguments forwarded to LFC.fun
-
 #'
 #' @details Both \link[lfc]{PsiLFC} and  \link[lfc]{NormLFC}) by default perform normalization by subtracting the median log2 fold change from all log2 fold changes.
 #' When computing LFCs of new RNA, it might be sensible to normalize w.r.t. to total RNA, i.e. subtract the median log2 fold change of total RNA from all the log2 fold change of new RNA.
@@ -562,18 +663,24 @@ hierarchical.beta.posterior=function(a,b,
       #image(t(grid))
       #contour(t(grid),levels = (seq(0.05,0.95,by=0.05)))
       marginal = colSums(grid)
-      re$sample=function(N) {
+      re$sample.param=function(N) {
         ilogitmu=sample.int(length(marginal),N,replace = TRUE,prob = marginal)
-        ilogsize=sapply(1:N,function(i) sample.int(nrow(grid),1,replace = TRUE,prob = grid[,i]))
+        ilogsize=sapply(1:N,function(i) sample.int(nrow(grid),1,replace = TRUE,prob = grid[,ilogitmu[i]]))
         logitmu=mu.grid[ilogitmu]+runif(N,-(mu.grid[2]-mu.grid[1])/2,(mu.grid[2]-mu.grid[1])/2)
         logsize=size.grid[ilogsize]+runif(N,-(size.grid[2]-size.grid[1])/2,(size.grid[2]-size.grid[1])/2)
-        to.ab(logitmu,logsize)
+        cbind(a=unname(exp(logitmu+logsize)/(exp(logitmu)+1)),
+             b=unname(exp(logsize)/(exp(logitmu)+1)))
       }
       re$sample.mu=function(N) {
         ilogitmu=sample.int(length(marginal),N,replace = TRUE,prob = marginal)
         logitmu=mu.grid[ilogitmu]+runif(N,-(mu.grid[2]-mu.grid[1])/2,(mu.grid[2]-mu.grid[1])/2)
         exp(logitmu)/(exp(logitmu)+1)
       }
+      re$sample=function(N) {
+        para=re$sample.param(N)
+        rbeta(N,shape1=para[,1],shape2=para[,2])
+      }
+
     }
   }
 
@@ -583,6 +690,7 @@ hierarchical.beta.posterior=function(a,b,
     for (i in 2:length(a)) graphics::lines(x,pbeta(x,a[i],b[i]))
     graphics::lines(x,pbeta(x,re$a,re$b),col='black',lwd=2)
     if (!is.null(re$sample.mu)) graphics::lines(ecdf(re$sample.mu(10000)),col='red')
+    if (!is.null(re$sample)) graphics::lines(ecdf(re$sample(10000)),col='orange')
   }
   re
 }
@@ -802,7 +910,7 @@ GetSummarizeMatrix.default=function(x,subset=NULL,average=TRUE,...) {
 #' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition="x").
 #'
-#' @return A contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}
+#' @return A data frame representig a contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}
 #'
 #' @seealso \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}
 #'

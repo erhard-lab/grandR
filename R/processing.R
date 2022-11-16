@@ -98,7 +98,7 @@ ComputeNtrPosteriorUpper=function(data,CI.size=0.95,name="upper") ComputeNtrPost
 #' @export
 #'
 #' @concept snapshot
-ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name, columns=NULL, max.HL=48, CI.size=0.95, compute.CI=FALSE, as.analysis=FALSE) {
+ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name="HL", columns=NULL, max.HL=48, CI.size=0.95, compute.CI=FALSE, as.analysis=FALSE) {
   if (is.character(time) && length(time)==1) time=Coldata(data,time)
 
   ntrs=as.matrix(GetTable(data,type="ntr",name.by = "Gene"))
@@ -393,11 +393,10 @@ FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.c
     t=GetTable(data,type=mode.slot,summarize = summi)
     use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincol)
     if (!is.null(keep)) use = use | rownames(t) %in% rownames(t[keep,])
-  } else {
-    use=ToIndex(data,use)
   }
+  use=ToIndex(data,use)
 
-  if (return.genes) return(Genes(data,use))
+  if (return.genes) return(unname(use))
   return(data.apply(data,function(t) t[use,],fun.gene.info = function(t) t[use,]))
 }
 

@@ -751,6 +751,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 
     t=a[,time]
     use=t>0
+    names=a$Name[use]
     c=droplevels(a$Condition[use])
     a=a$Value[use]
     b=b$Value[use]
@@ -777,7 +778,6 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
         pbounds=if (equi) bounds else c(max(bounds[1],log(f0/total[ind])/t[ind]),bounds[2]) # ensure that: d> log(f0/total[ind])
         d=optimize(ploglik,pbounds,maximum=T)$maximum
         max=ploglik(d)
-        df=data.frame(alpha=a[ind],beta=b[ind],t=t[ind])
         if (exact.ci) {
             plik=function(x) pmax(0,sapply(x,function(xx) exp(loglik(xx,a=a[ind],b=b[ind],t=t[ind])-max)))
             inte = function(u) integrate(plik,pbounds[1],u)$value
@@ -797,12 +797,18 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
             s=median(ntr/(1-exp(-t*d))*d*total)
             s.low=median(ntr/(1-exp(-t*lower))*lower*total)
             s.up=median(ntr/(1-exp(-t*upper))*upper*total)
-        }
-        else {
+        } else {
             s=f0*d
             s.low=f0*lower
             s.up=f0*upper
         }
+
+        df=data.frame(Name=names,alpha=a,beta=b,t=t)
+        df$Quantile = pbeta(1-exp(-df$t*d),df$alpha,df$beta)
+        df$Expected.NTR=1-exp(-df$t*d)
+        df$Observed.NTR=(df$alpha-1)/(df$alpha+df$beta-2)
+        df$Absolute.Residual = df$Observed.NTR-df$Expected.NTR
+        df$Relative.Residual = df$Absolute.Residual/df$Expected.NTR
 
         list(data=df,
              Synthesis=s,
@@ -832,7 +838,7 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #' @param time.name The name in the column annotation table to put the calibrated labeling durations
 #' @param time.conf.name The name in the column annotation table to put the confidence values for the labeling durations (half-size of the confidence interval)
 #' @param CI.size The level for confidence intervals
-#' @param steady.state either a named list of logical values representing conditions in steady state or not, or a single logical value for all conditions
+#' @param compute.confidence should CIs be computed or not?
 #' @param n.estimate the times are calibrated with the top n expressed genes
 #' @param n.iter the maximal number of iterations for the numerical optimization
 #' @param verbose verbose output
@@ -854,12 +860,11 @@ FitKineticsGeneNtr=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU
 #' @export
 #'
 #' @concept recalibration
-CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",CI.size=0.95,steady.state=NULL,n.estimate=1000, n.iter=10000, verbose=FALSE,...) {
+CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),time=Design$dur.4sU,time.name="calibrated_time",time.conf.name="calibrated_time_conf",CI.size=0.95,compute.confidence=FALSE,n.estimate=1000, n.iter=10000, verbose=FALSE,...) {
 
     conds=Coldata(data)
     if (is.null(conds$Condition)) {
         conds$Condition=factor("Data")
-        if (length(steady.state)==1) names(steady.state)="Data"
     }
     re=matrix(NA,ncol=2,nrow=nrow(conds),dimnames = list(conds$Name,c(time.name,time.conf.name)))
     for (cond in levels(conds$Condition)) {
@@ -872,7 +877,7 @@ CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),ti
         totals=rowSums(GetTable(sub,type=slot))
         sub=FitKinetics(sub,type='nlls',slot=slot,time=time,return.fields="Half-life")
         HLs=GetAnalysisTable(sub,prefix.by.analysis = FALSE)$`Half-life`
-        HL.cat=cut(HLs,c(0,2,4,6,8,Inf),include.lowest = TRUE)
+        HL.cat=cut(HLs,c(seq(0,2*max(Coldata(data,time)),length.out=5),Inf),include.lowest = TRUE)
         fil=plyr::ddply(data.frame(Gene=Genes(sub),totals,HL.cat),plyr::.(HL.cat),function(s) {
            threshold=sort(s$totals,decreasing = TRUE)[min(length(s$totals),ceiling(n.estimate/length(unique(HL.cat))))]
            data.frame(Gene=s$Gene,use=s$totals>=threshold)
@@ -882,11 +887,12 @@ CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),ti
         sub=FilterGenes(sub,use=genes)
         sub=DropAnalysis(sub)
 
+        n.eval=0
         opt.fun=function(times) {
             tt=init
             tt[use]=times
             Coldata(sub,Design$dur.4sU)=tt
-            fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]],...)
+            fit=FitKinetics(sub,return.fields='logLik',slot=slot,...)
         #    fit=FitKinetics(sub,return.fields='logLik',slot=slot,steady.state=steady.state[[cond]])
             re=sum(GetAnalysisTable(fit,gene.info=FALSE)[,1])
         #    fit=FitKinetics(sub,return.fields='Half-life',compute.residuals=TRUE,slot=slot,steady.state=steady.state[[cond]],return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
@@ -898,6 +904,9 @@ CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),ti
             #cat(" ")
             #cat(re)
             #cat("\n")
+            n.eval<<-n.eval+1
+            if (verbose && n.eval%%10==0) cat(sprintf("Optimization round %d (current solution: %s, loglik: %.2f)...\n",n.eval,paste(sprintf("%.2f",times),collapse = ","),re))
+
             re
         }
 
@@ -908,19 +917,25 @@ CalibrateEffectiveLabelingTimeKineticFit=function(data,slot=DefaultSlot(data),ti
         opt.fun2=function(min) -opt.fun(init[use]-min)
         mini=optimize(opt.fun2,interval=c(0,min(init[use])))$minimum
         init[use]=init[use]-mini
+        if (verbose) cat(sprintf("First step done.\n"))
 
         #fit=optim(init[use],fn=opt.fun,hessian=FALSE, control=list(fnscale=-1,maxit=n.iter),method="Nelder-Mead")
-        fit=optim(init[use],fn=opt.fun,hessian=FALSE, control=list(fnscale=-1,maxit=n.iter),method="Nelder-Mead")
-        if (fit$convergence!=0) stop(sprintf("Did not converge!"))
-        fit$hessian=numDeriv::hessian(opt.fun,fit$par)
-        conf=try(sd.from.hessian(fit$hessian)*qnorm(1-(1-CI.size)/2),silent=TRUE)
+        ui=diag(length(init[use]))
+        ci=rep(0,length(init[use]))
+        fit=constrOptim(init[use],f=opt.fun,ui=ui,ci=ci,hessian=FALSE, control=list(fnscale=-1,maxit=n.iter),method="Nelder-Mead")
+        if (fit$convergence!=0) warning(sprintf("Did not converge for %s. Maybe increase n.iter!",cond))
 
         tt=init
         tt[use]=fit$par
         re[as.character(Coldata(sub)$Name),time.name]=tt
         tt=rep(0,length(tt))
-        tt[use]=conf
-        re[as.character(Coldata(sub)$Name),time.conf.name]=tt
+
+        if (compute.confidence) {
+          fit$hessian=numDeriv::hessian(opt.fun,fit$par)
+          conf=try(sd.from.hessian(fit$hessian)*qnorm(1-(1-CI.size)/2),silent=TRUE)
+          tt[use]=conf
+          re[as.character(Coldata(sub)$Name),time.conf.name]=tt
+        }
     }
     data=Coldata(data,re)
     data
@@ -1277,7 +1292,7 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
     }
 
     if (hierarchical) {
-        mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample.mu
+        mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample
     } else {
         fit=beta.approximate.mixture(alpha$Value,beta$Value)
         mod=function(N) rbeta(N,fit$a,fit$b)
@@ -1467,13 +1482,12 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
     }
     df$time=df[[time]]
 
-
     if (tolower(type[1])=="ntr") {
         #fac=unlist(lapply(as.character(df$Condition),function(n) fit[[n]]$f0))/df$Value[df$Type=="Total"]
         fac=unlist(lapply(1:nrow(df),function(i) {
-            n=as.character(df$Condition)[i]
+            fit=if(is.null(Condition(data))) fit[[gene]] else fit[[as.character(df$Condition)[i]]]
             tt=df$time[i]
-            f.old.nonequi(tt,fit[[n]]$f0,fit[[n]]$Synthesis,fit[[n]]$Degradation)+f.new(tt,fit[[n]]$Synthesis,fit[[n]]$Degradation)
+            f.old.nonequi(tt,fit$f0,fit$Synthesis,fit$Degradation)+f.new(tt,fit$Synthesis,fit$Degradation)
         }))/df$Value[df$Type=="Total"]
         df$Value=df$Value*fac
         if (show.CI) {

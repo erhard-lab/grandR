@@ -35,6 +35,7 @@ confint.nls.lm=function (object, parm, level = 0.95, ...)
   m2[parm, ]
 }
 
+equal = function(a,b) length(a)==length(b) && all(a==b)
 
 #' Defer calling a function
 #'

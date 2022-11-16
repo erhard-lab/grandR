@@ -51,7 +51,7 @@ ServeGrandR=function(data,
 
   if (!is.list(plot.gene)) plot.gene=list(plot.gene)
   if (length(plot.gene)==0) plot.gene=list(PlotGeneOldVsNew)
-  if (length(sizes)==1 & is.na(sizes)) sizes=rep(floor(12/min(4,length(plot.gene))),length(plot.gene))
+  if (length(sizes)==1 && is.na(sizes)) sizes=rep(floor(12/min(4,length(plot.gene))),length(plot.gene))
   if (length(sizes)!=length(plot.gene)) stop("sizes need to be length 1 or same length as plots!")
   sizes=c(sizes,rep(1,8))
 
@@ -64,7 +64,9 @@ ServeGrandR=function(data,
 	  # R CMD check guard for non-standard evaluation
 	  ddf <- NULL
 
-	  dttab=DT::datatable(df,
+	  df.rounded = as.data.frame(lapply(df,function(v) if(is.numeric(v)) round(v,5) else v),check.names=FALSE,stringsAsFactors = FALSE)
+
+	  dttab=DT::datatable(df.rounded,
 	                      callback = DT::JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#downloadraw')); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
 	                      selection = 'single',
 	                      rownames = FALSE,
@@ -154,6 +156,7 @@ ServeGrandR=function(data,
 	    output[[paste0(n,"plot")]]=create(n)
 	  }
 
+	  highlighted.genes <- shiny::reactiveValues(genes = c())
 	  for (n in names(plot.global)) {
 	    create=function(n) {
 	      env=new.env()
@@ -168,7 +171,7 @@ ServeGrandR=function(data,
 	        if (is.null(w)) w=7*100
 	        w
 	      }
-	      shiny::renderPlot({plot.global[[n]](data)},width=getwidth,height=getheight,env=env)
+	      shiny::renderPlot({plot.global[[n]](data,highlight=highlighted.genes$genes,label=df[[df.identifier]][input$tab_rows_selected])},width=getwidth,height=getheight,env=env)
 	    }
 	    output[[make.names(paste0(n,"plotset"))]]=create(n)
 	    e=new.env()
@@ -179,8 +182,19 @@ ServeGrandR=function(data,
 	      brushgenes=rownames(shiny::brushedPoints(ddf, input[[make.names(paste0(n,"plotsetbrush"))]]))
 	      shiny::updateTextAreaInput(session, make.names(paste0(n,"plotsetgenes")), value = paste(brushgenes,collapse="\n"), label=sprintf("Selected genes (n=%d)",length(brushgenes)))
 	    },env=e)
-
 	  }
+
+	  lapply(names(plot.global),function(n) {
+	    observeEvent(input[[make.names(paste0(n,"sethighlight"))]], {
+	      highlighted.genes$genes <- strsplit(input[[make.names(paste0(n,"plotsetgenes"))]],"\n")[[1]]
+	      session$resetBrush(make.names(paste0(n,"plotsetbrush")))
+	    })
+
+	    shiny::observeEvent(input[[make.names(paste0(n,"addhighlight"))]], {
+	      highlighted.genes$genes <- c(highlighted.genes$genes,strsplit(input[[make.names(paste0(n,"plotsetgenes"))]],"\n")[[1]])
+	      session$resetBrush(make.names(paste0(n,"plotsetbrush")))
+	    })
+	  })
 
 	  if (show.sessionInfo) output$sessionInfo <- shiny::renderPrint({
 	    capture.output(sessionInfo())
@@ -207,7 +221,11 @@ ServeGrandR=function(data,
 	  plist=c(lapply(names(plot.global),function(n) shiny::tabPanel(n,
 	                                                       shiny::fluidRow(
 	                                                         shiny::column(8,shiny::plotOutput(make.names(paste0(n,"plotset")),brush = shiny::brushOpts(id = make.names(paste0(n,"plotsetbrush"))))),
-	                                                         shiny::column(4,shiny::textAreaInput(make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40))
+	                                                         shiny::column(4,
+	                                                                       shiny::textAreaInput(make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40),
+	                                                                       shiny::actionButton(make.names(paste0(n,"sethighlight")), label="Set highlight"),
+	                                                                       shiny::actionButton(make.names(paste0(n,"addhighlight")), label="Add highlight")
+	                                                                       )
 	                                                      )
 	  )),list(title="Global level"))
 
@@ -292,8 +310,8 @@ ServeGrandR=function(data,
 
 	  htmltools::tags$script(htmltools::HTML(sprintf("
         	var header = $('.navbar> .container-fluid');
-          header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">%s</span></div>')",
-        	                         VersionString()
+          header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">grandR v%s</span></div>')",
+	                                                 packageVersion("grandR")
         	)))
 	)
 

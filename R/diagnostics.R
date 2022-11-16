@@ -88,6 +88,9 @@ PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NUL
 	lab1=labeling::extended(1,max1,5)
 	lab2=labeling::extended(1,max2,5)
 
+	tab$Read=factor(tab$Read,levels=c("A","C","G","T"))
+	tab$Genomic=factor(tab$Genomic,levels=c("A","C","G","T"))
+
 	ymax=quantile(tab$`Mismatch frequency`,0.99,na.rm=TRUE)*1.2
 	g=ggplot(tab,aes(x,`Mismatch frequency`,color=SenseCat,linetype=factor(Corrected),group=interaction(SenseCat,Corrected)))+
 	  cowplot::theme_cowplot()
@@ -345,6 +348,13 @@ PlotModelConv=function(data,label="4sU",estimator="Separate",model="Binom") {
   cond=unique(tab$Condition)
   ncond=length(cond)
 
+etbeta_save=function(l=0,u=1,s1=1,s2=1) {
+	use=is.finite(l+u+s1+s2)
+	re=rep(NA,length(l))
+	if (sum(use)>0)	re[use]=etbeta(l[use],u[use],s1[use],s2[use])
+	re
+}
+
   tab=tab[tab$Label==label & tab$Estimator==estimator,]
 
 	if (model[1]=="TB-Binom") {
@@ -354,10 +364,10 @@ PlotModelConv=function(data,label="4sU",estimator="Separate",model="Binom") {
 		qq=function(s) paste0("`",s,"`")
 
 		tab2=tab
-		tab2$`TB-Binom p.mconv`=etbeta(tab2$`TB-Binom p.err`,tab2$`TB-Binom p.mconv`,exp(tab$`TB-Binom shape`),exp(-tab$`TB-Binom shape`))
+		tab2$`TB-Binom p.mconv`=etbeta_save(tab2$`TB-Binom p.err`,tab2$`TB-Binom p.mconv`,exp(tab$`TB-Binom shape`),exp(-tab$`TB-Binom shape`))
 		if (lower %in% names(tab)) {
-			tab2$`Lower TB-Binom p.mconv`=etbeta(tab2$`Lower TB-Binom p.err`,tab2$`Lower TB-Binom p.mconv`,exp(tab2$`Lower TB-Binom shape`),exp(-tab2$`Lower TB-Binom shape`))
-			tab2$`Upper TB-Binom p.mconv`=etbeta(tab2$`Upper TB-Binom p.err`,tab2$`Upper TB-Binom p.mconv`,exp(tab2$`Upper TB-Binom shape`),exp(-tab2$`Upper TB-Binom shape`))
+			tab2$`Lower TB-Binom p.mconv`=etbeta_save(tab2$`Lower TB-Binom p.err`,tab2$`Lower TB-Binom p.mconv`,exp(tab2$`Lower TB-Binom shape`),exp(-tab2$`Lower TB-Binom shape`))
+			tab2$`Upper TB-Binom p.mconv`=etbeta_save(tab2$`Upper TB-Binom p.err`,tab2$`Upper TB-Binom p.mconv`,exp(tab2$`Upper TB-Binom shape`),exp(-tab2$`Upper TB-Binom shape`))
 			tab=rbind(cbind(Type="Max",tab),cbind(Type="Mean",tab2))
 			g=ggplot(tab,aes_string("Condition",qq(param),color="Subread",shape="Type",ymin=qq(lower),ymax=qq(upper)))+cowplot::theme_cowplot()+
 			  geom_errorbar(width=0.1,position=position_dodge(width=0.2))+geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_shape_manual(NULL,values=c(Max=1,Mean=19))
