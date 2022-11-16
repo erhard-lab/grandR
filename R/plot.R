@@ -343,6 +343,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param data the grandR object (can also be a plain data frame)
 #' @param x an expression to compute the x value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param y an expression to compute the y value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
+#' @param analysis the name of an analysis table (can be NULL)
 #' @param xcol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param ycol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param xlab the label for x (can be NULL, then the x parameter is used)
@@ -351,6 +352,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param log.x  if TRUE, use log scale for the x axis
 #' @param log.y  if TRUE, use log scale for the y axis
 #' @param remove.outlier configure how outliers are selected (is the coef parameter to \link[grDevices]{boxplot.stats}); can be FALSE, in which case no points are considered outliers (see details)
+#' @param lim define the both x and y axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param xlim define the x axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param ylim define the y axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param size the point size to use
@@ -370,10 +372,11 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param layers.below list of ggplot geoms to add before adding the layer containing the points
 #'
 #' @details Both the x and y parameter are either expressions or names. Names are either sample (or cell, in case of single cell experiments) names or
-#' fully qualified analysis results (analysis name followed by a dot and the analysis result table column). These names can be used within expressions using non-standard evaluation.
+#' fully qualified analysis results (analysis name followed by a dot and the analysis result table column). If the analysis parameter is given, the analysis
+#' name must be omitted from x and y. These names can be used within expressions using non-standard evaluation.
 #' Defining by names only works with character literals like "kinetics.Synthesis", but if you give an expression (e.g. a variable name that contains a character),
 #' the situation is more complicated, since PlotScatter will try to evaluate this for defining the values, not the name of the column. If the expression evaluates
-#' into a singl character string that is equal to a name (see above!), PlotScatter knows what to do. For more complicated situations that cannot be resolved by this,
+#' into a single character string that is equal to a name (see above!), PlotScatter knows what to do. For more complicated situations that cannot be resolved by this,
 #' you can use the xcol and ycol parameters instead of the x and y parameters!
 #'
 #' @details By default the limits of x and y axis are chosen after removing outliers (using the same algorithm used for \link{boxplot}). Thus, larger numbers filter
@@ -395,9 +398,9 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #'
 #' @concept globalplot
 PlotScatter=function(data,
-                     x=NULL, y=NULL, xcol=NULL,ycol=NULL, xlab=NULL, ylab=NULL,
+                     x=NULL, y=NULL, analysis=NULL,xcol=NULL,ycol=NULL, xlab=NULL, ylab=NULL,
                      log=FALSE, log.x=log, log.y=log,
-                     remove.outlier=1.5, xlim=NULL, ylim=NULL,
+                     remove.outlier=1.5, lim=NULL,xlim=lim, ylim=lim,
                      size=0.3,
                      genes=NULL,highlight=NULL, label=NULL, label.repel=1,
                      facet=NULL,
@@ -405,7 +408,11 @@ PlotScatter=function(data,
                      correlation=NULL,correlation.x=-Inf,correlation.y=Inf,correlation.hjust=0.5,correlation.vjust=0.5,
                      layers.below=NULL) {
   if (is.grandR(data)) {
-    df=cbind(GetAnalysisTable(data,gene.info = FALSE),GetTable(data,type=DefaultSlot(data)),GeneInfo(data))
+    if (!is.null(analysis)) {
+      df=cbind(GetAnalysisTable(data,analyses = analysis,regex=FALSE,prefix.by.analysis = FALSE,gene.info = FALSE),GeneInfo(data))
+    }else{
+      df=cbind(GetAnalysisTable(data,gene.info = FALSE),GetTable(data,type=DefaultSlot(data)),GeneInfo(data))
+    }
     if (!is.null(genes)) df=df[ToIndex(data,genes),]
   } else {
     df=as.data.frame(data)
@@ -536,14 +543,14 @@ PlotScatter=function(data,
   if (!is.null(highlight)) {
     if (is.list(highlight)){
       for (col in names(highlight)) {
-        g=g+geom_point(data=df[highlight[[col]],],color=col,size=size*2)
+        g=g+geom_point(data=df[highlight[[col]],],color=col,size=size*3)
       }
     } else {
-      g=g+geom_point(data=df[highlight,],color='red',size=size*2)
+      g=g+geom_point(data=df[highlight,],color='red',size=size*3)
     }
   }
   if (!is.null(label)) {
-    df2=df[ToIndex(data,label),]
+    df2=df[if (is.grandR(data)) ToIndex(data,label) else label,]
     df2$label=if (is.character(label)) label else rownames(df2)[label]
     g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE,max.overlaps = Inf,min.segment.length = 0,force=label.repel)
   }
@@ -908,6 +915,7 @@ PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TR
 #' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
 #' @param aest parameter to set the visual attributes of the plot
 #' @param size the point size used for plotting; overridden if size is defined via aest
+#' @param transform function that is called on the data frame directly before plotting (can be NULL)
 #'
 #' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes} or  \link[ggplot2]{aes_string}.
 #'
@@ -932,7 +940,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
                               columns=NULL,
                               log=TRUE,
                               show.CI=FALSE,
-                              aest=NULL,size=2) {
+                              aest=NULL,size=2,transform=NULL) {
   # R CMD check guard for non-standard evaluation
   lower <- upper <- NULL
 
@@ -958,6 +966,9 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
     df=GetData(data,genes=gene,mode.slot=c(slot,"ntr"),columns=columns,by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
     df$value=switch(mode[1],total=df[[slot]],new=df[[slot]]*df[["ntr"]],old=df[[slot]]*(1-df[["ntr"]]),stop(paste0(mode," unknown!")))
   }
+
+  if (!is.null(transform)) df=transform(df)
+
   g=ggplot(df,utils::modifyList(aes_string(group,"value"),aest))+cowplot::theme_cowplot()
   if (!is.null(aest$size)) g=g+geom_point(position=if(show.CI) position_dodge(width=0.4) else "identity") else g=g+geom_point(size=size,position=if(show.CI) position_dodge(width=0.4) else "identity")
   g=g+xlab(NULL)+
@@ -992,6 +1003,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
 #' @param columns which columns (i.e. samples or cells) to show (see details)
 #' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
 #' @param xlab The names to show at the x axis;
+#' @param transform function that is called on the data frame directly before plotting (can be NULL)
 #'
 #' @details xlab can be given as a character vector or an expression that evaluates into a character vector.
 #' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
@@ -1007,7 +1019,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
 #'
 #' @export
 #' @concept geneplot
-PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.CI=FALSE,xlab=NULL) {
+PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.CI=FALSE,xlab=NULL,transform=NULL) {
   # R CMD check guard for non-standard evaluation
   Name <- Value <- mode.slot <- NULL
 
@@ -1023,6 +1035,8 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.C
   xlab=substitute(xlab)
   xlab=if (is.null(xlab)) df$Name else eval(xlab,df,parent.frame())
   df$xlab=xlab
+
+  if (!is.null(transform)) df=transform(df)
 
   g=ggplot(df,aes(Name,Value,fill=mode.slot))+
     cowplot::theme_cowplot()+

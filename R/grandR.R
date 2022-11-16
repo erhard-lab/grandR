@@ -35,6 +35,9 @@ NULL
 #' @param f The name of the annotation table according to which the object is split or the new annotation table column name denoting the origin after merging
 #' @param list a list of grandR objects
 #' @param column.name a new name for the Coldata table to annotate the merged objects
+#' @param map named list or vector representing a lookup table (names are current column names)
+#' @param fun a function that maps a vector of names to a new vector of names
+#' @param s1,s2 column names
 #' @param drop unused
 #' @param ... further arguments to be passed to or from other methods.
 #'
@@ -61,6 +64,9 @@ NULL
 #'   \item{print}{Print information on this grandR object}
 #'   \item{subset}{Create a new grandR object with a subset of the columns (use \code{\link{FilterGenes}} to subset on genes)}
 #'   \item{split}{Split the grandR object into a list of multiple grandR objects (according to the levels of an annotation table column)}
+#'   \item{RenameColumns}{Rename the column names according to a lookup table (map) or a function (invoked on the current names)}
+#'   \item{SwapColumns}{Swap the order of two columns (samples or cells)}
+#'   \item{Metadata}{Obtain global metadata}
 #'   \item{merge}{Merge several grandR objects into one}
 #' }
 #'
@@ -93,13 +99,6 @@ grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$dat
 
 #' @rdname grandR
 #' @export
-VersionString=function() {
-  "grandR v0.2.0"
-}
-
-
-#' @rdname grandR
-#' @export
 Title=function(data) {
   x=strsplit(data$prefix,"/")[[1]]
   x[length(x)]
@@ -118,8 +117,7 @@ dimnames.grandR=function(x) dimnames(x$data$count)
 #' @export
 print.grandR=function(x,...) {
   cat(
-  sprintf("grandR: %s\nRead from %s\n%d genes, %d samples/cells\nAvailable data slots: %s\nAvailable analyses: %s\nAvailable plots: %s\nDefault data slot: %s\n",
-          x$metadata$Description,
+  sprintf("grandR:\nRead from %s\n%d genes, %d samples/cells\nAvailable data slots: %s\nAvailable analyses: %s\nAvailable plots: %s\nDefault data slot: %s\n",
           x$prefix,
           nrow(x),
           ncol(x),
@@ -129,7 +127,9 @@ print.grandR=function(x,...) {
           DefaultSlot(x))
 )
 }
-
+#' @rdname grandR
+#' @export
+Metadata=function(x,...) {x$metadata}
 
 #' Internal function to apply functions to all slots etc.
 #'
@@ -176,6 +176,30 @@ split.grandR=function(x,f=Design$Condition,drop=FALSE,...) {
   re$coldata[[Design$Origin]]=c; re }),levels(col))
 }
 
+#' @rdname grandR
+#' @export
+RenameColumns=function(data,map=NULL,fun=NULL) {
+  if (!is.null(fun)) {
+    map=setNames(sapply(colnames(data),fun),colnames(data))
+  }
+  names=rownames(data$coldata)
+  names[names %in% names(map)]=unlist(map[names[names %in% names(map)]])
+  rownames(data$coldata)=names
+  data$coldata$Name=factor(names,levels = names)
+  data.apply(data,function(m) {colnames(m)=names; m})
+}
+#' @rdname grandR
+#' @export
+SwapColumns=function(data,s1,s2) {
+  i1=if(is.numeric(s1)) s1 else which(rownames(data$coldata)==s1)
+  i2=if(is.numeric(s2)) s2 else which(rownames(data$coldata)==s2)
+  return(data.apply(data,function(t) {
+    tmp=t[,i1]
+    t[,i1]=t[,i2]
+    t[,i2]=tmp
+    t
+  }))
+}
 
 #' @rdname grandR
 #' @export
@@ -190,9 +214,33 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
     if (!is.null(names(list))) add$coldata[[column.name]]=names(list)[i]
     if (any(colnames(add) %in% colnames(re))) stop("Sample names must be unique!")
     if (any(rownames(add)!=rownames(re))) stop("Data sets must have the same genes!")
-    if (any(colnames(add$coldata)!=colnames(re$coldata))) stop("Data sets have distinct coldata columns!")
+    #if (any(colnames(add$coldata)!=colnames(re$coldata))) stop("Data sets have distinct coldata columns!")
     if (!all(names(add$data) %in% names(re$data))) stop("Data sets must have the same data tables!")
-    re$coldata=rbind(re$coldata,add$coldata)
+
+    # merge coldata paying attention to columns and factor levels
+    cd=NULL
+    for (common in intersect(names(re$coldata),names(add$coldata))) {
+      if(is.factor(re$coldata[[common]])) {
+        r = c(as.character(re$coldata[[common]]),as.character(add$coldata[[common]]))
+        r=factor(r,levels=union(levels(re$coldata[[common]]),levels(add$coldata[[common]])))
+      } else {
+        r = c(re$coldata[[common]],add$coldata[[common]])
+      }
+      df=setNames(data.frame(r),common)
+      cd=if (is.null(cd)) df else cbind(cd,df)
+    }
+    for (re.only in setdiff(names(re$coldata),names(add$coldata))) {
+      r=c(re$coldata[[re.only]],rep(NA,nrow(add$coldata)))
+      df=setNames(data.frame(r),re.only)
+      cd=if (is.null(cd)) df else cbind(cd,df)
+    }
+    for (add.only in setdiff(names(add$coldata),names(re$coldata))) {
+      r=c(rep(NA,nrow(re$coldata)),add$coldata[[add.only]])
+      df=setNames(data.frame(r),add.only)
+      cd=if (is.null(cd)) df else cbind(cd,df)
+    }
+    rownames(cd)=c(rownames(re$coldata),rownames(add$coldata))
+    re$coldata=cd
 
     for (n in names(re$data)) re$data[[n]]=cbind(re$data[[n]],add$data[[n]])
 
@@ -598,6 +646,9 @@ ToIndex=function(data,gene,regex=FALSE) {
     warning("There were NA genes, removed!");
     gene=gene[!is.na(gene)]
   }
+  if (is.factor(gene)) gene = as.character(gene) # god, I hate factors
+
+
   if (regex) gene=grepl(gene,data$gene.info$Gene)|grepl(gene,data$gene.info$Symbol)
   if (is.null(gene)) return(1:nrow(data))
   if (is.numeric(gene)) return(gene)
@@ -876,7 +927,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
     if (length(spl)>1) {tno=spl[1]; mode.slot=spl[2];}
     mf = switch(tolower(substr(tno,1,1)),t=1,n=as.matrix(data$data$ntr[genes,columns]),o=1-as.matrix(data$data$ntr[genes,columns]),stop(paste0(mode.slot," unknown!")))
     if (!ntr.na) {
-      mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
+      mf[is.na(mf)|is.nan(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
     }
     conv=if (mode.slot=="count") function(m) {mode(m) <- "integer";m} else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
@@ -1086,7 +1137,7 @@ Analyses=function(data, description=FALSE) {
 #' @export
 AddAnalysis=function(data,name,table,warn.present=TRUE) {
   if (!is.data.frame(table)) stop("Cannot add; analysis table must be a data frame!")
-  if (!all(Genes(data,rownames(table))==Genes(data))) stop("Analysis table must contain row names corresponding to all genes!")
+  if (!equal(Genes(data,rownames(table)),Genes(data))) stop("Analysis table must contain row names corresponding to all genes!")
   if (is.null(data$analysis)) data$analysis=list()
   if (is.null(data$analysis[[name]])) {
     data$analysis[[name]]=table

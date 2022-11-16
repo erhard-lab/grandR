@@ -33,7 +33,7 @@ Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
 
   pairs=pairs[as.character(data$coldata$Name[!data$coldata$no4sU])]
   if (any(sapply(pairs,function(a) length(a)==0))) warning("There were samples without corresponding no4sU sample!")
-  pairs=pairs[sapply(pairs,function(a) length(a)>0)]
+  if (discard.no4sU) pairs=pairs[sapply(pairs,function(a) length(a)>0)]
   if (length(pairs)==0) stop("No no4sU pairs found!")
   pairs
 }
@@ -60,6 +60,48 @@ MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],tran
   df
 }
 
+ComputeToxicityStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE,do.bootstrap=FALSE,seed=1337) {
+  re=data.frame(Name=colnames(data))
+  re$`Corresponding no4sU`=sapply(re$Name,function(n) paste(pairs[[n]],collapse=","))
+
+  re$`Mean LFC`=NA
+  for (n in names(pairs)) {
+    re$`Mean LFC`[re$Name==n]=mean(abs(lfc::PsiLFC(rowSums(GetTable(data,type="count",columns=n)),rowSums(GetTable(data,type="count",columns=pairs[[n]])))))
+  }
+
+  l=EstimateTranscriptionLoss(data,pairs=pairs,bootstrap=FALSE)
+  re$`Transcription Loss`=l[colnames(data)]
+  if (do.bootstrap) {
+    l=apply(psapply(1:100,function(i) EstimateTranscriptionLoss(data,pairs=pairs,bootstrap=TRUE),seed=seed),1,sd)
+    re$`Transcription Loss.SE`=l[colnames(data)]
+  }
+
+  if (d$metadata$`GRAND-SLAM version`==3) {
+    tab=GetTableQC(data,"model.parameters")
+    tab=tab[tab$Label==tab$Label[1] & tab$Estimator==tab$Estimator[1],]
+    for (sub in unique(tab$Subread)) {
+      m=setNames(tab$`Binom p.conv`[tab$Subread==sub],tab$Condition[tab$Subread==sub])
+      re[[paste("p.conv",sub)]]=m[colnames(data)]
+    }
+  } else {
+    tab=GetTableQC(data,"rates")
+    m=unlist(tab[tab$Rate=="single_new",-1])
+    re$`p.conv single`=m[colnames(data)]
+    re$`p.conv single`[Coldata(data,"no4sU")]=NA
+    m=unlist(tab[tab$Rate=="double_new",-1])
+    if (any(m!=0)) {
+      re$`p.conv double`=m[colnames(data)]
+      re$`p.conv double`[Coldata(data,"no4sU")]=NA
+    }
+
+  }
+
+  re$`Fraction labeled`=colSums(GetTable(data,type='new.count',gene.info = FALSE,ntr.na = FALSE))/colSums(GetTable(data,type='count',gene.info = FALSE,ntr.na = FALSE))
+  if (coldata) re=cbind(Coldata(data),re[,-1])
+  re
+}
+
+
 
 #' Title
 #'
@@ -71,15 +113,16 @@ MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],tran
 #' @return
 #' @export
 #'
-ComputeBiasCorrectionFactors=function(data,pairs=Findno4sUPairs(data),TU.len=NULL,...) {
+EstimateTranscriptionLoss=function(data,pairs=Findno4sUPairs(data),...) {
+  TU.len=NULL
   if (is.null(TU.len)) {
-    sapply(names(pairs),function(n) EstimateTranscriptionLoss(data,n,pairs[[n]],...))
+    sapply(names(pairs),function(n) EstimateTranscriptionLossForSample(data,n,pairs[[n]],...))
   } else {
-    sapply(names(pairs),function(n) EstimateTranscriptionLossLen(data,n,pairs[[n]],TU.len=TU.len,...))
+    sapply(names(pairs),function(n) EstimateTranscriptionLossLenForSample(data,n,pairs[[n]],TU.len=TU.len,...))
   }
 }
 
-CorrectBiasHLFactor=function(data,pairs=Findno4sUPairs(data),factors=ComputeBiasCorrectionFactors(data,pairs=pairs,...),...) {
+CorrectBiasHLFactor=function(data,pairs=Findno4sUPairs(data),factors=EstimateTranscriptionLoss(data,pairs=pairs,...),...) {
   n=if(is.matrix(factors)) ncol(factors) else length(factors)
   for (i in 1:n) {
     if (is.matrix(factors)) {
@@ -98,7 +141,7 @@ CorrectBiasHLFactor=function(data,pairs=Findno4sUPairs(data),factors=ComputeBias
     # assume all other tables are expression tables!
     for (n in setdiff(names(data$data),c("count","ntr","alpha","beta"))) data$data[[n]][,names(pairs)[i]] = data$data[[n]][,names(pairs)[i]]+f*data$data[[n]][,names(pairs)[i]]*ntr
 
-    data$data$ntr[,names(pairs)[i]] = (ntr*count+f*ntr*count)/(count+f*count*ntr)
+    data$data$ntr[,names(pairs)[i]] = ifelse(ntr==0,0,(ntr*count+f*ntr*count)/(count+f*count*ntr))
     ntr=data$data$ntr[,names(pairs)[i]]
     data$data$alpha[,names(pairs)[i]]=ntr*(a+b-2)+1
     data$data$beta[,names(pairs)[i]]=a+b-1-ntr*(a+b-2)
@@ -196,7 +239,7 @@ CorrectBiasHLLen = function(data,pairs=Findno4sUPairs(data),LFC.fun=lfc::NormLFC
 }
 
 
-EstimateTranscriptionLossLen = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::NormLFC,TU.len) {
+EstimateTranscriptionLossLenForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::NormLFC,TU.len) {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun,TU.len=TU.len)
   df$tulen[is.na(df$tulen)]=median(df$tulen,na.rm=TRUE)
   obj=function(par) {
@@ -211,7 +254,7 @@ EstimateTranscriptionLossLen = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::No
   setNames(optim(c(0.01,0.5),obj)$par,c("p","f"))
 }
 
-EstimateTranscriptionLoss = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::NormLFC, type=c("quantreg","spearman","linear","lowess"),bootstrap=FALSE) {
+EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::NormLFC, type=c("spearman","quantreg","linear","lowess"),bootstrap=FALSE) {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun)
 
   if (bootstrap) df = df[sample.int(nrow(df),nrow(df),replace=TRUE),]
@@ -343,7 +386,7 @@ PlotToxicityTestRankDeferAll=function(data,pairs=NULL,...) {
 
 #' @rdname toxicity
 #' @export
-PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",correction=1) {
+PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",correction=1,label.corr=TRUE,boxplot.bins=10) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
@@ -357,7 +400,8 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
   p=if (p<2.2E-16) p = bquote("<"~2.2 %*% 10^-16) else p = sprintf("= %.2g",p)
   df$lfc=ifelse(df$lfc<ylim[1],-Inf,df$lfc)
   df$lfc=ifelse(df$lfc>ylim[2],+Inf,df$lfc)
-  ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
+
+  re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide='none')+
     geom_point(alpha=1)+
@@ -365,7 +409,17 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
     #geom_smooth(method="loess",formula=y~x)+
     xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
     coord_cartesian(ylim=ylim)+
-    ggtitle(w4sU,subtitle = bquote(rho == .(rho) ~ "," ~ p ~ .(p)))
+    ggtitle(w4sU,subtitle = if (label.corr) bquote(rho == .(rho) ~ "," ~ p ~ .(p)))
+  if (!is.na(boxplot.bins) && boxplot.bins>1) {
+    bin=max(df$covar)/boxplot.bins
+    df$cat=floor((df$covar-1)/bin)*bin+bin/2
+    pp=kruskal.test(lfc~cat,data=df)$p.value
+    pp=if (pp<2.2E-16) pp = bquote("<"~2.2 %*% 10^-16) else pp = sprintf("= %.2g",pp)
+    re=re+
+      geom_boxplot(data=df,mapping=aes(x=cat,color=NULL,group=factor(cat)),color="black",fill=NA,outlier.shape = NA,size=1)+
+      ggtitle(w4sU,subtitle = if (label.corr) bquote(rho == .(rho) ~ "," ~ p ~ .(p) ~ ", Kruskall-Wallis" ~ p ~ .(pp)))
+  }
+  re
 }
 
 #' @rdname toxicity
@@ -383,7 +437,7 @@ PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,
   }
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
     cowplot::theme_cowplot()+
-    scale_color_viridis_c(name = "Density",guide=FALSE)+
+    scale_color_viridis_c(name = "Density",guide="none")+
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+
    # geom_smooth(method="loess")+

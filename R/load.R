@@ -62,6 +62,35 @@ ClassifyGenes=function(...,use.default=TRUE, drop.levels=TRUE, name.unknown="Unk
 }
 
 
+check.and.make.unique = function(v,ref=NULL,label="entries",ref.label="reference") {
+  if (!is.null(ref) && (any(is.na(ref) | ref==""))) stop("References must be unique")
+  if (!is.null(ref) && (length(ref)!=length(v))) stop("References have invalid length")
+
+  if (any(is.na(v) | v=="")) {
+    if (!is.null(ref)) stop(sprintf("When %s are empty, %s must be provided!",label,ref.label))
+    warning(sprintf("%d %s are empty, replacing by %s ids!",sum(is.na(v) | c==""),label),call. = FALSE,immediate. = TRUE)
+    v[is.na(v) | v==""]=ref[is.na(v) | v==""]
+  }
+
+  if (anyDuplicated(v)) {
+    ext = ""
+    if (is.null(ref) || anyDuplicated(ref)) ext = sprintf(" Cannot guarantee maintaining consistency for %s across reading several files, watch out if you merge grandR objects!",label)
+    dupp=table(v)
+    dupp=names(dupp)[which(dupp>1)]
+    warning(sprintf("Duplicate %s (e.g. %s) present, making unique!%s",label,paste(head(dupp),collapse=","),ext),call. = FALSE,immediate. = TRUE)
+
+    if (!is.null(ref)) {
+      df=data.frame(id=1:length(v),v=as.character(v),ref=as.character(ref),stringsAsFactors = FALSE)
+      df=df[order(df$ref),]
+      df$v=make.unique(df$v)
+      df=df[order(df$id),]
+      v=df$v
+    } else {
+      v=make.unique(v)
+    }
+  }
+  v
+}
 
 #' A list of predefined names for design vectors
 #'
@@ -97,8 +126,9 @@ Design=list(
 #' @details Each function takes two parameters, the first being the original column in the \code{Coldata} table column, the second being its name.
 #'
 #' @details Semantics.time is such a predefined function: Contents such as 3h or 30min are converted into a numerical value (in hours), and no4sU is converted into 0.
+#' @details Semantics.concentration is such a predefined function: Contents such as 200uM or 1mM are converted into a numerical value (in uM), and no4sU is converted into 0.
 #'
-#' @details By default, this is used for the names duration.4sU and Experimental.time
+#' @details By default, Semantics.time is used for the names duration.4sU and Experimental.time, and Semantics.concentration is used for concentration.4sU
 #'
 #' @return a named list; the names should correspond to column names in the \link{Coldata} table,
 #' and the values are functions to add semantics to this table
@@ -126,6 +156,8 @@ DesignSemantics=function(...) {
   ll=list(...)
   if (!"duration.4sU" %in% names(ll)) ll=c(ll,list(duration.4sU=Semantics.time))
   if (!"Experimental.time" %in% names(ll)) ll=c(ll,list(Experimental.time=Semantics.time))
+  if (!"Time" %in% names(ll)) ll=c(ll,list(Time=Semantics.time))
+  if (!"concentration.4sU" %in% names(ll)) ll=c(ll,list(concentration.4sU=Semantics.concentration))
   ll
 }
 
@@ -156,8 +188,47 @@ Semantics.time=function(s,name) {
   min=grepl("[0-9.]+min",s)
   time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))/60
 
+  nounit=grepl("^[0-9.]+$",s)
+  time[nounit]=as.numeric(s[nounit])
+
   if (any(is.na(time))) stop(paste0("Time semantics cannot be used for this: ",paste(s[is.na(time)],collapse=",")))
   setNames(data.frame(time),name)
+}
+
+
+
+#' Semantics for concentration columns
+#'
+#' Defines additional semantics for columns representing concentrations
+#'
+#' @param s original column
+#' @param name the column name
+#'
+#' @return a data frame with a single numeric column, where <x>uM from s is replaced by x, <x>mM is replaced by
+#' x*1000, and no4sU is replaced by 0
+#'
+#' @export
+#'
+#' @concept load
+Semantics.concentration=function(s,name) {
+  conc=rep(NA,length(s))
+
+  no4sU=c("nos4U","no4sU","-")
+  conc[s %in% no4sU]=0
+  s=gsub("_",".",s)
+
+  h=grepl("[0-9.]+uM",s)
+  conc[h]=as.numeric(gsub("([0-9.]+)uM","\\1",s[h]))
+
+  min=grepl("[0-9.]+mM",s)
+  conc[min]=as.numeric(gsub("([0-9.]+)mM","\\1",s[min]))*1000
+
+  nounit=grepl("^[0-9.]+$",s)
+  conc[nounit]=as.numeric(s[nounit])
+
+
+  if (any(is.na(conc))) stop(paste0("Concentration semantics cannot be used for this: ",paste(s[is.na(conc)],collapse=",")))
+  setNames(data.frame(as.numeric(conc)),name)
 }
 
 
@@ -281,6 +352,7 @@ ReadGRAND=function(prefix,
   slots=c(`Readcount`="count",MAP="ntr",alpha="alpha",beta="beta")
   if (read.percent.conv) slots=c(slots,`Conversions`="conv",Coverage="cove")
   re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,verbose = verbose,rename.sample = rename.sample)
+  re$metadata=c(re$metadata,list(`GRAND-SLAM version`=2,Output="dense"))
   if (read.percent.conv) {
     re=AddSlot(re,"percent_conv",re$data$conv/re$data$cove)
     re=DropSlot(re,"conv|cove")
@@ -358,12 +430,14 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   if (!all(clss[firstnumeric:length(clss)]=="numeric") || firstnumeric==1) stop("Columns (except for the first n) must be numeric!")
   anno.names=colnames(data)[1:(firstnumeric-1)]
 
-  if (anyDuplicated(data[[1]])) {
-    dupp=table(data[[1]])
-    dupp=names(dupp)[which(dupp>1)]
-    warning(sprintf("Duplicate names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-    data[[1]]=make.unique(data[[1]])
-  }
+  data[[1]] = check.and.make.unique(data[[1]],label="names")
+
+  #if (anyDuplicated(data[[1]])) {
+  #  dupp=table(data[[1]])
+  #  dupp=names(dupp)[which(dupp>1)]
+  #  warning(sprintf("Duplicate names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  data[[1]]=make.unique(data[[1]])
+  #}
   if (verbose) cat("Processing...\n")
 
   coldata=MakeColdata(colnames(data)[firstnumeric:ncol(data)],design)
@@ -489,27 +563,30 @@ ReadGRAND3_sparse=function(prefix,
 
 
   if (verbose) cat("Reading count matrix...\n")
-  count=methods::as(Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "dgCMatrix")
+  count=methods::as(Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "CsparseMatrix")
   gene.info=read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
   if (ncol(gene.info)==4) gene.info$Length=1
   gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
 
-  if (anyDuplicated(gene.info$Gene)) {
-    dupp=table(gene.info$Gene)
-    dupp=names(dupp)[which(dupp>1)]
-    warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-    gene.info$Gene=make.unique(gene.info$Gene)
-  }
-  if (any(is.na(gene.info$Symbol) | gene.info$Symbol=="")) {
-    warning(sprintf("No gene symbols (e.g. %s) present, replacing by gene ids!",paste(head(gene.info$Gene[is.na(gene.info$Symbol) | gene.info$Symbol==""]),collapse=",")),call. = FALSE,immediate. = TRUE)
-    gene.info$Symbol[is.na(gene.info$Symbol) | gene.info$Symbol==""]=gene.info$Gene[is.na(gene.info$Symbol) | gene.info$Symbol==""]
-  }
-  if (anyDuplicated(gene.info$Symbol)) {
-    dupp=table(gene.info$Symbol)
-    dupp=names(dupp)[which(dupp>1)]
-    warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-    gene.info$Symbol=make.unique(gene.info$Symbol)
-  }
+  gene.info$Gene = check.and.make.unique(gene.info$Gene,label="gene names")
+  gene.info$Symbol = check.and.make.unique(gene.info$Symbol,ref=gene.info$Gene,label="gene symbols",ref.label = "gene names")
+
+  #if (anyDuplicated(gene.info$Gene)) {
+  #  dupp=table(gene.info$Gene)
+  #  dupp=names(dupp)[which(dupp>1)]
+  #  warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  gene.info$Gene=make.unique(gene.info$Gene)
+  #}
+  #if (any(is.na(gene.info$Symbol) | gene.info$Symbol=="")) {
+  #  warning(sprintf("No gene symbols (e.g. %s) present, replacing by gene ids!",paste(head(gene.info$Gene[is.na(gene.info$Symbol) | gene.info$Symbol==""]),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  gene.info$Symbol[is.na(gene.info$Symbol) | gene.info$Symbol==""]=gene.info$Gene[is.na(gene.info$Symbol) | gene.info$Symbol==""]
+  #}
+  #if (anyDuplicated(gene.info$Symbol)) {
+  #  dupp=table(gene.info$Symbol)
+  #  dupp=names(dupp)[which(dupp>1)]
+  #  warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  gene.info$Symbol=make.unique(gene.info$Symbol)
+  #}
   if (any(gene.info$Gene=="")) stop("Gene name may not be empty!")
 
 #  if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
@@ -524,19 +601,19 @@ ReadGRAND3_sparse=function(prefix,
   re$count=count
 
   if (verbose) cat("Reading NTRs...\n")
-  ntr=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+  ntr=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "CsparseMatrix")
   colnames(ntr)=cols
   rownames(ntr)=gene.info$Gene
   re$ntr=ntr
 
   if (read.posterior && file.exists(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
     if (verbose) cat("Reading posterior beta parameters...\n")
-    alpha=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    alpha=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)),Class = "CsparseMatrix")
     colnames(alpha)=cols
     rownames(alpha)=gene.info$Gene
     re$alpha=alpha
 
-    beta=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator)),Class = "dgCMatrix")
+    beta=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator)),Class = "CsparseMatrix")
     colnames(beta)=cols
     rownames(beta)=gene.info$Gene
     re$beta=beta
@@ -556,7 +633,7 @@ ReadGRAND3_sparse=function(prefix,
 
   coldata$no4sU=Matrix::colSums(ntr)==0
 
-  re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="GRAND-SLAM 3.0 sparse data"))
+  re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(`GRAND-SLAM version`=3,Output="sparse"))
   DefaultSlot(re)="count"
   re
 }
@@ -577,6 +654,7 @@ ReadGRAND3_dense=function(prefix,
   if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr")
 
   re=read.grand.internal(description="GRAND-SLAM 3.0 dense data",prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,rename.sample = rename.sample,verbose = verbose)
+  re$metadata=c(re$metadata,list(`GRAND-SLAM version`=3,Output="dense"))
   re
 }
 
@@ -586,39 +664,42 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
   gene.info=setNames(read.csv(genes,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
 
   if (verbose) cat("Reading total count matrix...\n")
-  count=methods::as(Matrix::readMM(total.matrix),Class = "dgCMatrix")
+  count=methods::as(Matrix::readMM(total.matrix),Class = "CsparseMatrix")
 
-  if (anyDuplicated(gene.info$Gene)) {
-    dupp=table(gene.info$Gene)
-    dupp=names(dupp)[which(dupp>1)]
-    warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-    gene.info$Gene=make.unique(gene.info$Gene)
-  }
-  if (anyDuplicated(gene.info$Symbol)) {
-    dupp=table(gene.info$Symbol)
-    dupp=names(dupp)[which(dupp>1)]
-    warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-    gene.info$Symbol=make.unique(gene.info$Symbol)
-  }
+  gene.info$Gene = check.and.make.unique(gene.info$Gene,label="gene names")
+  gene.info$Symbol = check.and.make.unique(gene.info$Symbol,ref=gene.info$Gene,label="gene symbols",ref.label = "gene names")
 
-  if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
-    ill=gene.info$Symbol[which(make.names(gene.info$Symbol)!=gene.info$Symbol)]
-    warning(sprintf("Illegal identifiers among the gene symbols (e.g. %s), making legal!",paste(head(ill),collapse=",")),call. = FALSE,immediate. = TRUE)
-    gene.info$Symbol=make.names(gene.info$Symbol)
-  }
+  #if (anyDuplicated(gene.info$Gene)) {
+  #  dupp=table(gene.info$Gene)
+  #  dupp=names(dupp)[which(dupp>1)]
+  #  warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  gene.info$Gene=make.unique(gene.info$Gene)
+  #}
+  #if (anyDuplicated(gene.info$Symbol)) {
+  #  dupp=table(gene.info$Symbol)
+  #  dupp=names(dupp)[which(dupp>1)]
+  #  warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  gene.info$Symbol=make.unique(gene.info$Symbol)
+  #}
+
+  #if (any(make.names(gene.info$Symbol)!=gene.info$Symbol)) {
+  #  ill=gene.info$Symbol[which(make.names(gene.info$Symbol)!=gene.info$Symbol)]
+  #  warning(sprintf("Illegal identifiers among the gene symbols (e.g. %s), making legal!",paste(head(ill),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  gene.info$Symbol=make.names(gene.info$Symbol)
+  #}
 
   colnames(count)=cols[,1]
   rownames(count)=gene.info$Symbol
 
   if (verbose) cat("Reading new count matrix...\n")
-  new=methods::as(Matrix::readMM(new.matrix),Class = "dgCMatrix")
+  new=methods::as(Matrix::readMM(new.matrix),Class = "CsparseMatrix")
 
   if (verbose) cat("Computing NTRs...\n")
   new=new/detection.rate
   ntr=new/count
   ntr@x[ntr@x>1]=1
   ntr@x[is.nan(ntr@x)]=0
-  ntr=methods::as(ntr,Class = "dgCMatrix")
+  ntr=methods::as(ntr,Class = "CsparseMatrix")
 
   colnames(ntr)=colnames(count)
   rownames(ntr)=rownames(count)
@@ -650,8 +731,9 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
 
   do.callback=function() {}
 
+  hascurl = suppressWarnings(requireNamespace("RCurl",quietly = TRUE))
   url=NULL
-  if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
+  if (hascurl) {
     if (RCurl::url.exists(prefix)) {
       url=prefix
     } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
@@ -683,7 +765,8 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     }
   }
 
-  if (!file.exists(file)) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
+  if (!file.exists(file) && !hascurl) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
+  if (!file.exists(file)) stop("File not found!")
 
 
   if (verbose) cat("Checking file...\n")
@@ -719,23 +802,27 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   data=read.delim(file,stringsAsFactors=FALSE,check.names=FALSE)
   if (!is.null(rename.sample)) colnames(data)=sapply(colnames(data),rename.sample)
 
-  if (anyDuplicated(data$Gene)) {
-    dupp=table(data$Gene)
-    dupp=names(dupp)[which(dupp>1)]
-    warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-    data$Gene=make.unique(data$Gene)
-  }
+  data$Gene = check.and.make.unique(data$Gene,label="gene names")
+  data$Symbol = check.and.make.unique(data$Symbol,ref=data$Gene,label="gene symbols",ref.label = "gene names")
+
+  #if (anyDuplicated(data$Gene)) {
+  #  dupp=table(data$Gene)
+  #  dupp=names(dupp)[which(dupp>1)]
+  #  warning(sprintf("Duplicate gene names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  data$Gene=make.unique(data$Gene)
+  #}
+  #if (any(is.na(data$Symbol) | data$Symbol=="")) {
+  #  warning(sprintf("No gene symbols (e.g. %s) present, replacing by gene ids!",paste(head(data$Gene[is.na(data$Symbol) | data$Symbol==""]),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  data$Symbol[is.na(data$Symbol) | data$Symbol==""]=data$Gene[is.na(data$Symbol) | data$Symbol==""]
+  #}
+  #if (anyDuplicated(data$Symbol)) {
+  #  dupp=table(data$Symbol)
+  #  dupp=names(dupp)[which(dupp>1)]
+  #  warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  data$Symbol=make.unique(data$Symbol)
+  #}
+
   if (any(data$Gene=="")) stop("Gene name may not be empty!")
-  if (any(is.na(data$Symbol) | data$Symbol=="")) {
-    warning(sprintf("No gene symbols (e.g. %s) present, replacing by gene ids!",paste(head(data$Gene[is.na(data$Symbol) | data$Symbol==""]),collapse=",")),call. = FALSE,immediate. = TRUE)
-    data$Symbol[is.na(data$Symbol) | data$Symbol==""]=data$Gene[is.na(data$Symbol) | data$Symbol==""]
-  }
-  if (anyDuplicated(data$Symbol)) {
-    dupp=table(data$Symbol)
-    dupp=names(dupp)[which(dupp>1)]
-    warning(sprintf("Duplicate gene symbols (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
-    data$Symbol=make.unique(data$Symbol)
-  }
   if (verbose) cat("Processing...\n")
 
   #ntr.mean = grepl("Mean",names(data))
