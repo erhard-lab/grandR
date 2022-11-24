@@ -96,6 +96,23 @@ grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$dat
   info
 }
 
+as.grandR=function(mat,slot="count",coldata=MakeColdata(colnames(mat)),gene.info=rownames(mat)) {
+  if (!is.data.frame(gene.info) && !is.matrix(gene.info)) gene.info=data.frame(Gene=gene.info,Symbol=gene.info,Type="Unknown")
+  gene.info = as.data.frame(gene.info)
+
+  if (!all(c("Gene","Symbol","Type") %in% names(gene.info))) stop("Gene info table has to have columns Gene, Symbol and Type!")
+
+  rownames(mat)=gene.info$Gene
+  ntr=mat
+  ntr[,]=0
+  slots=list()
+  slots[[slot]]=mat
+  slots$ntr=ntr
+
+  r=grandR(prefix="",gene.info = gene.info, slots = slots, coldata = coldata,metadata=list(Description="Converted from matrix",`GRAND-SLAM version`=0,Output="dense"))
+  DefaultSlot(r)=slot
+  r
+}
 
 #' @rdname grandR
 #' @export
@@ -112,7 +129,7 @@ dim.grandR=function(x) c(dim(x$gene.info)[1],dim(x$coldata)[1])
 is.grandR <- function(x) inherits(x, "grandR")
 #' @rdname grandR
 #' @export
-dimnames.grandR=function(x) dimnames(x$data$count)
+dimnames.grandR=function(x) dimnames(x$data[[DefaultSlot(x)]])
 #' @rdname grandR
 #' @export
 print.grandR=function(x,...) {

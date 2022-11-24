@@ -424,13 +424,14 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
 
 #' @rdname toxicity
 #' @export
-PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,correction=1) {
+PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
   time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
-  df=df[df$covar<quantile(df$covar[is.finite(df$covar)],hl.quantile) & df$ntr<1 & df$ntr>0,]
+  if (is.null(hl)) hl=quantile(df$covar[is.finite(df$covar)],hl.quantile)
+  df=df[df$covar<hl & df$ntr<1 & df$ntr>0,]
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc[is.finite(df$lfc)],c(0.01,0.99))))*1.5
     ylim=c(-d,d)
@@ -440,7 +441,7 @@ PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,
     scale_color_viridis_c(name = "Density",guide="none")+
     geom_point(alpha=1)+
     geom_hline(yintercept=0)+
-   # geom_smooth(method="loess")+
+    geom_smooth(method="loess",color='red')+
     xlab("RNA half-life")+ylab("log FC 4sU/no4sU")+
     coord_cartesian(ylim=ylim)+
     ggtitle(w4sU)

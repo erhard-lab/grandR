@@ -51,6 +51,7 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #' @param x number of principal component to show on the x axis (numeric)
 #' @param y number of principal component to show on the y axis (numeric)
 #' @param columns which columns (i.e. samples or cells) to perform PCA on (see details)
+#' @param do.vsd perform a variance stabilizing transformation for count data?
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
@@ -60,7 +61,7 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #' @export
 #'
 #' @concept globalplot
-PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,columns=NULL) {
+PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,columns=NULL,do.vst=TRUE) {
 
   aest=setup.default.aes(data,aest)
 
@@ -78,13 +79,12 @@ PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,c
 
 	rm.na=!apply(is.na(mat),2,sum)==nrow(mat)
 	mat=mat[,rm.na]
-	mat=cnt(mat)
 	cd=cd[rm.na,]
-	vsd <- DESeq2::vst(mat)
+	if (do.vst) mat <- DESeq2::vst(cnt(mat))
 
-  	rv <- matrixStats::rowVars(vsd)
+  	rv <- matrixStats::rowVars(mat)
   	select <- order(rv, decreasing=TRUE)[seq_len(min(ntop, length(rv)))]
-  	pca <- prcomp(t(vsd[select,]))
+  	pca <- prcomp(t(mat[select,]))
 	percentVar <- pca$sdev^2 / sum( pca$sdev^2 )
 	d <- as.data.frame(pca$x)
 	names(d)=paste0("PC",1:dim(d)[2])
@@ -152,6 +152,40 @@ Transform.logFC=function(label="log2 FC",LFC.fun=lfc::PsiLFC,columns=NULL,...) {
     re
   }
 }
+
+
+make.continuous.colors=function(values,colors=NULL,breaks=NULL) {
+  if (quantile(values,0.25)<0) {
+    quant=c(50,95) #c(seq(0,1,length.out=nq+1)[c(-1,-nq-1)]*100,95)
+    if (length(breaks)==1) {
+      quant=c(seq(0,1,length.out=breaks+1)[c(-1,-breaks-1)]*100,95)
+      breaks=NULL
+    }
+    if (is.null(breaks)) {
+      upper=quantile(values[values>0],quant/100)
+      lower=quantile(-values[values<0],quant/100)
+      breaks=c(-rev(pmax(upper,lower)),0,pmax(upper,lower))
+    }
+    if (is.null(colors)) colors="RdBu"
+  } else {
+    quant=c(5,25,50,75,95)
+    if (length(breaks)==1) {
+        quant=c(5,seq(0,1,length.out=breaks)[c(-1,-breaks)]*100,95)
+        breaks=NULL
+    }
+    if (is.null(breaks)) {
+      breaks=quantile(values,quant/100)
+    }
+    if (is.null(colors)) colors="YlOrRd"
+  }
+  if (length(colors)==1 && colors %in% rownames(RColorBrewer::brewer.pal.info)) {
+    colors = RColorBrewer::brewer.pal(length(breaks),colors)
+  } else if (length(color)==1) {
+    colors = viridisLite::viridis(length(breaks),option = color)
+  }
+  list(breaks = breaks,colors=colors)
+}
+
 
 #' Create heatmaps from grandR objects
 #'
@@ -249,23 +283,8 @@ PlotHeatmap=function(data,
 
 
   name=attr(mat,"label")
-  if (quantile(mat,0.25)<0) {
-    if (is.null(breaks)) {
-      quant=c(50,95) #c(seq(0,1,length.out=nq+1)[c(-1,-nq-1)]*100,95)
-      upper=quantile(mat[mat>0],quant/100)
-      lower=quantile(-mat[mat<0],quant/100)
-      breaks=c(-rev(pmax(upper,lower)),0,pmax(upper,lower))
-    }
-    if (is.null(colors)) colors="RdBu"
-  } else {
-    if (is.null(breaks)) {
-      quant=c(5,25,50,75,95) #c(5,seq(0,1,length.out=nq)[c(-1,-nq)]*100,95)
-      breaks=quantile(mat,quant/100)
-    }
-    if (is.null(colors)) colors="YlOrRd"
-  }
-  colors = RColorBrewer::brewer.pal(length(breaks),colors)
-  col=circlize::colorRamp2(breaks = breaks,colors=colors)
+  col=make.continuous.colors(mat,colors = colors,breaks=breaks)
+  col=circlize::colorRamp2(breaks=col$breaks,colors=col$colors)
 
   if (length(xlab)==ncol(mat)) colnames(mat)=xlab
   hm=ComplexHeatmap::Heatmap(mat,name=name,
@@ -471,7 +490,7 @@ PlotScatter=function(data,
   } else if (is.null(ycol)) {
     B=if (is.character(y) || is.numeric(y)) df[[y]] else eval(y,df,parent.frame())
     if (length(B)==1 && is.character(B)) {
-      if (B %in% names(df)) B=df[[B]] else stop("Cannot make heads or tails out of the y parameter. Try to use xcol to access a specific column!")
+      if (B %in% names(df)) B=df[[B]] else stop("Cannot make heads or tails out of the y parameter. Try to use ycol to access a specific column!")
     }
     if (length(B)!=nrow(df)) stop("Cannot make heads or tails out of the y parameter. Try to use xcol to access a specific column!")
   } else {
@@ -503,9 +522,9 @@ PlotScatter=function(data,
       ylim=grDevices::boxplot.stats(df$B.trans[is.finite(df$B.trans)],coef=remove.outlier)$stats[c(1,5)] #(quantile(df[,2]-ymean,pnorm(c(-2,2)))*1.5)+ymean
       ylim=c(df$B[which(df$B.trans==ylim[1])[1]],df$B[which(df$B.trans==ylim[2])[1]])
     }
-    if (is.null(xlim)) xlim=range(df$A[!is.infinite(df$A)])
-    if (is.null(ylim)) ylim=range(df$B[!is.infinite(df$B)])
-    clip=function(v,ch,lim,minus) ifelse(ch<lim[1],minus,ifelse(ch>lim[2],Inf,v))
+    if (is.null(xlim)) xlim=range(df$A[is.finite(df$A)])
+    if (is.null(ylim)) ylim=range(df$B[is.finite(df$B)])
+    clip=function(v,ch,lim,minus) ifelse(!is.finite(v),v,ifelse(ch<lim[1],minus,ifelse(ch>lim[2],Inf,v)))
     df$A.trans=clip(df$A.trans,df$A,xlim,-Inf)
     df$B.trans=clip(df$B.trans,df$B,ylim,-Inf)
     df$A=clip(df$A,df$A,xlim,if (log.x) 0 else -Inf)
@@ -515,6 +534,8 @@ PlotScatter=function(data,
     xlim=range(df$A[!is.infinite(df$A)])
     ylim=range(df$B[!is.infinite(df$B)])
   }
+
+  color=substitute(color)
   if (is.null(color)) {
     if (is.null(df$facet)) {
       df$color=density2d(df$A.trans, df$B.trans, n = density.n,margin = density.margin)
@@ -522,12 +543,24 @@ PlotScatter=function(data,
       df$color=density2d(df$A.trans, df$B.trans, n = density.n,margin = density.margin,facet = df$facet)
     }
     colorscale=scale_color_viridis_c(name = "Density",guide="none")
-  } else if (length(color)==1 && color %in% names(GeneInfo(data))) {
-    df$color=GeneInfo(data,color)[ToIndex(data,genes)]
-    colorscale=NULL
+#  } else if (length(color)==1 && as.character(color) %in% names(GeneInfo(data))) {
+#    df$color=GeneInfo(data,color)[ToIndex(data,genes)]
+#    colorscale=scale_color_discrete(deparse(color))
   } else {
-    df$color=color
-    colorscale=scale_color_identity()
+    ccol=if (length(color)==1 && as.character(color) %in% names(df)) df[[as.character(color)]] else eval(color,df,parent.frame())
+    if (length(ccol)==1 && is.character(ccol) && ccol %in% names(df)) {
+      ccol=df[[ccol]]
+    }
+    df$color=ccol
+    if (is.character(df$color)) {
+      colorscale=scale_color_identity(guide="none")
+    } else if (is.factor(df$color)) {
+      colorscale=scale_color_discrete(deparse(color))
+    } else {
+      col=make.continuous.colors(df$color)
+      df$color=pmin(pmax(df$color,min(col$breaks)),max(col$breaks))
+      colorscale = scale_color_gradientn(deparse(color),colors=col$colors[c(1,3,5)],breaks=scales::breaks_pretty(n=5)(df$color),limits=col$breaks[c(1,5)])
+    }
   }
 
   g=ggplot(df,aes(A,B,color=color))+cowplot::theme_cowplot()
@@ -658,7 +691,7 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
 #' @export
 #' @concept globalplot
 VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
-                     label.numbers=TRUE,...) {
+                     annotate.numbers=TRUE,...) {
   # R CMD check guard for non-standard evaluation
   Q <- NULL
 
@@ -671,8 +704,7 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
     geom_vline(xintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
     ggtitle(analysis)
 
-
-  if (label.numbers) {
+  if (annotate.numbers) {
     n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),factor(df$Q>p.cutoff,levels=c("FALSE","TRUE")))
     g=g+annotate("label",x=c(-Inf,0,Inf,-Inf,0,Inf),y=c(Inf,Inf,Inf,-Inf,-Inf,-Inf),label=paste0("n=",as.numeric(n)),hjust=c(-0.1,0.5,1.1,-0.1,0.5,1.1),vjust=c(1.1,1.1,1.1,-0.1,-0.1,-0.1))
   }

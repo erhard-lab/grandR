@@ -77,7 +77,7 @@ check.and.make.unique = function(v,ref=NULL,label="entries",ref.label="reference
     if (is.null(ref) || anyDuplicated(ref)) ext = sprintf(" Cannot guarantee maintaining consistency for %s across reading several files, watch out if you merge grandR objects!",label)
     dupp=table(v)
     dupp=names(dupp)[which(dupp>1)]
-    warning(sprintf("Duplicate %s (e.g. %s) present, making unique!%s",label,paste(head(dupp),collapse=","),ext),call. = FALSE,immediate. = TRUE)
+    warning(sprintf("Duplicate %s (n=%d, e.g. %s) present, making unique!%s",label,length(dupp),paste(head(dupp),collapse=","),ext),call. = FALSE,immediate. = TRUE)
 
     if (!is.null(ref)) {
       df=data.frame(id=1:length(v),v=as.character(v),ref=as.character(ref),stringsAsFactors = FALSE)
