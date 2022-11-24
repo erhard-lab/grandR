@@ -62,6 +62,7 @@ Suggests: knitr,
     rlang,
     graphics,
     scales,
-    shiny
+    shiny,
+    viridisLite
 RoxygenNote: 7.2.1
 VignetteBuilder: knitr

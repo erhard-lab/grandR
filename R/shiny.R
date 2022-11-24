@@ -70,15 +70,15 @@ ServeGrandR=function(data,
 	                      callback = DT::JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#downloadraw')); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
 	                      selection = 'single',
 	                      rownames = FALSE,
-	                      escape=-1,
 	                      filter = "top",
+	                      escape = FALSE,
 	                      options = list(
 	                        pageLength = 10,
 	                        lengthMenu =list(c(5, 10, 25, 50, 100,-1),c(5, 10, 25, 50, 100,"All")),
 	                        dom = '<"#buttons">lfrtip'
 	                      ))
 	  dttab=DT::formatRound(dttab,names(df)[sapply(df,class)=="numeric"], 2)
-	  if (any(grepl("\\.LFC$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.LFC$",names(df))], 2)
+	  if (any(grepl("LFC$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.LFC$",names(df))], 2)
 	  if (any(grepl("\\.Q$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.Q$",names(df))], 2)
 	  if (any(grepl("\\.P$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.P$",names(df))], 2)
 	  if (any(grepl("\\.Half-life$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Half-life$",names(df))], 2)
@@ -185,7 +185,11 @@ ServeGrandR=function(data,
 	  }
 
 	  lapply(names(plot.global),function(n) {
-	    observeEvent(input[[make.names(paste0(n,"sethighlight"))]], {
+	    shiny::observeEvent(input$tab_rows_selected, {
+	      session$resetBrush(make.names(paste0(n,"plotsetbrush")))
+	    })
+
+	    shiny::observeEvent(input[[make.names(paste0(n,"sethighlight"))]], {
 	      highlighted.genes$genes <- strsplit(input[[make.names(paste0(n,"plotsetgenes"))]],"\n")[[1]]
 	      session$resetBrush(make.names(paste0(n,"plotsetbrush")))
 	    })
