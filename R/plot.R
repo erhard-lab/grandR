@@ -89,7 +89,7 @@ PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,c
 	d <- as.data.frame(pca$x)
 	names(d)=paste0("PC",1:dim(d)[2])
 	d=cbind(d, cd)
-	ggplot(d,utils::modifyList(aes_string(paste0("PC",x),paste0("PC",y)),aest))+cowplot::theme_cowplot()+
+	ggplot(d,utils::modifyList(aes(!!sym(paste0("PC",x)),!!sym(paste0("PC",y))),aest))+cowplot::theme_cowplot()+
 	  geom_point(size=3)+xlab(paste0("PC",x,": ",round(percentVar[x] * 100),"% variance"))+ylab(paste0("PC",y,": ",round(percentVar[y] * 100),"% variance"))+coord_fixed()
 }
 
@@ -155,15 +155,15 @@ Transform.logFC=function(label="log2 FC",LFC.fun=lfc::PsiLFC,columns=NULL,...) {
 
 
 make.continuous.colors=function(values,colors=NULL,breaks=NULL) {
-  if (quantile(values,0.25)<0) {
+  if (quantile(values,0.25,na.rm=TRUE)<0) {
     quant=c(50,95) #c(seq(0,1,length.out=nq+1)[c(-1,-nq-1)]*100,95)
     if (length(breaks)==1) {
       quant=c(seq(0,1,length.out=breaks+1)[c(-1,-breaks-1)]*100,95)
       breaks=NULL
     }
     if (is.null(breaks)) {
-      upper=quantile(values[values>0],quant/100)
-      lower=quantile(-values[values<0],quant/100)
+      upper=quantile(values[values>0],quant/100,na.rm=TRUE)
+      lower=quantile(-values[values<0],quant/100,na.rm=TRUE)
       breaks=c(-rev(pmax(upper,lower)),0,pmax(upper,lower))
     }
     if (is.null(colors)) colors="RdBu"
@@ -174,14 +174,14 @@ make.continuous.colors=function(values,colors=NULL,breaks=NULL) {
         breaks=NULL
     }
     if (is.null(breaks)) {
-      breaks=quantile(values,quant/100)
+      breaks=quantile(values,quant/100,na.rm=TRUE)
     }
     if (is.null(colors)) colors="YlOrRd"
   }
   if (length(colors)==1 && colors %in% rownames(RColorBrewer::brewer.pal.info)) {
     colors = RColorBrewer::brewer.pal(length(breaks),colors)
-  } else if (length(color)==1) {
-    colors = viridisLite::viridis(length(breaks),option = color)
+  } else if (length(colors)==1) {
+    colors = viridisLite::viridis(length(breaks),option = colors)
   }
   list(breaks = breaks,colors=colors)
 }
@@ -205,6 +205,7 @@ make.continuous.colors=function(values,colors=NULL,breaks=NULL) {
 #' @param colors an RColorBrewer palette name; can be NULL (see details)
 #' @param title the title for the plot; can be NULL
 #' @param return.matrix if TRUE, return a list containing the data matrix and the heatmap instead of the heatmap alone
+#' @param na.to convert NA values in the matrix to this value immediately before computing the heatmap
 #' @param ... additional parameters forwarded to \link[ComplexHeatmap]{Heatmap}
 #'
 #' @details This is just a convenience function which
@@ -259,11 +260,12 @@ PlotHeatmap=function(data,
                      transform="Z",
                      cluster.genes=TRUE,
                      cluster.columns=FALSE,
-                     label.genes=length(genes)<=50,
+                     label.genes=NULL,
                      xlab=NULL,
                      breaks=NULL,
                      colors=NULL,
-                     title=NULL,return.matrix=FALSE,...) {
+                     title=NULL,return.matrix=FALSE,
+                     na.to=NA,...) {
 
   mode.slot=check.mode.slot(data,type)
   if (any(mode.slot)) {
@@ -287,6 +289,9 @@ PlotHeatmap=function(data,
   col=circlize::colorRamp2(breaks=col$breaks,colors=col$colors)
 
   if (length(xlab)==ncol(mat)) colnames(mat)=xlab
+  if (is.null(label.genes)) label.genes=nrow(mat)<=50
+
+  mat[is.na(mat)]=na.to
   hm=ComplexHeatmap::Heatmap(mat,name=name,
                           cluster_rows = cluster.genes,
                           cluster_columns = cluster.columns,
@@ -362,7 +367,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param data the grandR object (can also be a plain data frame)
 #' @param x an expression to compute the x value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param y an expression to compute the y value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
-#' @param analysis the name of an analysis table (can be NULL)
+#' @param analysis the name of an analysis table (can be NULL; see details)
 #' @param xcol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param ycol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param xlab the label for x (can be NULL, then the x parameter is used)
@@ -381,8 +386,10 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param label.repel force to repel labels from points and each other (increase if labels overlap)
 #' @param facet an expression (evaluated in the same environment as x and y); for each unique value a panel (facet) is created; can be NULL
 #' @param color either NULL (use point density colors), or a name of the \link{GeneInfo} table (use scale_color_xxx to define colors), or a color for all points
+#' @param colorpalette either NULL (use default colors), or a palette name from color brewer or viridis
 #' @param density.margin for density colors, one of 'n','x' or 'y'; should the density be computed along both axes ('n'), or along 'x' or 'y' axis only
 #' @param density.n how many bins to use for density calculation (see \link[MASS]{kde2d})
+#' @param rasterize use ggrastr to rasterize points? (can be NULL, see details)
 #' @param correlation a function to format correlation statistics to be annotated (see details)
 #' @param correlation.x x coordinate to put the correlation annotation in the plot (see details)
 #' @param correlation.y y coordinate to put the correlation annotation in the plot (see details)
@@ -407,6 +414,9 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' are plotted in red and with larger points size, or it can be a list of such vectors. The names of this list must be valid colors. Genes can also be labeled (make sure that this
 #' is really only a small subset of the genes).
 #'
+#' @details When rendering to vector based devices (such as svg or pds), a genome-wide scatterplot often is painfully big (and rendering therefore slow). The \code{rasterize}
+#' parameter can be used to automatically rasterize the points only (via the ggrastr package). If this parameter is NULL, ggrastr is used if more than 1000 points are plotted!
+#'
 #' @details Often scatter plots show that x and y coordinates are correlated. Correlations can be annotated using the \link{FormatCorrelation} function. Most often you will use
 #' \code{PlotScatter(data,x,y,correlation=FormatCorrelation())}. To use a different correlation measure, other formats for correlation coefficient and P values or omit one of these
 #' statistics, parametrize \code{FormatCorrelation}. Use correlation.x and correlation.y to place the annotation in the plot, and correlation.hjust/correlation.vjust to align the
@@ -423,7 +433,9 @@ PlotScatter=function(data,
                      size=0.3,
                      genes=NULL,highlight=NULL, label=NULL, label.repel=1,
                      facet=NULL,
-                     color=NULL, density.margin = 'n', density.n = 100,
+                     color=NULL, colorpalette=NULL,
+                     density.margin = 'n', density.n = 100,
+                     rasterize=NULL,
                      correlation=NULL,correlation.x=-Inf,correlation.y=Inf,correlation.hjust=0.5,correlation.vjust=0.5,
                      layers.below=NULL) {
   if (is.grandR(data)) {
@@ -542,7 +554,12 @@ PlotScatter=function(data,
     } else {
       df$color=density2d(df$A.trans, df$B.trans, n = density.n,margin = density.margin,facet = df$facet)
     }
-    colorscale=scale_color_viridis_c(name = "Density",guide="none")
+    if (is.null(colorpalette)) {
+      colorscale=scale_color_viridis_c(name = "Density",guide="none")
+    } else {
+      col=make.continuous.colors(values=df$color,colors = colorpalette)
+      colorscale = scale_color_gradientn(name="Density",guide="none",colors=col$colors)
+    }
 #  } else if (length(color)==1 && as.character(color) %in% names(GeneInfo(data))) {
 #    df$color=GeneInfo(data,color)[ToIndex(data,genes)]
 #    colorscale=scale_color_discrete(deparse(color))
@@ -557,16 +574,19 @@ PlotScatter=function(data,
     } else if (is.factor(df$color)) {
       colorscale=scale_color_discrete(deparse(color))
     } else {
-      col=make.continuous.colors(df$color)
+      col=make.continuous.colors(values = df$color,colors=colorpalette)
       df$color=pmin(pmax(df$color,min(col$breaks)),max(col$breaks))
       colorscale = scale_color_gradientn(deparse(color),colors=col$colors[c(1,3,5)],breaks=scales::breaks_pretty(n=5)(df$color),limits=col$breaks[c(1,5)])
     }
   }
 
+  point.fun=function(...) geom_point(...)
+  if ((is.null(rasterize) && nrow(df)>1000) || rlang::is_true(rasterize)) point.fun=function(...) ggrastr::geom_point_rast(...)
+
   g=ggplot(df,aes(A,B,color=color))+cowplot::theme_cowplot()
   if (!is.null(layers.below)) for (e in layers.below) g=g+e
   g=g+
-    geom_point(size=size)+
+    point.fun(size=size)+
     xlab(xlab)+ylab(ylab)
 
   if (!is.null(df$facet)) g=g+facet_wrap(~facet)
@@ -823,7 +843,7 @@ setup.default.aes=function(data,aest) {
 #' @param aest parameter to set the visual attributes of the plot
 #' @param size the point size used for plotting; overridden if size is defined via aest
 #'
-#' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes} or  \link[ggplot2]{aes_string}.
+#' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes}.
 #'
 #' @details The table used for plotting is the table returned by \link{GetData} with coldata set to TRUE, i.e. you can use all names from the \link{Coldata} table for aest.
 #'
@@ -852,7 +872,7 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE
   columns=Columns(data,columns)
 
   df=GetData(data,genes=gene,mode.slot=c(old,new),columns=columns,by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
-  g=ggplot(df,utils::modifyList(aes_string(old,new),aest))+cowplot::theme_cowplot()
+  g=ggplot(df,utils::modifyList(aes(!!sym(old),!!sym(new)),aest))+cowplot::theme_cowplot()
   if (!is.null(aest$size)) g=g+geom_point() else g=g+geom_point(size=size)
   if (log) {
     g=g+scale_x_log10()+
@@ -867,8 +887,8 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
     df=cbind(df,GetData(data,genes=gene,mode.slot=c("lower","upper",slot),by.rows=FALSE,coldata=T,ntr.na = FALSE)[,c("lower","upper",slot)])
-    g=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)))
-    g=g+geom_errorbarh(data=df,mapping=aes_string(xmin=paste0("(1-upper)*",slot),xmax=paste0("(1-lower)*",slot)))
+    g=g+geom_errorbar(data=df,mapping=aes(ymin=lower*!!sym(slot),ymax=upper*!!sym(slot)))
+    g=g+geom_errorbarh(data=df,mapping=aes(xmin=(1-upper)*!!sym(slot),xmax=(1-lower)*!!sym(slot)))
   }
   g
 }
@@ -886,7 +906,7 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE
 #' @param aest parameter to set the visual attributes of the plot
 #' @param size the point size used for plotting; overridden if size is defined via aest
 #'
-#' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes} or  \link[ggplot2]{aes_string}.
+#' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes}.
 #'
 #' @details The table used for plotting is the table returned by \link{GetData} with coldata set to TRUE, i.e. you can use all names from the \link{Coldata} table for aest.
 #'
@@ -916,7 +936,7 @@ PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TR
   columns=Columns(data,columns)
 
   df=GetData(data,genes=gene,mode.slot=c("ntr",slot),columns=columns,by.rows=FALSE,coldata=T,ntr.na = FALSE)
-  g=ggplot(df,utils::modifyList(aes_string(slot,"ntr"),aest))+cowplot::theme_cowplot()
+  g=ggplot(df,utils::modifyList(aes(!!sym(slot),ntr),aest))+cowplot::theme_cowplot()
   if (!is.null(aest$size)) g=g+geom_point() else g=g+geom_point(size=size)
   if (log) {
     g=g+scale_x_log10()
@@ -949,7 +969,7 @@ PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TR
 #' @param size the point size used for plotting; overridden if size is defined via aest
 #' @param transform function that is called on the data frame directly before plotting (can be NULL)
 #'
-#' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes} or  \link[ggplot2]{aes_string}.
+#' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes}.
 #'
 #' @details To refer to data slots, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total) followed by a
 #' dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to obtain the \emph{new counts}.
@@ -1001,7 +1021,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
 
   if (!is.null(transform)) df=transform(df)
 
-  g=ggplot(df,utils::modifyList(aes_string(group,"value"),aest))+cowplot::theme_cowplot()
+  g=ggplot(df,utils::modifyList(aes(!!sym(group),value),aest))+cowplot::theme_cowplot()
   if (!is.null(aest$size)) g=g+geom_point(position=if(show.CI) position_dodge(width=0.4) else "identity") else g=g+geom_point(size=size,position=if(show.CI) position_dodge(width=0.4) else "identity")
   g=g+xlab(NULL)+
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -1017,8 +1037,8 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
     } else {
       g=switch(mode[1],
                total=g,
-               new=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)),width=0,position=position_dodge(width=0.4)),
-               old=g+geom_errorbar(data=df,mapping=aes_string(ymin=paste0("(1-upper)*",slot),ymax=paste0("(1-lower)*",slot)),width=0,position=position_dodge(width=0.4)),
+               new=g+geom_errorbar(data=df,mapping=aes(ymin=lower*!!sym(slot),ymax=upper*!!sym(slot)),width=0,position=position_dodge(width=0.4)),
+               old=g+geom_errorbar(data=df,mapping=aes(ymin=(1-upper)*!!sym(slot),ymax=(1-lower)*!!sym(slot)),width=0,position=position_dodge(width=0.4)),
                stop(paste0(mode," unknown!")))
     }
   }
@@ -1081,7 +1101,7 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.C
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
     df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
-    g=g+geom_errorbar(data=df2,mapping=aes_string(y=slot,fill=NULL,ymin=paste0("(1-upper)*",slot),ymax=paste0("(1-lower)*",slot)),width=0)
+    g=g+geom_errorbar(data=df2,mapping=aes(y=!!sym(slot),fill=NULL,ymin=(1-upper)*!!sym(slot),ymax=(1-lower)*!!sym(slot)),width=0)
   }
   g
 }
@@ -1104,7 +1124,7 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.C
 #'
 #' @details The x axis of this plot will show a temporal dimension. The time parameter defines a name in the \link{Coldata} table containing the temporal values for each sample.
 #'
-#' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes} or  \link[ggplot2]{aes_string}.
+#' @details The value of the aest parameter must be an \emph{Aesthetic mapping} as generated by \link[ggplot2]{aes}.
 #'
 #' @details The table used for plotting is the table returned by \link{GetData} with coldata set to TRUE, i.e. you can use all names from the \link{Coldata} table for aest.
 #'
@@ -1139,8 +1159,8 @@ PlotGeneSnapshotTimecourse=function(data,gene,time=Design$dur.4sU,
 
   df=GetData(data,genes=gene,mode.slot=mode.slot,columns=columns,by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
 
-  aes=utils::modifyList(aes_string(x=time,y="Value"),aest)
-  if (!is.null(Condition(data))) aes=utils::modifyList(aes,aes_string(group="Condition"))
+  aes=utils::modifyList(aes(x=!!sym(time),y=Value),aest)
+  if (!is.null(Condition(data))) aes=utils::modifyList(aes,aes(group=Condition))
   breaks=if (exact.tics) sort(unique(df[[time]])) else scales::breaks_extended(5)(df[[time]])
 
   oslot=mode.slot
@@ -1174,8 +1194,8 @@ PlotGeneSnapshotTimecourse=function(data,gene,time=Design$dur.4sU,
     } else {
       g=switch(mode[1],
                total=g,
-               new=g+geom_errorbar(data=df2,mapping=aes_string(y=oslot,ymin=paste0("lower*",slot),ymax=paste0("upper*",slot)),width=0,position=position_dodge(width=0.4)),
-               old=g+geom_errorbar(data=df2,mapping=aes_string(y=oslot,ymin=paste0("(1-upper)*",slot),ymax=paste0("(1-lower)*",slot)),width=0,position=position_dodge(width=0.4)),
+               new=g+geom_errorbar(data=df2,mapping=aes(y=!!sym(oslot),ymin=lower*!!sym(slot),ymax=upper*!!sym(slot)),width=0,position=position_dodge(width=0.4)),
+               old=g+geom_errorbar(data=df2,mapping=aes(y=oslot,ymin=(1-upper)*!!sym(slot),ymax=(1-lower)*!!sym(slot)),width=0,position=position_dodge(width=0.4)),
                stop(paste0(mode," unknown!")))
     }
   }

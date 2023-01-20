@@ -355,7 +355,7 @@ ReadGRAND=function(prefix,
   re$metadata=c(re$metadata,list(`GRAND-SLAM version`=2,Output="dense"))
   if (read.percent.conv) {
     re=AddSlot(re,"percent_conv",re$data$conv/re$data$cove)
-    re=DropSlot(re,"conv|cove")
+    re=DropSlot(re,"^conv|cove")
   }
   re
 }
@@ -461,12 +461,20 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 }
 
 
-GetTableQC=function(data,name) {
+GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
   fn=paste0(data$prefix,".",name,".tsv.gz")
   if (!file.exists(fn)) {
     fn2=paste0(data$prefix,".",name,".tsv")
-    if (!file.exists(fn2)) stop(paste0("Cannot find QC table ",fn," or ",fn2))
-    fn = fn2
+    if (!file.exists(fn2)) {
+      fn3=paste0(data$prefix,".",name)
+      if (!file.exists(fn3)) {
+        if (stop.if.not.exist) stop(paste0("Cannot find QC table ",fn," or ",fn2))
+        else warning(paste0("Cannot find QC table ",fn," or ",fn2))
+      }
+      fn=fn3
+    } else {
+      fn = fn2
+    }
   }
   if (!file.exists(fn)) return(NULL)
 
@@ -724,7 +732,6 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     m=as.matrix(m)
     m[is.na(m)]=0
     colnames(m)=gsub(" .*","",cnames)
-    if (!is.null(rename.sample)) colnames(m)=sapply(colnames(m),rename.sample)
     rownames(m)=names
     m
   }
@@ -779,6 +786,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
 
   if (header[1]!="Gene" || header[2]!="Symbol" || !grepl(paste0(count.name,"$"),header[!header %in% annotations][1])) stop("File is not a GRAND-SLAM output file!")
   conds=gsub(paste0(" ",count.name),"",header[grepl(paste0(" ",count.name),header)])
+  ori.conds = conds
 
   if (!is.null(rename.sample)) conds=sapply(conds,rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
 

@@ -22,6 +22,7 @@ URL: https://github.com/erhard-lab/grandR
 BugReports: https://github.com/erhard-lab/grandR/issues
 Imports: stats,
     Matrix,
+    rlang,
     ggplot2,
     grDevices,
     patchwork,
@@ -59,10 +60,10 @@ Suggests: knitr,
     monocle,
     VGAM,
     quantreg,
-    rlang,
     graphics,
     scales,
     shiny,
+    ggrastr,
     viridisLite
 RoxygenNote: 7.2.1
 VignetteBuilder: knitr

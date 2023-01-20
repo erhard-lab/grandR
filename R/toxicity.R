@@ -38,7 +38,7 @@ Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
   pairs
 }
 
-MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=lfc::PsiLFC,slot="count",correction=1,TU.len=NULL) {
+MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=lfc::PsiLFC,slot="count",rm.all.zero=TRUE,correction=1,...) {
   w=rowMeans(GetTable(data,type=slot,columns=w4sU))
   col=no4sU
   n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=col))
@@ -53,14 +53,18 @@ MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],tran
   ntr=(ntr*w+f1*ntr*w)/nw
   w=nw
 
-  phl=transform(ntr)
+  phl=transform(ntr,...)
 
   df=data.frame(`4sU`=w,`no4sU`=n,ntr=ntr,lfc=LFC.fun(w,n),covar=phl,check.names = FALSE)
-  if (!is.null(TU.len)) df$tulen=data$gene.info[[TU.len]][use]
+
+  if (rm.all.zero) {
+    df=df[df$`4sU`>0,]
+  }
+
   df
 }
 
-ComputeToxicityStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE,do.bootstrap=FALSE,seed=1337) {
+ComputeSummaryStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE,do.bootstrap=FALSE,seed=1337) {
   re=data.frame(Name=colnames(data))
   re$`Corresponding no4sU`=sapply(re$Name,function(n) paste(pairs[[n]],collapse=","))
 
@@ -70,7 +74,7 @@ ComputeToxicityStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE
   }
 
   l=EstimateTranscriptionLoss(data,pairs=pairs,bootstrap=FALSE)
-  re$`Transcription Loss`=l[colnames(data)]
+  re$`Transcription Loss`=1-l[colnames(data)]
   if (do.bootstrap) {
     l=apply(psapply(1:100,function(i) EstimateTranscriptionLoss(data,pairs=pairs,bootstrap=TRUE),seed=seed),1,sd)
     re$`Transcription Loss.SE`=l[colnames(data)]
@@ -84,14 +88,32 @@ ComputeToxicityStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE
       re[[paste("p.conv",sub)]]=m[colnames(data)]
     }
   } else {
-    tab=GetTableQC(data,"rates")
-    m=unlist(tab[tab$Rate=="single_new",-1])
-    re$`p.conv single`=m[colnames(data)]
-    re$`p.conv single`[Coldata(data,"no4sU")]=NA
-    m=unlist(tab[tab$Rate=="double_new",-1])
-    if (any(m!=0)) {
-      re$`p.conv double`=m[colnames(data)]
-      re$`p.conv double`[Coldata(data,"no4sU")]=NA
+    tab=GetTableQC(data,"mismatches",stop.if.not.exist=FALSE)
+    if (!is.null(tab)) {
+      strand=GetTableQC(d,"strandness",stop.if.not.exist=FALSE)$V1
+      if (strand=="Antisense") {
+        tab=tab[(tab$Orientation=="First" & tab$Genomic=="A" & tab$Read=="G")|(tab$Orientation=="Second" & tab$Genomic=="T" & tab$Read=="C"),]
+      } else if (strand=="Sense") {
+        tab=tab[(tab$Orientation=="First" & tab$Genomic=="T" & tab$Read=="C")|(tab$Orientation=="Second" & tab$Genomic=="A" & tab$Read=="G"),]
+      } else {
+        tab=tab[(tab$Genomic=="T" & tab$Read=="C")|(tab$Genomic=="A" & tab$Read=="G"),]
+      }
+      tab=tab[tab$Category=="Exonic",]
+      tab=plyr::ddply(tab,c("Condition"),function(s) data.frame(Coverage=sum(s$Coverage),Mismatches=sum(s$Mismatches)))
+      m=setNames(tab$Mismatches/tab$Coverage,tab$Condition)
+      re$`raw conversions`=m[colnames(data)]
+    }
+
+        tab=GetTableQC(data,"rates",stop.if.not.exist=FALSE)
+    if (!is.null(tab)) {
+      m=unlist(tab[tab$Rate=="single_new",-1])
+      re$`p.conv single`=m[colnames(data)]
+      re$`p.conv single`[Coldata(data,"no4sU")]=NA
+      m=unlist(tab[tab$Rate=="double_new",-1])
+      if (any(m!=0)) {
+        re$`p.conv double`=m[colnames(data)]
+        re$`p.conv double`[Coldata(data,"no4sU")]=NA
+      }
     }
 
   }
@@ -107,32 +129,19 @@ ComputeToxicityStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE
 #'
 #' @param data
 #' @param pairs
-#' @param TU.len
 #' @param ...
 #'
 #' @return
 #' @export
 #'
 EstimateTranscriptionLoss=function(data,pairs=Findno4sUPairs(data),...) {
-  TU.len=NULL
-  if (is.null(TU.len)) {
-    sapply(names(pairs),function(n) EstimateTranscriptionLossForSample(data,n,pairs[[n]],...))
-  } else {
-    sapply(names(pairs),function(n) EstimateTranscriptionLossLenForSample(data,n,pairs[[n]],TU.len=TU.len,...))
-  }
+  sapply(names(pairs),function(n) EstimateTranscriptionLossForSample(data,n,pairs[[n]],...))
 }
 
 CorrectBiasHLFactor=function(data,pairs=Findno4sUPairs(data),factors=EstimateTranscriptionLoss(data,pairs=pairs,...),...) {
   n=if(is.matrix(factors)) ncol(factors) else length(factors)
   for (i in 1:n) {
-    if (is.matrix(factors)) {
-      TU.len=list(...)$TU.len
-      tulen=pmin(80000,setNames(data$gene.info[[TU.len]],data$gene.info$Gene)[rownames(data$data$count)])
-      f=factors["f",i]*2^(-tulen/1000*factors["p",i])
-      f=(1-f)/f
-    } else {
-      f=1/factors[i]-1
-    }
+    f=1/factors[i]-1
     count=data$data$count[,names(pairs)[i]]
     ntr=data$data$ntr[,names(pairs)[i]]
     a=data$data$alpha[,names(pairs)[i]]
@@ -149,41 +158,16 @@ CorrectBiasHLFactor=function(data,pairs=Findno4sUPairs(data),factors=EstimateTra
   data
 }
 
-CorrectBiasHLNonlinear.old=function(data,pairs=Findno4sUPairs(data)) {
+CorrectBiasHLNonlinear=function(data,pairs=Findno4sUPairs(data),spline.df=15) {
+  set.seed(42)
   for (i in 1:length(pairs)) {
-    df=MakeToxicityTestTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank)
-    df$idx=1:nrow(df)
-    df=df[order(df$covar),]
-    fit=lowess(df$covar,df$lfc,f=0.2)
-    stopifnot(all(fit$x==df$covar))
+    df=MakeToxicityTestTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,ties='random')
 
-    df$f=2^(-fit$y)
-    df$f=df$f/min(df$f) # scale such that we have an increase for each gene!
-    df=df[order(df$idx),]
+    X <- model.matrix(lfc ~ splines::bs(covar, df=spline.df),data=df)
+    fit <- quantreg::rq(lfc ~ splines::bs(covar, df=spline.df), data=df)
+    lfc.fit <- X %*% fit$coef
 
-    count=data$data$count[,names(pairs)[i]]
-    ntr=data$data$ntr[,names(pairs)[i]]
-    a=data$data$alpha[,names(pairs)[i]]
-    b=data$data$beta[,names(pairs)[i]]
-
-    #f1=(count*df$f-count)/(count*ntr)
-    data$data$count[,names(pairs)[i]] = count*df$f #==count+f1*count*ntr
-    for (n in setdiff(names(data$data),c("count","ntr","alpha","beta"))) data$data[[n]][,names(pairs)[i]] = data$data[[n]][,names(pairs)[i]]*df$f
-    data$data$ntr[,names(pairs)[i]] = (ntr+df$f-1) / df$f #==(ntr*count+f1*ntr*count)/(count+f1*count*ntr)
-    ntr=data$data$ntr[,names(pairs)[i]]
-    data$data$alpha[,names(pairs)[i]]=ntr*(a+b-2)+1
-    data$data$beta[,names(pairs)[i]]=a+b-1-ntr*(a+b-2)
- }
-  data
-}
-
-
-CorrectBiasHLNonlinear=function(data,pairs=Findno4sUPairs(data),TU.len=NULL) {
-  for (i in 1:length(pairs)) {
-    df=MakeToxicityTestTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,TU.len = TU.len)
-    fit=if (is.null(TU.len))  loess(lfc~covar,data=df) else loess(lfc~covar+log(tulen),data=df)
-
-    df$f=2^(-predict(fit))
+    df$f=2^(-lfc.fit)
     df$f=df$f/min(df$f) # scale such that we have an increase for each gene!
 
     count=data$data$count[,names(pairs)[i]]
@@ -203,58 +187,8 @@ CorrectBiasHLNonlinear=function(data,pairs=Findno4sUPairs(data),TU.len=NULL) {
 }
 
 
-CorrectBiasHLLen = function(data,pairs=Findno4sUPairs(data),LFC.fun=lfc::NormLFC) {
-  for (i in 1:length(pairs)) {
-    df=MakeToxicityTestTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,LFC.fun=LFC.fun)
-    df$tulen=pmin(80000,setNames(data$gene.info$TU.len,data$gene.info$Symbol)[rownames(df)])
-    obj=function(par) {
-      p=par[1]
-      f=par[2]
-      df=df[!is.na(df$tulen),]
-      f=f*2^(-df$tulen/1000*p)
-      f1=(1-f)/f
-      df2=data.frame(lfc = LFC.fun(df$`4sU`+df$`4sU`*df$ntr*f1, df$`no4sU`),covar=(df$`4sU`*df$ntr+df$`4sU`*df$ntr*f1)/(df$`4sU`+df$`4sU`*df$ntr*f1))
-      sum(loess(lfc~covar,data=df2)$y^2)
-    }
-    par=optim(c(1,0.1),obj)
-    p=par$par[1]
-    f=par$par[2]
-    f=f*2^(-df$tulen/1000*p)
-    f=(1-f)/f
 
-    count=data$data$count[,names(pairs)[i]]
-    ntr=data$data$ntr[,names(pairs)[i]]
-    a=data$data$alpha[,names(pairs)[i]]
-    b=data$data$beta[,names(pairs)[i]]
-    data$data$count[,names(pairs)[i]] = count+f*count*ntr
-    # assume all other tables are expression tables!
-    for (n in setdiff(names(data$data),c("count","ntr","alpha","beta"))) data$data[[n]][,names(pairs)[i]] = data$data[[n]][,names(pairs)[i]]+f*data$data[[n]][,names(pairs)[i]]*ntr
-
-    data$data$ntr[,names(pairs)[i]] = (ntr*count+f*ntr*count)/(count+f*count*ntr)
-    ntr=data$data$ntr[,names(pairs)[i]]
-    data$data$alpha[,names(pairs)[i]]=ntr*(a+b-2)+1
-    data$data$beta[,names(pairs)[i]]=a+b-1-ntr*(a+b-2)
-  }
-  data
-}
-
-
-EstimateTranscriptionLossLenForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::NormLFC,TU.len) {
-  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun,TU.len=TU.len)
-  df$tulen[is.na(df$tulen)]=median(df$tulen,na.rm=TRUE)
-  obj=function(par) {
-    p=par[1]
-    f=par[2]
-    df=df[!is.na(df$tulen),]
-    f=f*2^(-df$tulen/1000*p)
-    f1=(1-f)/f
-    df2=data.frame(lfc = LFC.fun(df$`4sU`+df$`4sU`*df$ntr*f1, df$`no4sU`),covar=(df$`4sU`*df$ntr+df$`4sU`*df$ntr*f1)/(df$`4sU`+df$`4sU`*df$ntr*f1))
-    sum(loess(lfc~covar,data=df2)$y^2)
-  }
-  setNames(optim(c(0.01,0.5),obj)$par,c("p","f"))
-}
-
-EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::NormLFC, type=c("spearman","quantreg","linear","lowess"),bootstrap=FALSE) {
+EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::PsiLFC, type=c("spearman","quantreg","linear","lowess"),bootstrap=FALSE) {
   df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun)
 
   if (bootstrap) df = df[sample.int(nrow(df),nrow(df),replace=TRUE),]
@@ -299,34 +233,6 @@ EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=l
 
   1/(f1+1)
 
-}
-
-PlotToxicityTestLengthAll=function(data,pairs=Findno4sUPairs(data),TU.len="TU.len",...) {
-  setNames(lapply(names(pairs),function(n) PlotToxicityTestLength(data,n,pairs[[n]],TU.len = TU.len,...)),names(pairs))
-}
-PlotToxicityTestLengthDeferAll=function(data,pairs=NULL,TU.len="TU.len",...) {
-  if (is.null(pairs)) pairs=Findno4sUPairs(data)
-  rm(data)
-  setNames(lapply(names(pairs),function(n) Defer(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],TU.len = TU.len,add=ggtitle(n),height=4,...)),names(pairs))
-}
-PlotToxicityTestLength=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",TU.len="TU.len") {
-  # R CMD check guard for non-standard evaluation
-  tulen <- lfc <- NULL
-
-  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=1,TU.len = TU.len)
-  if (is.null(ylim)) {
-    d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
-    ylim=c(-d,d)
-  }
-  ggplot(df,aes(tulen,lfc,color=density2d(log(tulen), lfc, n = 100)))+
-    cowplot::theme_cowplot()+
-    scale_color_viridis_c(name = "Density",guide=FALSE)+
-    geom_point(alpha=1)+
-    scale_x_log10("TU length")+
-    geom_smooth(method="loess",formula=y~x)+
-    ylab("log FC 4sU/no4sU")+
-    coord_cartesian(ylim=ylim)+
-    ggtitle(w4sU)
 }
 
 #' Perform toxicity tests
@@ -386,7 +292,7 @@ PlotToxicityTestRankDeferAll=function(data,pairs=NULL,...) {
 
 #' @rdname toxicity
 #' @export
-PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",correction=1,label.corr=TRUE,boxplot.bins=10) {
+PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",correction=1,label.corr=TRUE,return.corr=FALSE,boxplot.bins=10,title=w4sU,size=1.5) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
@@ -404,27 +310,32 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
   re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide='none')+
-    geom_point(alpha=1)+
+    ggrastr::geom_point_rast(alpha=1,size=size)+
     geom_hline(yintercept=0)+
     #geom_smooth(method="loess",formula=y~x)+
     xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
-    coord_cartesian(ylim=ylim)+
-    ggtitle(w4sU,subtitle = if (label.corr) bquote(rho == .(rho) ~ "," ~ p ~ .(p)))
+    coord_cartesian(ylim=ylim)
+
+  lab=bquote(rho == .(rho) ~ "," ~ p ~ .(p))
+
   if (!is.na(boxplot.bins) && boxplot.bins>1) {
     bin=max(df$covar)/boxplot.bins
     df$cat=floor((df$covar-1)/bin)*bin+bin/2
     pp=kruskal.test(lfc~cat,data=df)$p.value
     pp=if (pp<2.2E-16) pp = bquote("<"~2.2 %*% 10^-16) else pp = sprintf("= %.2g",pp)
     re=re+
-      geom_boxplot(data=df,mapping=aes(x=cat,color=NULL,group=factor(cat)),color="black",fill=NA,outlier.shape = NA,size=1)+
-      ggtitle(w4sU,subtitle = if (label.corr) bquote(rho == .(rho) ~ "," ~ p ~ .(p) ~ ", Kruskall-Wallis" ~ p ~ .(pp)))
+      geom_boxplot(data=df,mapping=aes(x=cat,color=NULL,group=factor(cat)),color="black",fill=NA,outlier.shape = NA,size=1)
+    lab=bquote(rho == .(rho) * "," ~ p ~ .(p) * ", Kruskall-Wallis" ~ p ~ .(pp))
   }
-  re
+
+  re=re+ggtitle(title,subtitle = if (label.corr) lab)
+
+  if (return.corr) list(plot=re,label=lab) else re
 }
 
 #' @rdname toxicity
 #' @export
-PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1) {
+PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,title=w4sU,size=1.5) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
@@ -439,10 +350,10 @@ PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide="none")+
-    geom_point(alpha=1)+
+    ggrastr::geom_point_rast(alpha=1,size=size)+
     geom_hline(yintercept=0)+
     geom_smooth(method="loess",color='red')+
-    xlab("RNA half-life")+ylab("log FC 4sU/no4sU")+
+    xlab("RNA half-life [h]")+ylab("log FC 4sU/no4sU")+
     coord_cartesian(ylim=ylim)+
-    ggtitle(w4sU)
+    ggtitle(title)
 }

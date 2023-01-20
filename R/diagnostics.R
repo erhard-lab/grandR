@@ -110,7 +110,7 @@ PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NUL
 	if (max2>0 && !is.na(clip["Inferred 3p2"])) g=g+geom_vline(xintercept=offset+clip["Inferred 3p2"])
 	g=g+geom_line()+
 	  facet_grid(Read~Genomic)+
-	  scale_linetype_discrete(NULL,guide=if(length(unique(tab$Corrected))<=1) FALSE else guide_legend())+
+	  scale_linetype_discrete(NULL,guide=if(length(unique(tab$Corrected))<=1) guide_none() else guide_legend())+
 	  scale_color_brewer(NULL,palette="Dark2")+
 	  scale_x_continuous(breaks=c(lab1,max2-lab2+offset),labels=c(lab1,lab2))+
 	  scale_y_continuous(labels = scales::label_percent(0.1))+
@@ -192,7 +192,7 @@ PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category
 	if (!is.na(clip["Inferred 3p1"])) g=g+geom_vline(xintercept=max1-clip["Inferred 3p1"])
 	if (max2>0 && !is.na(clip["Inferred 5p2"])) g=g+geom_vline(xintercept=max2-clip["Inferred 5p2"]+offset-1)
 	if (max2>0 && !is.na(clip["Inferred 3p2"])) g=g+geom_vline(xintercept=offset+clip["Inferred 3p2"])
-	g=g+geom_line()+facet_grid(Category~Sense)+scale_linetype_discrete(NULL,guide=if(length(unique(tab$Corrected))<=1) F else guide_legend())+scale_x_continuous(breaks=c(lab1,max2-lab2+offset),labels=c(lab1,lab2))+coord_cartesian(ylim=c(0,ymax))+xlab(NULL)+ggtitle(paste0(genomic,">",read))
+	g=g+geom_line()+facet_grid(Category~Sense)+scale_linetype_discrete(NULL,guide=if(length(unique(tab$Corrected))<=1) guide_none() else guide_legend())+scale_x_continuous(breaks=c(lab1,max2-lab2+offset),labels=c(lab1,lab2))+coord_cartesian(ylim=c(0,ymax))+xlab(NULL)+ggtitle(paste0(genomic,">",read))
 	list(plot=g,
 	     description="For all positions along the reads (x axis; potentially paired end, shown left and right), show the percentage of a specific mismatch type for all samples. Positions outside of shaded areas are clipped. Uncorrected and Retained means before and after correcting multiply sequenced bases. Sense/Antisense means reads (first read for paired end) that are (based on the annotation) oriented in sense or antisense direction to a gene (i.e. this is only relevant for sequencing protocols that do not preserve strand information).",
 	     size=c(width=length(unique(tab$Sense))*5+2,height=length(unique(tab$Category))*2+0.2)
@@ -298,7 +298,7 @@ PlotModelNtr=function(data,label="4sU",estimator="Separate",model="Binom") {
 	qq=function(s) paste0("`",s,"`")
 
 	if (lower %in% names(tab)) {
-		g=ggplot(tab,aes_string("Condition",qq(param),color="Subread",ymin=qq(lower),ymax=qq(upper)))+
+		g=ggplot(tab,aes(Condition,!!sym(param),color=Subread,ymin=!!sym(lower),ymax=!!sym(upper)))+
 	    cowplot::theme_cowplot()+
 	    geom_errorbar(width=0.1,position=position_dodge(width=0.2))+
 	    geom_point(position=position_dodge(width=0.2))+
@@ -308,7 +308,7 @@ PlotModelNtr=function(data,label="4sU",estimator="Separate",model="Binom") {
 		  scale_color_brewer(NULL,palette="Dark2")+
 	    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}else{
-		g=ggplot(tab,aes_string("Condition",qq(param),color="Subread"))+
+		g=ggplot(tab,aes(Condition,!!sym(param),color=Subread))+
 	    cowplot::theme_cowplot()+
 	    geom_point(position=position_dodge(width=0.2))+
 	    coord_cartesian(ylim=c(0,max(tab[,param])))+
@@ -369,11 +369,11 @@ etbeta_save=function(l=0,u=1,s1=1,s2=1) {
 			tab2$`Lower TB-Binom p.mconv`=etbeta_save(tab2$`Lower TB-Binom p.err`,tab2$`Lower TB-Binom p.mconv`,exp(tab2$`Lower TB-Binom shape`),exp(-tab2$`Lower TB-Binom shape`))
 			tab2$`Upper TB-Binom p.mconv`=etbeta_save(tab2$`Upper TB-Binom p.err`,tab2$`Upper TB-Binom p.mconv`,exp(tab2$`Upper TB-Binom shape`),exp(-tab2$`Upper TB-Binom shape`))
 			tab=rbind(cbind(Type="Max",tab),cbind(Type="Mean",tab2))
-			g=ggplot(tab,aes_string("Condition",qq(param),color="Subread",shape="Type",ymin=qq(lower),ymax=qq(upper)))+cowplot::theme_cowplot()+
+			g=ggplot(tab,aes(Condition,!!sym(param),color=Subread,shape=Type,ymin=!!sym(lower),ymax=!!sym(upper)))+cowplot::theme_cowplot()+
 			  geom_errorbar(width=0.1,position=position_dodge(width=0.2))+geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_shape_manual(NULL,values=c(Max=1,Mean=19))
 		} else {
 			tab=rbind(cbind(Type="Max",tab),cbind(Type="Mean",tab2))
-			g=ggplot(tab,aes_string("Condition",qq(param),color="Subread",shape="Type"))+cowplot::theme_cowplot()+
+			g=ggplot(tab,aes(Condition,!!sym(param),color=Subread,shape=Type))+cowplot::theme_cowplot()+
 			  geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_shape_manual(NULL,values=c(Max=1,Mean=19))
 		}
 	} else {
@@ -383,10 +383,10 @@ etbeta_save=function(l=0,u=1,s1=1,s2=1) {
 		qq=function(s) paste0("`",s,"`")
 
 		if (lower %in% names(tab)) {
-			g=ggplot(tab,aes_string("Condition",qq(param),color="Subread",ymin=qq(lower),ymax=qq(upper)))+cowplot::theme_cowplot()+
+			g=ggplot(tab,aes_(Condition,!!sym(param),color=Subread,ymin=!!sym(lower),ymax=!!sym(upper)))+cowplot::theme_cowplot()+
 		    geom_errorbar(width=0.1,position=position_dodge(width=0.2))+geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 		} else {
-			g=ggplot(tab,aes_string("Condition",qq(param),color="Subread"))+cowplot::theme_cowplot()+
+			g=ggplot(tab,aes(Condition,!!sym(param),color=Subread))+cowplot::theme_cowplot()+
 		    geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 		}
 	}
@@ -429,10 +429,10 @@ PlotModelErr=function(data,label="4sU",estimator="Separate",model="Binom") {
 	qq=function(s) paste0("`",s,"`")
 
 	if (lower %in% names(tab)) {
-		g=ggplot(tab,aes_string("Condition",qq(param),color="Subread",ymin=qq(lower),ymax=qq(upper)))+cowplot::theme_cowplot()+
+		g=ggplot(tab,aes(Condition,!!sym(param),color=Subread,ymin=!!sym(lower),ymax=!!sym(upper)))+cowplot::theme_cowplot()+
 	    geom_errorbar(width=0.1,position=position_dodge(width=0.2))+geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}else{
-		g=ggplot(tab,aes_string("Condition",qq(param),color="Subread"))+cowplot::theme_cowplot()+
+		g=ggplot(tab,aes(Condition,!!sym(param),color=Subread))+cowplot::theme_cowplot()+
 	    geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}
 
@@ -559,7 +559,7 @@ PlotModelCompareErrPrior=function(data,label="4sU",estimator="Separate",model="B
 	param=paste(model[1],"p.err")
 	qq=function(s) paste0("`",s,"`")
 
-	g=ggplot(tab,aes_string("(`Lower prior p.err`+`Upper prior p.err`)/2",qq(param),color="Subread",xmin="`Lower prior p.err`",xmax="`Upper prior p.err`"))+cowplot::theme_cowplot()+
+	g=ggplot(tab,aes((`Lower prior p.err`+`Upper prior p.err`)/2,!!sym(param),color=Subread,xmin=`Lower prior p.err`,xmax=`Upper prior p.err`))+cowplot::theme_cowplot()+
 	  geom_point()+geom_errorbarh()+geom_abline()+scale_color_brewer(NULL,palette="Dark2")+xlab("Prior p.err")
 
 	list(
@@ -727,11 +727,12 @@ PlotProfileLikelihood=function(data,label="4sU",estimator=NULL,sample=NULL,subre
 
 
   tab=if (is.data.frame(data)) data else GetTableQC(data,"model.profile")
+  if (is.null(tab$Estimator)) tab$Estimator=estimator
   tab=tab[tab$Condition==sample & tab$Subread==subread & tab$Label==label & tab$Estimator==estimator,]
 
 	plot1=function(x,y,ylab=y,xlab=NULL) {
 		t=tab[tab$Parameter==x,]
-		g=ggplot(t,aes_string(x,y))+cowplot::theme_cowplot()+
+		g=ggplot(t,aes(!!sym(x),!!sym(y)))+cowplot::theme_cowplot()+
 		  ylab(ylab)+xlab(xlab)+theme(axis.text.x = element_text(angle = 40, vjust = 1, hjust=1))
 		if (y=="deltaLL") g=g+geom_hline(yintercept=0,color="grey",linetype=2)
 		g+geom_line()

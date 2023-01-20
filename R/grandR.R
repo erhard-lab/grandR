@@ -166,6 +166,7 @@ data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
   }
   ngene.info=if (!is.null(fun.gene.info)) fun.gene.info(data$gene.info,...) else data$gene.info
   ncoldata=if (!is.null(fun.coldata)) fun.coldata(data$coldata,...) else data$coldata
+  ncoldata$Name=factor(ncoldata$Name,levels=ncoldata$Name)
   analysis=NULL
   if (!is.null(data$analysis)) {
     map=setNames(1:nrow(data$gene.info),data$gene.info$Gene)
@@ -688,7 +689,7 @@ ToIndex=function(data,gene,regex=FALSE) {
 #' @param genes Restrict the output table to the given genes
 #' @param ntr.na For columns representing a 4sU naive sample, should types \emph{ntr},\emph{new.count} and \emph{old.count} be 0,0 and count (ntr.na=FALSE; can be any other slot than count) or NA,NA and NA (ntr.na=TRUE)
 #' @param gene.info Should the table contain the \link{GeneInfo} values as well (at the beginning)?
-#' @param summarize Should replicates by summarized? Can only be specified if columns is NULL; either a summarization matrix (\link{GetSummarizeMatrix}) or TRUE (in which case \link{GetSummarizeMatrix}(data) is called)
+#' @param summarize Should replicates by summarized? see details
 #' @param prefix Prepend each column in the output table (except for the gene.info columns) by the given prefix
 #' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
 #'
@@ -705,6 +706,9 @@ ToIndex=function(data,gene,regex=FALSE) {
 #'
 #' @details To refer to data slots via \code{type}, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total)
 #' followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to obtain the \emph{new counts}.
+#'
+#' @details The summarization parameter can only be specified if columns is NULL. It is either a summarization matrix (\link{GetSummarizeMatrix}) or
+#' TRUE (in which case \link{GetSummarizeMatrix}(data) is called). If there a NA values, they are imputed as the mean per group!
 #'
 #' @seealso \link{GetData},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes},\link{GetSummarizeMatrix}
 #'
@@ -768,7 +772,18 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
         rtt=as.data.frame(t(GetData(data,tt,columns=cols,genes,ntr.na = ntr.na,coldata=FALSE, by.rows=FALSE, name.by = name.by)))
         names(rtt)=cols
         if (!is.null(summarize)) {
-          rtt=as.data.frame(as.matrix(rtt) %*% summarize)
+          #rtt=as.data.frame(as.matrix(rtt) %*% summarize)  ## this is without imputation, which is really bad!
+          mrtt=as.matrix(rtt)
+          mrtt=apply(summarize,2,function(cc) {
+            h=mrtt[,cc!=0,drop=FALSE]
+            cc=cc[cc!=0]
+            apply(h,1,function(v) { v[is.na(v)] = mean(v,na.rm = TRUE); sum(v*cc)})
+          })
+          if (!is.matrix(mrtt)) mrtt=matrix(mrtt,nrow=1)
+          mrtt[is.nan(mrtt)]=NA
+          rownames(mrtt)=rownames(rtt)
+          colnames(mrtt)=colnames(summarize)
+          rtt=as.data.frame(mrtt)
         }
         if (length(type[mode.slot])>1) names(rtt)=paste0(names(rtt),".",tt)
         r1=if(is.null(r1)) rtt else cbind(r1,rtt)
