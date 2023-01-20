@@ -40,17 +40,17 @@ ServeGrandR=function(data,
   plot.static=list()
   df=table
   if (is.null(df)) {
-    df=if ("ServeGrandR" %in% Analyses(data)) GetAnalysisTable(data,analyses = "ServeGrandR",regex = FALSE,gene.info = FALSE) else GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q",gene.info = FALSE)
+    df=if ("ServeGrandR" %in% Analyses(data)) GetAnalysisTable(data,analyses = "ServeGrandR",regex = FALSE,gene.info = FALSE,prefix.by.analysis=FALSE) else GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q|log2FC|ROPE",gene.info = FALSE)
   }
 
   if (ncol(df)==0) stop("Empty table given!")
 
   if (is.null(plot.gene)) plot.gene=data$plots$gene
   if (is.null(plot.global)) plot.global=data$plots$global
-
+  if (is.null(plot.gene)) plot.gene=PlotGeneGroupsBars
 
   if (!is.list(plot.gene)) plot.gene=list(plot.gene)
-  if (length(plot.gene)==0) plot.gene=list(PlotGeneOldVsNew)
+  if (length(plot.gene)==0) plot.gene=list(PlotGeneGroupsBars)
   if (length(sizes)==1 && is.na(sizes)) sizes=rep(floor(12/min(4,length(plot.gene))),length(plot.gene))
   if (length(sizes)!=length(plot.gene)) stop("sizes need to be length 1 or same length as plots!")
   sizes=c(sizes,rep(1,8))
@@ -118,7 +118,7 @@ ServeGrandR=function(data,
 
 	  output$clip <- shiny::renderUI({
 	    nn=if(.row_names_info(df)<0) df[input$tab_rows_all,1] else rownames(df)[input$tab_rows_all]
-	    rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), modal=TRUE,shiny::icon("clipboard"))
+	    rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), modal=TRUE,icon=shiny::icon("clipboard"))
 	  })
 	  shiny::observeEvent(input$clipbtn, {shiny::showNotification(
 	    sprintf("Copied %d names",length(input$tab_rows_all)),

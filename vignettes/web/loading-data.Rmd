@@ -127,7 +127,7 @@ split.list
 lapply(split.list,Columns)
 ```
 
-The inverse of `split` is `join`:
+The inverse of `split` is `merge`:
 
 ```{r}
 sars.mock <- merge(split.list$SARS,split.list$Mock)
