@@ -1290,7 +1290,7 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
         return(re)
     }
 
-    if (sum(use)<2 || sum(ss$Value>0)==0) return(emptyres())
+
 
     ntr=ntr[use,]
     total=total[use,]
@@ -1311,7 +1311,6 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
             f0=mean(ss$Value)
             param=TransformSnapshot(ntr=ntr$Value,total=mean(total$Value),t=t,t0=t0,f0=f0)
         }
-
         re=emptyres()
         re$s=param['s']
         re$d=param['d']
@@ -1320,6 +1319,10 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
         return(re)
     }
 
+    if (sum(use)<2 || sum(ss$Value>0)==0) {
+      warning("Less than 2 samples. Skipping...")
+      return(emptyres())
+    }
     alpha=GetData(data,mode.slot="alpha",genes=gene,columns = columns)
     beta=GetData(data,mode.slot="beta",genes=gene,columns = columns)
     alpha=alpha[use,]
