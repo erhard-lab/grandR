@@ -1,20 +1,47 @@
 
 
-as.Seurat.grandR=function(d,modalities=c(RNA="total",newRNA="new"),hls=NULL,mode=c("assay","cells","genes","list")) {
+#' Create Seurat object from a grandR object
+#'
+#' @param data a grandR object
+#' @param modalities vector defining modalities to include in the Seurat object (see details)
+#' @param hls half-lives for computing previous RNA, only required for "prev" modality (see details)
+#' @param time labeling time, only required for "prev" modality (see details)
+#' @param mode how to integrate modalities into seurat object (see details)
+#'
+#' @details Modalities must be a named character vector. The only allowed elements are "total" (total counts),
+#' "new" (new counts), "old" (old counts), "prev" (estimated previous time point counts). The names of the elements are further
+#' used depending on mode.
+#'
+#' @details To compute the previous time point counts, a vector of half lives and the labeling time is required. The half-lives
+#' must be given in the correct order (same as in the grandR object).
+#'
+#' @details The mode parameter defines how the defined modalities are represented in the Seurat object. "assay" means
+#' that for each modality, the Seurat object will contain an assay (named according to the corresponding name in modalities).
+#' "cells" means that cells will be copied for each modality and cell names are prefixed by the corresponding name in modalities
+#'  (i.e., if the grandR object has 1000 cells named c1,...,c1000, and modalities=c(RNA="total",newRNA="new"), the Seurat object
+#'  will have 2000 cells named RNA.c1,...,RNA.c1000,newRNA.c1,...,newRNA.c1000). "genes" means that genes fill be copied for each
+#'  modality and gene names are prefixed by the corresponding name in modalities. "list" means that instead of a single Seurat object,
+#'  a list of Seurat objects is returned.
+#'
+#' @return a Seurat object
+#' @export
+#'
+#' @concept load
+as.Seurat.grandR=function(data,modalities=c(RNA="total",newRNA="new"),hls=NULL,time=NULL,mode=c("assay","cells","genes","list")) {
 
   if (length(modalities)==0) stop("No modality specified!")
 
-  mats=list(total=GetSparseMatrix(d,mode.slot='count'))
+  mats=list(total=GetSparseMatrix(data,mode.slot='count'))
   rows=Matrix::rowSums(mats$total)>0
   cols=Matrix::colSums(mats$total)>0
   mats$total=mats$total[rows,cols]
-  mats$ntr=GetSparseMatrix(d,mode.slot='ntr')[rows,cols]
+  mats$ntr=GetSparseMatrix(data,mode.slot='ntr')[rows,cols]
   if (any(c("old","new","prev") %in% modalities)) {
     mats$new=round(mats$total*mats$ntr)
     if (any(c("old","prev") %in% modalities)) mats$old=mats$total-mats$new
     if ("prev" %in% modalities) {
       stopifnot(!is.null(hls));
-      mats$prev=mats$old*exp(2*log(2)/pmin(pmax(hls,0.25),24))
+      mats$prev=mats$old*exp(time*log(2)/pmin(pmax(hls,0.25),24))
     }
   }
 #  if (any(c("old.lower","new.upper") %in% modalities)) {
@@ -33,27 +60,27 @@ as.Seurat.grandR=function(d,modalities=c(RNA="total",newRNA="new"),hls=NULL,mode
   if (!is.null(names(modalities))) names(mats)=names(modalities)
 
   re=switch(mode[1],assay={
-    s=Seurat::CreateSeuratObject(counts=mats[[1]],assay=names(mats)[1],project=basename(d$prefix))
+    s=Seurat::CreateSeuratObject(counts=mats[[1]],assay=names(mats)[1],project=basename(data$prefix))
     if (length(mats)>1) for (i in 2:length(mats)) s[[names(mats)[i]]]=Seurat::CreateAssayObject(mats[[i]])
     s
   },cells={
     for (i in 1:length(mats)) colnames(mats[[i]])=paste(colnames(mats[[i]]),names(mats)[i],sep=".")
     mat=do.call("cbind",mats)
     mode=do.call("c",lapply(1:length(mats),function(i) rep(names(mats)[i],ncol(mats[[i]]))))
-    s=Seurat::CreateSeuratObject(counts=mat,project=basename(d$prefix))
+    s=Seurat::CreateSeuratObject(counts=mat,project=basename(data$prefix))
     s[["mode"]]=factor(mode,levels=unique(mode))
     s
   },genes={
     for (i in 1:length(mats)) rownames(mats[[i]])=paste(rownames(mats[[i]]),names(mats)[i],sep=".")
     mat=do.call("rbind",mats)
-    Seurat::CreateSeuratObject(counts=mat,project=basename(d$prefix))
+    Seurat::CreateSeuratObject(counts=mat,project=basename(data$prefix))
   },list={
     re=lapply(1:length(mats),function(i) Seurat::CreateSeuratObject(counts=mats[[i]],project=names(mats)[i]))
     names(re)=names(mats)
     re
   })
   append.meta=function(s) {
-    for (i in seq_len(ncol(d$coldata))) s[[names(d$coldata)[i]]]=rep(d$coldata[cols,i],nrow(s[[]])/nrow(d$coldata[cols,]))
+    for (i in seq_len(ncol(d$coldata))) s[[names(data$coldata)[i]]]=rep(data$coldata[cols,i],nrow(s[[]])/nrow(data$coldata[cols,]))
     s
   }
   re = if ("Seurat" %in% class(re)) append.meta(re) else lapply(re,append.meta)
