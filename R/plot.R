@@ -1178,8 +1178,11 @@ PlotGeneSnapshotTimecourse=function(data,gene,time=Design$dur.4sU,
     # compute average line:
     if (!is.null(Condition(data))) {
       ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
-      ddf=plyr::ddply(ddf,plyr::.(x,colour,group),function(s) c(Value=mean(s$y,na.rm=TRUE)))
-      g=g+geom_line(data=ddf,mapping=aes(x,Value,color=colour,group=group),inherit.aes=F)
+      ddf=plyr::ddply(ddf,intersect(names(ddf),c("x","colour","linetype","group")),function(s) c(Value=mean(s$y,na.rm=TRUE)))
+      daes=aes(x,Value,group=group)
+      if ("colour" %in% names(ddf)) daes=utils::modifyList(daes,aes(color=colour))
+      if ("linetype" %in% names(ddf)) daes=utils::modifyList(daes,aes(linetype=linetype))
+      g=g+geom_line(data=ddf,mapping=daes,inherit.aes=FALSE)
     } else {
       ddf=as.data.frame(lapply(aes,function(col) rlang::eval_tidy(col,data=df)))
       ddf=plyr::ddply(ddf,plyr::.(x),function(s) c(Value=mean(s$y,na.rm=TRUE)))
