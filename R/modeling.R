@@ -1145,14 +1145,18 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
       samp.a=fit.A$samples
 
       N=nrow(samp.a)
-      if (N==0 || is.null(fit.A$samples)) return(c(
-        s=unname(fit.A$s),
-        HL=unname(log(2)/fit.A$d),
+      if (N==0 || is.null(fit.A$samples)) {
+        return(c(
+        #REVIEW Added mean, so for multiple samples it only returns the mean (is that ok?).
+          #What if one value is INF should I include it in mean or exclude it?
+        s=mean(unname(fit.A$s)),
+        HL=mean(unname(log(2)/fit.A$d)),
         s.cred.lower=-Inf,
         s.cred.upper=-Inf,
         HL.cred.lower=-Inf,
         HL.cred.upper=Inf
       ))
+      }
       samp.a=samp.a[1:N,,drop=FALSE]
 
       sc=quantile(samp.a[,'s'],c(0.5-CI.size/2,0.5+CI.size/2))
@@ -1253,7 +1257,6 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
 
     total=GetData(data,mode.slot=slot,genes=gene,columns = columns)
     ss=GetData(data,mode.slot=slot,genes=gene,columns = reference.columns)
-
     if (correct.labeling) {
       if (!is.null(time.experiment) && length(unique(ss[[time.experiment]]))!=1) ss[[time.experiment]] = median(ss[[time.experiment]])
     } else {
@@ -1312,8 +1315,15 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
             param=TransformSnapshot(ntr=ntr$Value,total=mean(total$Value),t=t,t0=t0,f0=f0)
         }
         re=emptyres()
-        re$s=param['s']
-        re$d=param['d']
+        #REVIEW added if statement such that the values of a single sample as well as
+        #multiple samples can be accessed
+        if (is.vector(param)) {
+          re$s=param['s']
+          re$d=param['d']
+        }
+        else {
+        re$s=param[,'s']
+        re$d=param[,'d'] }
         if (return.points)
             re$points=points
         return(re)
