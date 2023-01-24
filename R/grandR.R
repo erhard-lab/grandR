@@ -84,6 +84,16 @@ NULL
 #'
 #' @concept grandr
 grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$data,coldata=parent$coldata,metadata=parent$metadata,analyses=NULL,plots=NULL,parent=NULL) {
+
+  checknames=function(a){
+    if (!all(colnames(a)==rownames(coldata))) stop("Column names do not match!")
+    if (!all(rownames(a)==gene.info$Gene)) stop("Row names do not match!")
+  }
+  for (slot in slots) checknames(slot)
+  check.and.make.unique(gene.info$Gene,label = "Gene",do.error=TRUE)
+  check.and.make.unique(gene.info$Symbol,label = "Symbol",do.error=TRUE)
+
+
   info=list()
   info$prefix=prefix
   info$gene.info=gene.info
@@ -872,7 +882,7 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
     } else if (mode.slot=="ntr") {
       re[is.na(re)]=0
     }
-    return(methods::as(re,Class = "dgCMatrix"))
+    return(re)
   } else {
     if (tolower(substr(tno,1,1))=="t") return(re)
     if (tolower(substr(tno,1,1))=="n") {
