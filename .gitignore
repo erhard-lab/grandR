@@ -43,3 +43,5 @@ man/*.Rd
 .Renviron
 inst/doc
 docs
+
+src/*.so
