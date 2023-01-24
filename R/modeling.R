@@ -1145,18 +1145,16 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
       samp.a=fit.A$samples
 
       N=nrow(samp.a)
-      if (N==0 || is.null(fit.A$samples)) {
+      if (N==0 || is.null(fit.A$samples))
         return(c(
-        #REVIEW Added mean, so for multiple samples it only returns the mean (is that ok?).
-          #What if one value is INF should I include it in mean or exclude it?
-        s=mean(unname(fit.A$s)),
-        HL=mean(unname(log(2)/fit.A$d)),
+        s=unname(fit.A$s),
+        HL=unname(log(2)/fit.A$d),
         s.cred.lower=-Inf,
         s.cred.upper=-Inf,
         HL.cred.lower=-Inf,
         HL.cred.upper=Inf
       ))
-      }
+
       samp.a=samp.a[1:N,,drop=FALSE]
 
       sc=quantile(samp.a[,'s'],c(0.5-CI.size/2,0.5+CI.size/2))
@@ -1176,7 +1174,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
 
     re.df=as.data.frame(t(simplify2array(re)))
     rownames(re.df)=Genes(data)
-
+    #REVIEW could the Pseudobulk names be part of the colnames of the Analysis Table instead of 1:n.
     data=AddAnalysis(data,name = if (is.null(name.prefix)) n else if (n=="") name.prefix else paste0(name.prefix,".",n),table = re.df)
   }
   data
