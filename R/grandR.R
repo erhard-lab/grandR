@@ -852,6 +852,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #'
 #' @export
 #'
+#' @useDynLib grandR
 #' @concept data
 GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),name.by="Symbol") {
 
@@ -886,22 +887,37 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
   } else {
     if (tolower(substr(tno,1,1))=="t") return(re)
     if (tolower(substr(tno,1,1))=="n") {
-      # all that have zero in ntr matrix will be zero, so this is fine
-      sX <- Matrix::summary(re)
-      sY <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
-      sRes <- merge(sX, sY, by=c("i", "j"))
-      return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
+
+      X <- Matrix::summary(re)
+      Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
+      R=.Call('fastsparsematcompmult',X$i,X$j,X$x,Y$i,Y$j,Y$x)
+
+      return(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
                                   dimnames=dimnames(re)))
+
+      # all that have zero in ntr matrix will be zero, so this is fine
+      #sX <- Matrix::summary(re)
+      #sY <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
+      #sRes <- merge(sX, sY, by=c("i", "j"))
+      #return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
+      #                            dimnames=dimnames(re)))
     }
     if (tolower(substr(tno,1,1))=="o") {
-      sX <- Matrix::summary(re)
-      sY <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
-      sRes <- merge(sX, sY, by=c("i", "j"),all.x=TRUE)
-      sRes[is.na(sRes[,4]),4]=0
-      sRes[,4]=1-sRes[,4]
-      sRes=sRes[sRes[,4]>0,]
-      return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
+      X <- Matrix::summary(re)
+      Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
+      R=.Call('fastsparsematcompmult1m',X$i,X$j,X$x,Y$i,Y$j,Y$x)
+
+      return(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
                                   dimnames=dimnames(re)))
+
+      #sX <- Matrix::summary(re)
+      #sY <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
+      #sRes <- merge(sX, sY, by=c("i", "j"),all.x=TRUE)
+      #sRes[is.na(sRes[,4]),4]=0
+      #sRes[,4]=1-sRes[,4]
+      #sRes=sRes[sRes[,4]>0,]
+      #return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
+      #                            dimnames=dimnames(re)))
     }
     stop(paste0(mode.slot," unknown!"))
   }
