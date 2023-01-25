@@ -43,3 +43,6 @@ man/*.Rd
 .Renviron
 inst/doc
 docs
+
+src/*.so
+src/*.o
