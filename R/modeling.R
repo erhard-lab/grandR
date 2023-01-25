@@ -1174,7 +1174,6 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
 
     re.df=as.data.frame(t(simplify2array(re)))
     rownames(re.df)=Genes(data)
-    #REVIEW could the Pseudobulk names be part of the colnames of the Analysis Table instead of 1:n.
     data=AddAnalysis(data,name = if (is.null(name.prefix)) n else if (n=="") name.prefix else paste0(name.prefix,".",n),table = re.df)
   }
   data
@@ -1306,22 +1305,15 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
 
     if (N<1) {
         if (is.steady.state) {
-            param=TransformSnapshot(ntr=ntr$Value,total=mean(total$Value),t=t)
+            param=TransformSnapshot(ntr=mean(ntr$Value),total=mean(total$Value),t=t)
         } else {
             if (t0<=0) stop("Experimental time is not properly defined (the steady state sample must be prior to each of A and B)!")
             f0=mean(ss$Value)
-            param=TransformSnapshot(ntr=ntr$Value,total=mean(total$Value),t=t,t0=t0,f0=f0)
+            param=TransformSnapshot(ntr=mean(ntr$Value),total=mean(total$Value),t=t,t0=t0,f0=f0)
         }
         re=emptyres()
-        #REVIEW added if statement such that the values of a single sample as well as
-        #multiple samples can be accessed
-        if (is.vector(param)) {
-          re$s=param['s']
-          re$d=param['d']
-        }
-        else {
-        re$s=param[,'s']
-        re$d=param[,'d'] }
+        re$s=param['s']
+        re$d=param['d']
         if (return.points)
             re$points=points
         return(re)
