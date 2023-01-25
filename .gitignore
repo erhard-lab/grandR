@@ -45,3 +45,4 @@ inst/doc
 docs
 
 src/*.so
+src/*.o
