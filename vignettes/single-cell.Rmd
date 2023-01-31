@@ -1,0 +1,130 @@
+---
+title: "single-cell"
+author: "Lygeri Sakellaridi"
+date: "2023-01-18"
+output: rmarkdown::html_vignette:
+    toc: true
+    df_print: kable
+    fig_width: 7
+    fig_height: 6
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading single-cell data
+
+Single-cell data in the form of feature-barcode matrices (eg cellranger output) can be directly read into a grandR object. Afterards, they can be
+processed and analysed in that format, or converted into a Seurat object.
+
+To demonstrate this, we will use publicly available data on cortisol response in 
+single-cells of the A549 cell-line, including matrices of total and newly synthesized RNA (https://www.nature.com/articles/s41587-020-0480-9). The data is available on GEO under the accession ID GSM3770930.
+
+Since we are downloading large files, the download may take some time.
+The default time limit in R is 60 seconds, which might be insufficient.
+We change increase the time limit as follows:
+
+```{r}
+options(timeout=300)
+getOption("timeout")
+```
+
+Then we download the data:
+
+```{r}
+d <- ReadNewTotal("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSM3770930&format=file&file=GSM3770930%5FA549%5Fgene%5Fannotate%2Etxt%2Egz","https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSM3770930&format=file&file=GSM3770930%5FA549%5Fcell%5Fannotate%2Etxt%2Egz","https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSM3770930&format=file&file=GSM3770930%5FA549%5Fgene%5Fcount%5Fnewly%5Fsynthesised%2Etxt%2Egz","https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSM3770930&format=file&file=GSM3770930%5FA549%5Fgene%5Fcount%2Etxt%2Egz",verbose=TRUE,detection.rate
+= 0.82)
+```
+
+## Pre-processing the data
+
+Note: This section is currently not working with the grandR object
+made by ReadNewTotal. It works as expected with the grandR object
+made by running ReadGrand3_sparse on the grand-slam output.
+Error noted in the first code chunk.
+
+After loading the data into a grandR object, we can perform standard
+pre-processing such as gene filtering:
+
+```{r}
+# Currently not working with ReadNewTotal output;
+# works with ReadGrand3_sparse output
+dim(d)
+d.filtered <- FilterGenes(d, mode.slot = "count", minval = 1, mincol = 100)
+dim(d.filtered)
+
+# Warning: sparse->dense coercion: allocating vector of size 2.4 GiBError in #`$<-.data.frame`(`*tmp*`, Name, value = integer(0)) : 
+ # replacement has 0 rows, data has 7404
+```
+It should be noted that for single cell data, the default options for
+gene filtering are too strict due to the sparse nature of the data. 
+Let's see this in practice:
+
+```{r cars}
+d.small <- FilterGenes(d)
+dim(d.small)
+```
+
+Consequently, it is recommended to set the parameters manually.
+
+## Computing new RNA percentage
+
+Note: Code runs, plots are empty.
+
+We can now compute the percentage of new RNA per gene across cells:
+
+```{r}
+total <- GetTable(d, type = "total.count")
+new <- GetTable(d, type = "new.count")
+
+# New rna percentage per gene across all cells
+new.sums.per.gene <- rowSums(new)
+total.sums.per.gene <- rowSums(total)
+ntr.per.gene <- new.sums.per.gene/total.sums.per.gene
+new.rna.percentage.per.gene <- ntr.per.gene * 100
+```
+
+As well as the percentage of new RNA per cell across genes:
+
+```{r}
+# New rna percentage per cell across all genes
+new.sums.per.cell <- colSums(new)
+total.sums.per.cell <- colSums(total)
+ntr.per.cell <- new.sums.per.cell/total.sums.per.cell
+new.rna.percentage.per.cell <- ntr.per.cell * 100
+```
+
+Plotting new RNA percentage per gene across cells:
+
+```{r}
+new.rna.per.gene.df <- data.frame(new.rna.percentage.per.gene)
+ggplot2::ggplot(new.rna.per.gene.df, ggplot2::aes(new.rna.percentage.per.gene), ggplot2::stat_ecdf(geom = "point"))
+```
+
+Plotting new RNA percentage per cell across genes:
+
+```{r}
+new.rna.per.cell.df <- data.frame(new.rna.percentage.per.cell)
+ggplot(new.rna.per.cell.df, aes(new.rna.percentage.per.cell), stat_ecdf(geom = "point"))
+```
+
+## Conversion to Seurat
+
+We can convert the grandR object to a Seurat object:
+```{r}
+s <- as.Seurat.grandR(d, modalities=c(RNA='total',newRNA="new"))
+```
+Information on total and newly synthesized RNA are then stored in two
+separate assays:
+
+```{r}
+Seurat::Assays(s)
+```
+The total RNA is the default assay:
+
+```{r}
+Seurat::DefaultAssay(s)
+```
+
+Now we can use all Seurat's capabilities on this object.
