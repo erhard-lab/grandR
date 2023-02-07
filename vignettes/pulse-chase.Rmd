@@ -1,0 +1,72 @@
+---
+title: "Analyzing Pulse-Chase Designs"
+output: 
+  html_document:
+    toc: true
+    df_print: kable
+    fig_width: 7
+    fig_height: 6
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
+```
+
+This vignette will show the most suitable commands to work with pulse-chase data.
+
+Throughout this vignette, we will be using the GRAND-SLAM processed SLAM-seq data set from Herzog et al. 2017 [[1]](https://www.nature.com/articles/nmeth.4435). The data set includes SLAM-seq pulse-chase samples of mouse embryonic stem cells (mESCs) with pulse durations of 0, 0.5, 1, 3, 6, 12, and 24 hours.
+
+```{r}
+suppressPackageStartupMessages({
+  library(grandR)
+    library(ggplot2)
+    library(patchwork)
+})
+```
+
+First we load the data and do the standard preprocessing steps. For more on these initial commands see the [Loading data and working with grandR objects](loading-data.html) vignette.
+
+In this step, we need to modify the sample names in the data, as the names were not processed using systematic naming conventions. If systematic sample names were used, this step is not necessary.
+To do this, we use the rename.sample parameter in the `ReadGRAND` function, which allows us to specify a function for renaming the samples.
+The specified function removes all instances of "chase" and replaces 0.5 with 0_5. For example, "mESC.0.5h.chase.B" becomes "mESC.0_5h.B" and "mESC.0h.chase.C" becomes "mESC.0h.C". The output of the function is the modified vector after these replacements. This enables us to load the data using the design vector.
+
+```{r}
+d=ReadGRAND("/mnt/hilbert/projects/erhard/grandslam/ameres/chase_notrescued/grandslam_t15_fixedparam/chase_notrescued",
+            design=c(NA,"Time",Design$Replicate),rename.sample=function(v) gsub(".chase","",gsub("0.5h","0_5h",v)),read.percent.conv = TRUE)
+d=FilterGenes(d)
+d=Normalize(d)
+```
+
+The `FitKinetics` function can be utilized to analyze pulse-chase experiment data and estimate the synthesis and degradation rates of genes. To perform this analysis, the type parameter of the function should be set to "chase". The function requires a grandR object as input, which holds the data from the pulse-chase experiment.
+
+In addition to the required input, the `FitKinetics` function also has several optional parameters that allow for customization of the analysis. For further information on these parameters, please refer to the [Kinetic modeling](kinetic-modeling.html) vignette.
+
+The `FitKinetics` function uses the information in the grandR object and the specified parameters to fit a non-linear least squares model that describe the pulse-chase data. After fitting the models, the function returns a grandR object with an added analysis table that contains the inferred synthesis and degradation rates. 
+
+```{r,warning=FALSE}
+SetParallel()
+d=FitKinetics(d,time="Time",type="chase")
+```
+
+The function `GetAnalysisTable` can be used to retrieve the results from this analysis.
+
+```{r}
+head(GetAnalysisTable(d))
+```
+We can also inspect parameters for single genes for example:
+
+```{r}
+PlotGeneProgressiveTimecourse(d,gene=grep("Nanog",d$gene.info$Gene),time="Time",type="chase")
+```
+
+The curves represent the fitted model for this gene. 
+
+
+In this step, we compare the half-life values obtained from the `FitKinetics` function with those from Herzog et al. The latter was estimated by observing the decrease in mismatches during the chase period, while our method also considers the GRAND-SLAM-estimated NTR and posterior. To compare, we add Herzog et al's half-life values to our analysis table and create a scatter plot with half-life values on both the x and y axes. The plot clearly shows a correlation between the two sets of results, indicating that the `FitKinetics` results are consistent with those from Herzog et al.
+
+```{r,warning=FALSE}
+t=read.delim("/mnt/hilbert/projects/erhard/grandslam/ameres/chase/from_paper/halflives.tsv")
+t$Gene=paste0(t$Name,".",t$End)
+d = AddAnalysis(data = d,"kinetics",table = t,by="Gene")
+PlotScatter(d,`kinetics.Half.life..h.`,`kinetics.Half-life`)+geom_abline()
+```
+
