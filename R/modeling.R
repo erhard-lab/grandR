@@ -1295,6 +1295,7 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
     ntr=ntr[use,]
     total=total[use,]
     ss=ss[ss$Value>0,]
+    if ((nrow(ntr)==0)&(nrow(total)==0)) return(emptyres())
 
     t=if (is.numeric(time.labeling)) time.labeling else unique(ntr[[time.labeling]])
     t0=if (is.null(time.experiment)) t else unique(ntr[[time.experiment]])-unique(ss[[time.experiment]])
