@@ -1196,14 +1196,17 @@ Analyses=function(data, description=FALSE) {
 AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE) {
   if (!is.data.frame(table)) stop("Cannot add; analysis table must be a data frame!")
   #if (!equal(Genes(data,rownames(table)),Genes(data))) stop("Analysis table must contain row names corresponding to all genes!")
-  if (!equal(Genes(data,rownames(table)),Genes(data))) warning("Analysis table contains row names not corresponding to all genes!")
 
   if (!is.null(by)) {
     row.names(table) = table[,by]
     table <- table[, !names(table) %in% by, drop = TRUE]
+  }
+
+  if (!equal(Genes(data,rownames(table)),Genes(data))) {
+      warning("Analysis table contains row names not corresponding to all genes!")
     table <- table[Genes(data), ]
     rownames(table) = Genes(data)
-    }
+  }
 
   if (is.null(data$analysis)) data$analysis=list()
   if (is.null(data$analysis[[name]])) {
