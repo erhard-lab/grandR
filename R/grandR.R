@@ -93,6 +93,16 @@ grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$dat
   check.and.make.unique(gene.info$Gene,label = "Gene",do.error=TRUE)
   check.and.make.unique(gene.info$Symbol,label = "Symbol",do.error=TRUE)
 
+  if (!"no4sU" %in% colnames(coldata)) {
+    warning("No no4sU entry in coldata, assuming all samples/cells as 4sU treated!")
+    coldata$no4sU=FALSE
+  }
+
+  if (!"Name" %in% colnames(coldata)) {
+    coldata=cbind(data.frame(Name=factor(rownames(coldata),levels=rownames(coldata))),coldata)
+  }
+
+
 
   info=list()
   info$prefix=prefix
@@ -130,6 +140,11 @@ Title=function(data) {
   x=strsplit(data$prefix,"/")[[1]]
   x[length(x)]
 }
+
+#' @rdname grandR
+#' @export
+IsSparse=function(data) !is.matrix(data$data$count)
+
 
 #' @rdname grandR
 #' @export
@@ -175,8 +190,7 @@ data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
     re[[l1]]=fun(data$data[[l1]],...)
   }
   ngene.info=if (!is.null(fun.gene.info)) fun.gene.info(data$gene.info,...) else data$gene.info
-  ncoldata=if (!is.null(fun.coldata)) fun.coldata(data$coldata,...) else data$coldata
-  ncoldata$Name=factor(ncoldata$Name,levels=ncoldata$Name)
+  ncoldata=droplevels(if (!is.null(fun.coldata)) fun.coldata(data$coldata,...) else data$coldata)
   analysis=NULL
   if (!is.null(data$analysis)) {
     map=setNames(1:nrow(data$gene.info),data$gene.info$Gene)
@@ -683,8 +697,13 @@ ToIndex=function(data,gene,regex=FALSE) {
   if (is.logical(gene) && length(gene)==nrow(data)) return(which(gene))
   if (all(gene %in% data$gene.info$Gene)) return(setNames(1:nrow(data),data$gene.info$Gene)[gene])
   if (all(gene %in% data$gene.info$Symbol)) return(setNames(1:nrow(data),data$gene.info$Symbol)[gene])
-  warning("Could not find all genes!")
-  if (sum(gene %in% data$gene.info$Gene) > sum(gene %in% data$gene.info$Symbol)) return(setNames(1:nrow(data),data$gene.info$Gene)[intersect(gene,data$gene.info$Gene)])
+  if (sum(gene %in% data$gene.info$Gene) > sum(gene %in% data$gene.info$Symbol)) {
+    mis=setdiff(gene,data$gene.info$Gene)
+    warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(head(mis,5),collapse=",")))
+    return(setNames(1:nrow(data),data$gene.info$Gene)[intersect(gene,data$gene.info$Gene)])
+  }
+  mis=setdiff(gene,data$gene.info$Symbol)
+  warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(head(mis,5),collapse=",")))
   return(setNames(1:nrow(data),data$gene.info$Symbol)[intersect(gene,data$gene.info$Symbol)])
 }
 
@@ -830,17 +849,19 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
   r
 }
 
-#' Obtain a genes x values table as a sparse matrix
+
+#' Obtain a genes x values table as a large matrix
 #'
-#' This is the main function to access slot data for all genes as a sparse matrix.
+#' This is the main function to access slot data for all genes as a (potentially sparse) matrix.
 #'
 #' @param data A grandR object
 #' @param mode.slot Which kind of data to access (see details)
 #' @param columns which columns (i.e. samples or cells) to return (see details)
 #' @param genes Restrict the output table to the given genes
 #' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
+#' @param summarize Should replicates by summarized? see details
 #'
-#' @return A sparse matrix containing the desired values
+#' @return A (potentially) sparse matrix containing the desired values
 #'
 #' @details To refer to data slots, the mode.slot syntax can be used: It is either a data slot, or one of (new,old,total) followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to obtain the \emph{new counts}.
 #'
@@ -848,13 +869,16 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #' The expression is evaluated in an environment havin the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
 #' conveniently build a logical vector (e.g., columns=Condition=="x").
 #'
+#' @details The summarization parameter can only be specified if columns is NULL. It is either a summarization matrix (\link{GetSummarizeMatrix}) or
+#' TRUE (in which case \link{GetSummarizeMatrix}(data) is called). If there a NA values, they are imputed as the mean per group!
+#'
 #' @seealso \link{GetData},\link{GetAnalysisTable},\link{DefaultSlot},\link{Genes},\link{GetSummarizeMatrix}
 #'
 #' @export
 #'
 #' @useDynLib grandR
 #' @concept data
-GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),name.by="Symbol") {
+GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),name.by="Symbol",summarize=NULL) {
 
   if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(data,mode.slot)],collapse=",")))
   if (length(mode.slot)!=1) stop("Specify exactly one mode.slot!")
@@ -870,11 +894,11 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
   if (length(spl)>1) {tno=spl[1]; mode.slot=spl[2];}
 
   re=data$data[[mode.slot]][genes,columns,drop=FALSE]
-  rownames(re)=Genes(data,genes)
+  rownames(re)=Genes(data,genes,use.symbols = name.by=="Symbol")
 
   conv=function(v) { mode(v)="integer"; v}
 
-  if (is.matrix(re)) {
+  if (is.matrix(re)) {  # plain old R matrix!
     mf = switch(tolower(substr(tno,1,1)),t=1,n=as.matrix(data$data$ntr[genes,columns,drop=FALSE]),o=1-as.matrix(data$data$ntr[genes,columns,drop=FALSE]),stop(paste0(mode.slot," unknown!")))
       mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
     re=re*mf
@@ -883,16 +907,14 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
     } else if (mode.slot=="ntr") {
       re[is.na(re)]=0
     }
-    return(re)
   } else {
-    if (tolower(substr(tno,1,1))=="t") return(re)
     if (tolower(substr(tno,1,1))=="n") {
 
       X <- Matrix::summary(re)
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      return(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
                                   dimnames=dimnames(re)))
 
       # all that have zero in ntr matrix will be zero, so this is fine
@@ -901,13 +923,12 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
       #sRes <- merge(sX, sY, by=c("i", "j"))
       #return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
       #                            dimnames=dimnames(re)))
-    }
-    if (tolower(substr(tno,1,1))=="o") {
+    } else if (tolower(substr(tno,1,1))=="o") {
       X <- Matrix::summary(re)
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult1m',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      return(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
                                   dimnames=dimnames(re)))
 
       #sX <- Matrix::summary(re)
@@ -919,9 +940,29 @@ GetSparseMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Gen
       #return(Matrix::sparseMatrix(i=sRes[,1], j=sRes[,2], x=conv(sRes[,3]*sRes[,4]),dims=dim(re),
       #                            dimnames=dimnames(re)))
     }
-    stop(paste0(mode.slot," unknown!"))
   }
 
+  if (!is.null(summarize)) {
+    if (is.logical(summarize) && length(summarize)==1 && !summarize) {
+      summarize=NULL
+    } else {
+      if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
+      summarize=summarize[columns,]
+      summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
+    }
+
+    re=apply(summarize,2,function(cc) {
+      h=re[,cc!=0,drop=FALSE]
+      cc=cc[cc!=0]
+      apply(h,1,function(v) { v[is.na(v)] = mean(v,na.rm = TRUE); sum(v*cc)})
+    })
+    if (!is.matrix(re)) re=matrix(re,nrow=1)
+    re[is.nan(re)]=NA
+    rownames(re)=Genes(data,genes,use.symbols = name.by=="Symbol")
+    colnames(re)=colnames(summarize)
+  }
+
+  re
 
 }
 

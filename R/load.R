@@ -572,7 +572,7 @@ ReadGRAND3_sparse=function(prefix,
 
 
   if (verbose) cat("Reading count matrix...\n")
-  count=methods::as(Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz")),Class = "CsparseMatrix")
+  count=Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz"))
   gene.info=read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
   if (ncol(gene.info)==4) gene.info$Length=1
   gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
@@ -610,19 +610,19 @@ ReadGRAND3_sparse=function(prefix,
   re$count=count
 
   if (verbose) cat("Reading NTRs...\n")
-  ntr=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator)),Class = "CsparseMatrix")
+  ntr=Matrix::readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator))
   colnames(ntr)=cols
   rownames(ntr)=gene.info$Gene
   re$ntr=ntr
 
   if (read.posterior && file.exists(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
     if (verbose) cat("Reading posterior beta parameters...\n")
-    alpha=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)),Class = "CsparseMatrix")
+    alpha=Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator))
     colnames(alpha)=cols
     rownames(alpha)=gene.info$Gene
     re$alpha=alpha
 
-    beta=methods::as(Matrix::readMM(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator)),Class = "CsparseMatrix")
+    beta=Matrix::readMM(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))
     colnames(beta)=cols
     rownames(beta)=gene.info$Gene
     re$beta=beta
@@ -728,7 +728,6 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
   #ntr=new/count
   #ntr@x[ntr@x>1]=1
   #ntr@x[is.nan(ntr@x)]=0
-  #ntr=methods::as(ntr,Class = "CsparseMatrix")
 
   colnames(ntr)=colnames(count)
   rownames(ntr)=rownames(count)
@@ -853,6 +852,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   terms=strsplit(conds[1],".",fixed=TRUE)[[1]]
 
   if (is.data.frame(design)) {
+    design=as.data.frame(design) # in case it's a tibble or similar
     if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(conds,collapse=", ")))
     if (is.null(design$Name) || !all(design$Name==conds)) stop(paste0("Design parameter (table) must contain a Name column corresponding to the sample names!"))
     coldata=design

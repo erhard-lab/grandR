@@ -25,13 +25,12 @@ suppressPackageStartupMessages({
 
 First we load the data and do the standard preprocessing steps. For more on these initial commands see the [Loading data and working with grandR objects](loading-data.html) vignette.
 
-In this step, we need to modify the sample names in the data, as the names were not processed using systematic naming conventions. If systematic sample names were used, this step is not necessary.
-To do this, we use the rename.sample parameter in the `ReadGRAND` function, which allows us to specify a function for renaming the samples.
-The specified function removes all instances of "chase" and replaces 0.5 with 0_5. For example, "mESC.0.5h.chase.B" becomes "mESC.0_5h.B" and "mESC.0h.chase.C" becomes "mESC.0h.C". The output of the function is the modified vector after these replacements. This enables us to load the data using the design vector.
+In this step, we need to modify the sample names in the data, as the names were not processed using systematic naming conventions. If systematic sample names were used, the `rename.sample` parameter would not be necessary. This parameter allows us to specify a function for renaming the samples.
+The specified function removes all occurrences of ".chase" and replaces 0.5 with 0_5. For example, "mESC.0.5h.chase.B" becomes "mESC.0_5h.B" and "mESC.0h.chase.C" becomes "mESC.0h.C". The output of the function is the modified vector after these replacements. This enables us to load the data using the design vector.
 
 ```{r}
 d=ReadGRAND("/mnt/hilbert/projects/erhard/grandslam/ameres/chase_notrescued/grandslam_t15_fixedparam/chase_notrescued",
-            design=c(NA,"Time",Design$Replicate),rename.sample=function(v) gsub(".chase","",gsub("0.5h","0_5h",v)),read.percent.conv = TRUE)
+            design=c(NA,"Time",Design$Replicate),rename.sample=function(v) gsub(".chase","",gsub("0.5h","0_5h",v)))
 d=FilterGenes(d)
 d=Normalize(d)
 ```
@@ -52,13 +51,18 @@ The function `GetAnalysisTable` can be used to retrieve the results from this an
 ```{r}
 head(GetAnalysisTable(d))
 ```
-We can also inspect parameters for single genes for example:
+
+We can also visualize single genes graphically:
 
 ```{r}
-PlotGeneProgressiveTimecourse(d,gene=grep("Nanog",d$gene.info$Gene),time="Time",type="chase")
+PlotGeneProgressiveTimecourse(d,gene=Genes(d,"Dnmt3b",regex=TRUE),time="Time",type="chase")
 ```
 
-The curves represent the fitted model for this gene. 
+The curves represent the fitted model for this gene. Note that we do not specify the gene name directly, since here the gene names were labeled differently, and the `Genes()` function can be used to find the matching label:
+
+```{r}
+Genes(d,"Dnmt3b",regex=TRUE)
+```
 
 
 In this step, we compare the half-life values obtained from the `FitKinetics` function with those from Herzog et al. The latter was estimated by observing the decrease in mismatches during the chase period, while our method also considers the GRAND-SLAM-estimated NTR and posterior. To compare, we add Herzog et al's half-life values to our analysis table and create a scatter plot with half-life values on both the x and y axes. The plot clearly shows a correlation between the two sets of results, indicating that the `FitKinetics` results are consistent with those from Herzog et al.
@@ -67,6 +71,6 @@ In this step, we compare the half-life values obtained from the `FitKinetics` fu
 t=read.delim("/mnt/hilbert/projects/erhard/grandslam/ameres/chase/from_paper/halflives.tsv")
 t$Gene=paste0(t$Name,".",t$End)
 d = AddAnalysis(data = d,"kinetics",table = t,by="Gene")
-PlotScatter(d,`kinetics.Half.life..h.`,`kinetics.Half-life`)+geom_abline()
+PlotScatter(d,`kinetics.Half.life..h.`,`kinetics.Half-life`,correlation = FormatCorrelation())+geom_abline()
 ```
 

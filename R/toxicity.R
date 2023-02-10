@@ -125,15 +125,6 @@ ComputeSummaryStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE,
 
 
 
-#' Title
-#'
-#' @param data
-#' @param pairs
-#' @param ...
-#'
-#' @return
-#' @export
-#'
 EstimateTranscriptionLoss=function(data,pairs=Findno4sUPairs(data),...) {
   sapply(names(pairs),function(n) EstimateTranscriptionLossForSample(data,n,pairs[[n]],...))
 }
