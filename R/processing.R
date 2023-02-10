@@ -391,8 +391,9 @@ FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.c
   if (is.null(use)) {
     summi = if (!is.null(min.cond)) GetSummarizeMatrix(data,no4sU=TRUE,average=FALSE) else NULL
     mincol=if (!is.null(min.cond)) min.cond else mincol
-    t=GetTable(data,type=mode.slot,summarize = summi)
-    use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincol)
+    t=GetMatrix(data,mode.slot=mode.slot,summarize = summi)
+    use=Matrix::rowSums(t>=minval,na.rm=TRUE)>=mincol
+    #use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincol)
     if (!is.null(keep)) use = use | rownames(t) %in% rownames(t[keep,])
   }
   use=ToIndex(data,use)
@@ -410,9 +411,15 @@ FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.c
 #' @param name the new name by which this is added to the Coldata
 #' @param genes define the set of genes to compute the percentage for
 #' @param mode.slot which mode.slot to take the values for computing the percentage from
+#' @param genes.total define the set of genes defining the total value
+#' @param mode.slot.total which mode.slot to take the values for computing the total
 #' @param multiply.by.100 if TRUE, compute percentage values, otherwise fractions between 0 and 1
 #'
 #' @seealso \code{\link{Coldata}}
+#'
+#' @details The percentages are computed for the given genes with the given mode.slot, w.r.t the mode.slot.total from the genes.total. Thus
+#' to compute the percentage of mitochondrial gene expression in total RNA (unnormalized), only set genes=Genes(data,"^MT-",regex=TRUE).
+#' To compute the percentage of new RNA among all genes, set mode.slot="new.count" and mode.slot.total="count".
 #'
 #' @details Genes can be referred to by their names, symbols, row numbers in the gene table, or a logical vector referring to the gene table rows.
 #'
@@ -423,9 +430,9 @@ FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.c
 #' @export
 #'
 #' @concept data
-ComputeExpressionPercentage=function(data,name,genes,mode.slot=DefaultSlot(data),multiply.by.100=TRUE) {
-  gof=colSums(GetTable(data,type=mode.slot,ntr.na = FALSE,genes = genes))
-  total=colSums(GetTable(data,type=mode.slot,ntr.na = FALSE))
+ComputeExpressionPercentage=function(data,name,genes=Genes(data),mode.slot=DefaultSlot(data),genes.total=Genes(data),mode.slot.total=mode.slot,multiply.by.100=TRUE) {
+  gof=Matrix::colSums(GetMatrix(data,mode.slot=mode.slot,genes = genes))
+  total=Matrix::colSums(GetMatrix(data,mode.slot=mode.slot.total,genes = genes.total))
   percentage=gof/total
   if (multiply.by.100) percentage=percentage*100
   Coldata(data,name)=percentage

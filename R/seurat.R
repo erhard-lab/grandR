@@ -24,6 +24,8 @@
 #'  a list of Seurat objects is returned.
 #'
 #' @return a Seurat object
+#'
+#' @export as.Seurat.grandR
 #' @export
 #'
 #' @concept load
@@ -33,11 +35,11 @@ as.Seurat.grandR=function(data,modalities=c(RNA="total",newRNA="new"),hls=NULL,t
 
   if (length(modalities)==0) stop("No modality specified!")
 
-  mats=list(total=GetSparseMatrix(data,mode.slot='count'))
+  mats=list(total=GetMatrix(data,mode.slot='count'))
   rows=Matrix::rowSums(mats$total)>0
   cols=Matrix::colSums(mats$total)>0
   mats$total=mats$total[rows,cols]
-  mats$ntr=GetSparseMatrix(data,mode.slot='ntr')[rows,cols]
+  mats$ntr=GetMatrix(data,mode.slot='ntr')[rows,cols]
   if (any(c("old","new","prev") %in% modalities)) {
     mats$new=round(mats$total*mats$ntr)
     if (any(c("old","prev") %in% modalities)) mats$old=mats$total-mats$new

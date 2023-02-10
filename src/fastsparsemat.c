@@ -20,7 +20,7 @@ SEXP fastsparsematdiv(SEXP Xi, SEXP Xj, SEXP Xx, SEXP Yi, SEXP Yj, SEXP Yx, SEXP
   int j = 0;
   for (int i = 0; i < n; i++) {
     for (; pXi[i]!=pYi[j] || pXj[i]!=pYj[j]; ++j);
-    pout[i] = (pXx[i]/pdr)/pYx[i];
+    pout[i] = (pXx[i]/pdr)/pYx[j];
     if (pout[i]>1) pout[i]=1;
   }
   UNPROTECT(1);
