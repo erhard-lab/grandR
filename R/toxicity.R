@@ -159,6 +159,8 @@ CorrectBiasHLFactor=function(data,pairs=Findno4sUPairs(data),factors=EstimateTra
 }
 
 CorrectBiasHLNonlinear=function(data,pairs=Findno4sUPairs(data),spline.df=15) {
+  checkPackages("quantreg")
+
   set.seed(42)
   for (i in 1:length(pairs)) {
     df=MakeToxicityTestTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,ties='random')
@@ -221,6 +223,7 @@ EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=l
     f1=optimize(obj,c(0,19))$minimum
   }
   else if (type[1]=="quantreg") {
+    checkPackages("quantreg")
     obj=function(f1) quantreg::rq(lfc~covar,data=data.frame(lfc = LFC.fun(df$`4sU`+df$`4sU`*df$ntr*f1, df$`no4sU`), covar=(df$`4sU`*df$ntr+df$`4sU`*df$ntr*f1)/(df$`4sU`+df$`4sU`*df$ntr*f1)))$coeff[2]
     l=obj(0)
     r=obj(19)
@@ -307,10 +310,16 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
   df$lfc=ifelse(df$lfc<ylim[1],-Inf,df$lfc)
   df$lfc=ifelse(df$lfc>ylim[2],+Inf,df$lfc)
 
+  pfun=if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
+    singleMessage("Install the ggrastr package to get rasterized toxicity plots!")
+    ggplot2::geom_point
+  } else ggrastr::geom_point_rast
+
+
   re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide='none')+
-    ggrastr::geom_point_rast(alpha=1,size=size)+
+    pfun(alpha=1,size=size)+
     geom_hline(yintercept=0)+
     #geom_smooth(method="loess",formula=y~x)+
     xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
@@ -347,10 +356,16 @@ PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,
     d=max(abs(quantile(df$lfc[is.finite(df$lfc)],c(0.01,0.99))))*1.5
     ylim=c(-d,d)
   }
+
+  pfun=if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
+    singleMessage("Install the ggrastr package to get rasterized toxicity plots!")
+    ggplot2::geom_point
+  } else ggrastr::geom_point_rast
+
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide="none")+
-    ggrastr::geom_point_rast(alpha=1,size=size)+
+    pfun(alpha=1,size=size)+
     geom_hline(yintercept=0)+
     geom_smooth(method="loess",color='red')+
     xlab("RNA half-life [h]")+ylab("log FC 4sU/no4sU")+

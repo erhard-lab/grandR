@@ -156,6 +156,7 @@ ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name="HL", columns
 #'
 #' @concept preprocess
 ComputeAbsolute=function(data,dilution=4E4,volume=10,slot="tpm",name="absolute") {
+  checkPackages(c("monocle","VGAM"))
   fd=data.frame(gene_short_name=Genes(data))
   rownames(fd)=Genes(data)
   mat=GetTable(data,type=slot)

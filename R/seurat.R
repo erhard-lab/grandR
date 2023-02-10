@@ -29,6 +29,8 @@
 #' @concept load
 as.Seurat.grandR=function(data,modalities=c(RNA="total",newRNA="new"),hls=NULL,time=NULL,mode=c("assay","cells","genes","list")) {
 
+  checkPackages(c("Seurat"))
+
   if (length(modalities)==0) stop("No modality specified!")
 
   mats=list(total=GetSparseMatrix(data,mode.slot='count'))

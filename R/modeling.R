@@ -1067,7 +1067,7 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param seed Seed for the random number generator
 #' @param dispersion overdispersion parameter for each gene; if NULL this is estimated from data
-#' @param hierarchical Take the NTR from the hierarchical Bayesian model (see details)
+#' @param sample.level Define how the NTR is sampled from the hierarchical Bayesian model (must be 0,1, or 2; see details)
 #' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
 #' @param verbose Vebose output
 #'
@@ -1081,8 +1081,10 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #' is NULL, then the labeling time of the A or B samples is used (e.g. useful if labeling was started concomitantly with the perturbation, and the steady state samples
 #' are unperturbed samples).
 #'
-#' @details By default, the hierarchical Bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
-#' that approximates the mixture of betas from the replicate samples.
+#' @details By default, the hierarchical Bayesian model is estimated. If sample.level = 0, the NTRs are sampled from a beta distribution
+#' that approximates the mixture of betas from the replicate samples. If sample.level = 1, only the first level from the hierarchical model
+#' is sampled (corresponding to the uncertainty of estimating the biological variability). If sample.level = 2, the first and second levels
+#' are estimated (corresponding to the full hierarchical model).
 #'
 #' @details if N is set to 0, then no sampling from the posterior is performed, but the transformed MAP estimates are returned
 #'
@@ -1099,7 +1101,11 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #'
 #' @export
 #' @concept snapshot
-FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,slot=DefaultSlot(data),conditions=NULL,time.labeling=Design$dur.4sU,time.experiment=NULL, sample.f0.in.ss=TRUE,N=10000,N.max=N*10,CI.size=0.95,seed=1337, dispersion=NULL, hierarchical=TRUE, correct.labeling=FALSE, verbose=FALSE) {
+FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
+                             slot=DefaultSlot(data),conditions=NULL,
+                             time.labeling=Design$dur.4sU,time.experiment=NULL,
+                             sample.f0.in.ss=TRUE,N=10000,N.max=N*10,CI.size=0.95,seed=1337, dispersion=NULL,
+                             sample.level=2, correct.labeling=FALSE, verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
   if(!is.null(seed)) set.seed(seed)
 
@@ -1141,7 +1147,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
 
     re=plapply(1:nrow(data),function(i) {
       #for (i in 1:nrow(data)) { print (i);
-      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
+      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,sample.level=sample.level,beta.prior=beta.prior,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
       samp.a=fit.A$samples
 
       N=nrow(samp.a)
@@ -1193,7 +1199,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
 #' @param time.labeling the column in the column annotation table denoting the labeling duration or the labeling duration itself
 #' @param time.experiment the column in the column annotation table denoting the experimental time point (can be NULL, see details)
 #' @param sample.f0.in.ss whether or not to sample f0 under steady state conditions
-#' @param hierarchical Take the NTR from the hierarchical Bayesian model (see details)
+#' @param sample.level Define how the NTR is sampled from the hierarchical Bayesian model (must be 0,1, or 2; see details)
 #' @param beta.prior The beta prior for the negative binomial used to sample counts, if NULL, a beta distribution is fit to all expression values and given dispersions
 #' @param return.samples return the posterior samples of the parameters?
 #' @param return.points return the point estimates per replicate as well?
@@ -1208,8 +1214,10 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
 #' \code{time.experiment} is NULL, then the labeling time of the samples is used (e.g. useful if labeling was started concomitantly with
 #' the perturbation, and the reference samples are unperturbed samples).
 #'
-#' @details By default, the hierarchical Bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
-#' that approximates the mixture of betas from the replicate samples.
+#' @details By default, the hierarchical Bayesian model is estimated. If sample.level = 0, the NTRs are sampled from a beta distribution
+#' that approximates the mixture of betas from the replicate samples. If sample.level = 1, only the first level from the hierarchical model
+#' is sampled (corresponding to the uncertainty of estimating the biological variability). If sample.level = 2, the first and second levels
+#' are estimated (corresponding to the full hierarchical model).
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
@@ -1226,7 +1234,7 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
                              dispersion=NULL,
                              slot=DefaultSlot(data),time.labeling=Design$dur.4sU,time.experiment=NULL,
                              sample.f0.in.ss=TRUE,
-                             hierarchical=TRUE,
+                             sample.level=2,
                              beta.prior=NULL,
                              return.samples=FALSE,
                              return.points=FALSE,
@@ -1234,6 +1242,8 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
                              CI.size=0.95,
                              correct.labeling=FALSE
                              ) {
+
+  if (!sample.level %in% c(0,1,2)) stop("Sample level must be 0,1 or 2!")
 
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
@@ -1329,8 +1339,10 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
     alpha=alpha[use,]
     beta=beta[use,]
 
-    if (hierarchical) {
-        mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample
+    if (n==2) {
+      mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample
+    } else if (n==1) {
+      mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample.param
     } else {
         fit=beta.approximate.mixture(alpha$Value,beta$Value)
         mod=function(N) rbeta(N,fit$a,fit$b)
