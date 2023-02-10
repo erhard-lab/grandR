@@ -50,11 +50,12 @@ Condition(banp) <- c("Genotype","Experimental.time.original","has.4sU")
 PlotGeneOldVsNew(banp,"Tubgcp5")
 ```
 
-It is also possible to change the aesthetic mappings (i.e. the usage of shape for replicates and colors for conditions) via the aest parameter and the way they are displayed via ggplot's scales:
+Since the plotting function return standard ggplot object,it is easily possible to add titles or to change the aesthetic mappings (i.e. the usage of shape for replicates and colors for conditions) via the aest parameter and the way they are displayed via ggplot's scales:
 
 ```{r fig.width=6, warning=FALSE}
 PlotGeneOldVsNew(banp,"Tubgcp5",aest = aes(color=Genotype,shape=factor(duration.4sU)))+
-  scale_color_brewer(palette="Dark2")
+  scale_color_brewer(palette="Dark2")+
+  ggtitle("Tubgcp5")
 ```
 
 Both plotting functions also offer to plot credible intervals. These must be precomputed using `ComputeNtrCI`. Note here that `PlotGeneOldVsNew` returns a plain ggplot2 object, so we can easily further customize it (here: restrict the y axis, which would otherwise be extended way down due to the large CI of one of the points).

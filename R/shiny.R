@@ -35,6 +35,8 @@ ServeGrandR=function(data,
                    show.sessionInfo=FALSE,
                    help=list(".Q: multiple testing corrected p values",".LFC: log2 fold changes") ) {
 
+  checkPackages(c("shiny","rclipboard","DT","htmltools"))
+
   if (is.character(data) && file.exists(data)) data = readRDS(data)
 
   plot.static=list()

@@ -23,6 +23,9 @@
 #'
 #' @concept diffexp
 DESeq2BIC=function(data,name="BIC",mode="total",normalization=mode,formulas=list(Condition=~Condition, Background=~1),no4sU=FALSE,columns=NULL,verbose=FALSE) {
+
+  checkPackages("DESeq2")
+
   mode.slot=paste0(mode,".count")
   normalization=paste0(normalization,".count")
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
@@ -96,6 +99,8 @@ DESeq2BIC=function(data,name="BIC",mode="total",normalization=mode,formulas=list
 #'
 #' @concept diffexp
 LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,target=~Condition,background=~1,columns=NULL, logFC=FALSE, verbose=FALSE) {
+  checkPackages("DESeq2")
+
   mode.slot=paste0(mode,".count")
   normalization=paste0(normalization,".count")
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
@@ -305,6 +310,8 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' @concept diffexp
 PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode="total",
                         normalization=mode, logFC=FALSE, verbose=FALSE) {
+  checkPackages("DESeq2")
+
   mode.slot=paste0(mode,".count")
   normalization=paste0(normalization,".count")
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
@@ -407,6 +414,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #' @param CI.size A number between 0 and 1 representing the size of the credible interval
 #' @param seed Seed for the random number generator
 #' @param dispersion overdispersion parameter for each gene; if NULL this is estimated from data
+#' @param sample.level Define how the NTR is sampled from the hierarchical Bayesian model (must be 0,1, or 2; see details)
 #' @param hierarchical Take the NTR from the hierarchical Bayesian model (see details)
 #' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
 #' @param verbose Print status messages
@@ -421,8 +429,10 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #' is NULL, then the labeling time of the A or B samples is used (e.g. useful if labeling was started concomitantly with the perturbation, and the steady state samples
 #' are unperturbed samples).
 #'
-#' @details By default, the hierarchical Bayesian model is estimated. If hierarchical = FALSE, the NTRs are sampled from a beta distribution
-#' that approximates the mixture of betas from the replicate samples.
+#' @details By default, the hierarchical Bayesian model is estimated. If sample.level = 0, the NTRs are sampled from a beta distribution
+#' that approximates the mixture of betas from the replicate samples. If sample.level = 1, only the first level from the hierarchical model
+#' is sampled (corresponding to the uncertainty of estimating the biological variability). If sample.level = 2, the first and second levels
+#' are estimated (corresponding to the full hierarchical model).
 #'
 #' @details if N is set to 0, then no sampling from the posterior is performed, but the transformed MAP estimates are returned
 #'
@@ -474,7 +484,7 @@ EstimateRegulation=function(data,name.prefix="Regulation",
                             CI.size=0.95,
                             seed=1337,
                             dispersion=NULL,
-                            hierarchical=TRUE,
+                            sample.level=2,
                             correct.labeling=FALSE,
                             verbose=FALSE) {
   if (!check.slot(data,slot)) stop("Illegal slot definition!")
@@ -526,8 +536,8 @@ EstimateRegulation=function(data,name.prefix="Regulation",
 
     re=plapply(1:nrow(data),function(i) {
     #for (i in 1:nrow(data)) { print (i);
-      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
-      fit.B=FitKineticsGeneSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,hierarchical=hierarchical,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
+      fit.A=FitKineticsGeneSnapshot(data=data,gene=i,columns=A,dispersion=dispersion.A[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,sample.level=sample.level,beta.prior=beta.prior.A,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
+      fit.B=FitKineticsGeneSnapshot(data=data,gene=i,columns=B,dispersion=dispersion.B[i],reference.columns=reference.columns,slot=slot,time.labeling=time.labeling,time.experiment=time.experiment,sample.f0.in.ss=sample.f0.in.ss,sample.level=sample.level,beta.prior=beta.prior.B,return.samples=TRUE,N=N,N.max=N.max,CI.size=CI.size,correct.labeling=correct.labeling)
       samp.a=fit.A$samples
       samp.b=fit.B$samples
 
@@ -658,6 +668,7 @@ hierarchical.beta.posterior=function(a,b,
     size.high=uniroot(function(x) ltrans.marg.posterior(logMAP[1],x)-opt$value+log(fak.below.max),interval = c(logMAP[2],logMAP[2]+4),extendInt = "downX")$root
 
     if (compute.marginal.likelihood) {
+      checkPackages("cubature")
       ml=log(cubature::adaptIntegrate(function(v) exp(ltrans.marg.posterior(v[1],v[2])-opt$value),lowerLimit = c(mu.low,size.low),upperLimit = c(mu.high,size.high))$integral)+opt$value
       re$mar.loglik=ml
     }
@@ -693,6 +704,7 @@ hierarchical.beta.posterior=function(a,b,
   }
 
   if (plot) {
+    checkPackages("graphics")
     x=seq(min(qbeta(0.001,a,b)),max(qbeta(0.999,a,b)),length.out=1000)
     plot(x,pbeta(x,a[1],b[1]),type='l',xlim=range(x),ylim=c(0,1))
     for (i in 2:length(a)) graphics::lines(x,pbeta(x,a[i],b[i]))
@@ -731,6 +743,7 @@ ListGeneSets=function() {
     C7="Immunologic signature gene sets  represent cell states and perturbations within the immune system.",
     C8="Cell type signature gene sets  curated from cluster markers identified in single-cell sequencing studies of human tissue."
   )
+  checkPackages("msigdbr")
   re=setNames(as.data.frame(msigdbr::msigdbr_collections()),c("category","subcategory","n"))
   re$`category description` = descr[as.character(re$category)]
   re
@@ -779,6 +792,9 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
                          species = NULL, category = NULL, subcategory = NULL,
                          verbose=TRUE, minSize=10, maxSize=500,
                          process.genesets=NULL) {
+
+  checkPackages("clusterProfiler","msigdbr")
+
   if (is.null(species)) {
     if (sum(grepl("ENSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="Homo sapiens"
     if (sum(grepl("ENSMUSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="Mus musculus"
@@ -801,6 +817,8 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
 
   genes=eval(substitute(GetSignificantGenes(data,analysis=analysis,criteria=criteria,as.table=TRUE,use.symbols=FALSE,gene.info=FALSE)),enclos = parent.frame()) # this is necessary to call the eval subs function!
   if (mode(genes[,1])=="numeric") {
+    checkPackages("fgsea")
+
     if (verbose) cat("Performing GSEA (using fgsea)...\n")
     clusterProfiler::GSEA(setNames(genes[,1],rownames(genes)),TERM2GENE = gs,minGSSize=minSize,maxGSSize = maxSize)
   }
@@ -1019,6 +1037,7 @@ GetContrasts.default=function(x,contrast,columns=NULL,group=NULL,name.format=NUL
 
 # Normalization of NTRs such that: median logFC new RNA vs. new RNA is 0, there is no correlation of this logFC vs the NTR
 NormalizeEffectiveLabeling=function(data,reference=colnames(data),slot="norm",verbose=FALSE) {
+  checkPackages("quantreg")
   w=rowMeans(GetTable(data,type=slot,columns=reference),na.rm=TRUE)
   ntr=rowMeans(GetTable(data,type="ntr",columns=reference),na.rm=TRUE)
   w=w*ntr

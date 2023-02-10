@@ -383,7 +383,7 @@ etbeta_save=function(l=0,u=1,s1=1,s2=1) {
 		qq=function(s) paste0("`",s,"`")
 
 		if (lower %in% names(tab)) {
-			g=ggplot(tab,aes_(Condition,!!sym(param),color=Subread,ymin=!!sym(lower),ymax=!!sym(upper)))+cowplot::theme_cowplot()+
+			g=ggplot(tab,aes(Condition,!!sym(param),color=Subread,ymin=!!sym(lower),ymax=!!sym(upper)))+cowplot::theme_cowplot()+
 		    geom_errorbar(width=0.1,position=position_dodge(width=0.2))+geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.conv")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 		} else {
 			g=ggplot(tab,aes(Condition,!!sym(param),color=Subread))+cowplot::theme_cowplot()+
@@ -428,12 +428,14 @@ PlotModelErr=function(data,label="4sU",estimator="Separate",model="Binom") {
 	upper=paste("Upper",model[1],"p.err")
 	qq=function(s) paste0("`",s,"`")
 
+	savemax=function(a,b=a) max(c(a,b)[is.finite(c(a,b))])
+
 	if (lower %in% names(tab)) {
 		g=ggplot(tab,aes(Condition,!!sym(param),color=Subread,ymin=!!sym(lower),ymax=!!sym(upper)))+cowplot::theme_cowplot()+
-	    geom_errorbar(width=0.1,position=position_dodge(width=0.2))+geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,upper])))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+	    geom_errorbar(width=0.1,position=position_dodge(width=0.2))+geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,savemax(tab[,upper],tab[,param])))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}else{
 		g=ggplot(tab,aes(Condition,!!sym(param),color=Subread))+cowplot::theme_cowplot()+
-	    geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,max(tab[,param])))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+	    geom_point(position=position_dodge(width=0.2))+coord_cartesian(ylim=c(0,savemax(tab[,param])))+ylab("p.err")+xlab(NULL)+scale_color_brewer(NULL,palette="Dark2")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 	}
 
 	list(
@@ -811,7 +813,7 @@ CreatePdfsParameters=function(data,labels=NULL,estimators=NULL) {
   for (lab in unique(tab$Label)) {
     for (estimator in unique(tab$Estimator)) {
 
-      pdf(sprintf("%s.model.parameters.%s.%s.pdf",prefix,lab,estimator),width=3+ncond/2,height=7)
+      pdf(sprintf("%s.model.parameters.%s.%s.pdf",data$prefix,lab,estimator),width=3+ncond/2,height=7)
       print(PlotModelNtr(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
       print(PlotModelErr(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
       print(PlotModelConv(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
@@ -843,7 +845,7 @@ CreatePdfsComparison=function(data,labels=NULL,estimators=NULL) {
   for (lab in unique(tab$Label)) {
     for (estimator in unique(tab$Estimator)) {
 
-      pdf(sprintf("%s.model.comparison.%s.%s.pdf",prefix,lab,estimator),width=9,height=7)
+      pdf(sprintf("%s.model.comparison.%s.%s.pdf",data$prefix,lab,estimator),width=9,height=7)
       print(PlotModelCompareErrPrior(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
       if ("TB-Binom ntr" %in% names(tab)) {
         print(PlotModelCompareErrPrior(data,label=lab,estimator=estimator,model="TB-Binom")$plot+ggtitle(paste(lab," (tbbinom)")))
@@ -883,7 +885,7 @@ CreatePdfsProfiles=function(data,labels=NULL,estimators=NULL) {
   for (lab in unique(para$Label)) {
     for (estimator in unique(para$Estimator)) {
 
-      pdf(sprintf("%s.model.profile.%s.%s.pdf",prefix,lab,estimator),width=21,height=16)
+      pdf(sprintf("%s.model.profile.%s.%s.pdf",data$prefix,lab,estimator),width=21,height=16)
       for (cond in unique(tab$Condition)) {
         for (subread in subs) {
           if (sum(tab$Label==lab & tab$Condition==cond & tab$Subread==subread & tab$Estimator==estimator)>0) {

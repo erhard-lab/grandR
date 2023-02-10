@@ -80,9 +80,14 @@ PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,c
 	rm.na=!apply(is.na(mat),2,sum)==nrow(mat)
 	mat=mat[,rm.na]
 	cd=cd[rm.na,]
-	if (do.vst) mat <- DESeq2::vst(cnt(mat))
+	if (do.vst) {
+	  checkPackages("DESeq2")
+	  mat <- DESeq2::vst(cnt(mat))
+	}
 
-  	rv <- matrixStats::rowVars(mat)
+	checkPackages("matrixStats")
+	rv <- matrixStats::rowVars(mat)
+
   	select <- order(rv, decreasing=TRUE)[seq_len(min(ntop, length(rv)))]
   	pca <- prcomp(t(mat[select,]))
 	percentVar <- pca$sdev^2 / sum( pca$sdev^2 )
@@ -178,6 +183,9 @@ make.continuous.colors=function(values,colors=NULL,breaks=NULL) {
     }
     if (is.null(colors)) colors="YlOrRd"
   }
+
+  if (length(colors)==1) checkPackages(c("RColorBrewer","viridisLite"))
+
   if (length(colors)==1 && colors %in% rownames(RColorBrewer::brewer.pal.info)) {
     colors = RColorBrewer::brewer.pal(length(breaks),colors)
   } else if (length(colors)==1) {
@@ -267,6 +275,9 @@ PlotHeatmap=function(data,
                      title=NULL,return.matrix=FALSE,
                      na.to=NA,...) {
 
+  checkPackages(c("ComplexHeatmap","circlize"))
+
+
   mode.slot=check.mode.slot(data,type)
   if (any(mode.slot)) {
     columns=substitute(columns)
@@ -305,15 +316,15 @@ PlotHeatmap=function(data,
   hm
 }
 
-PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
-  # R CMD check guard for non-standard evaluation
-  name <- NULL
+#PlotTestOverlap=function(data,names=NULL,alpha=0.05,type=c("venn","euler")) {
+#  # R CMD check guard for non-standard evaluation
+#  name <- NULL#
 
-  mat=GetAnalysisTable(data,gene.info=FALSE,genes=names,columns='^Q$')
-	df=setNames(as.data.frame(mat<alpha & !is.na(mat)),gsub(".Q$","",names(mat)))
-	pl=switch(type[1],euler=eulerr::euler(df),venn=eulerr::venn(df))
-	plot(pl,main=name)
-}
+#  mat=GetAnalysisTable(data,gene.info=FALSE,genes=names,columns='^Q$')
+#	df=setNames(as.data.frame(mat<alpha & !is.na(mat)),gsub(".Q$","",names(mat)))
+#	pl=switch(type[1],euler=eulerr::euler(df),venn=eulerr::venn(df))
+#	plot(pl,main=name)
+#}
 
 #' Formatting function for correlations
 #'
@@ -581,7 +592,10 @@ PlotScatter=function(data,
   }
 
   point.fun=function(...) geom_point(...)
-  if ((is.null(rasterize) && nrow(df)>1000) || rlang::is_true(rasterize)) point.fun=function(...) ggrastr::geom_point_rast(...)
+  if ((is.null(rasterize) && nrow(df)>1000) || rlang::is_true(rasterize)) {
+    checkPackages("ggrastr")
+    point.fun=function(...) ggrastr::geom_point_rast(...)
+  }
 
   g=ggplot(df,aes(A,B,color=color))+cowplot::theme_cowplot()
   if (!is.null(layers.below)) for (e in layers.below) g=g+e
@@ -605,7 +619,12 @@ PlotScatter=function(data,
   if (!is.null(label)) {
     df2=df[if (is.grandR(data)) ToIndex(data,label) else label,]
     df2$label=if (is.character(label)) label else rownames(df2)[label]
-    g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE,max.overlaps = Inf,min.segment.length = 0,force=label.repel)
+    if (checkPackages("ggrepel",error = FALSE,warn = FALSE)) {
+      g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE,max.overlaps = Inf,min.segment.length = 0,force=label.repel)
+    } else {
+      singleMessage("Install the ggrepel package to have nicer labels!")
+      g=g+ggplot2::geom_label(data=df2,mapping=aes(label=label),show.legend = FALSE)
+    }
   }
   if (!is.null(correlation)) {
     if (correlation.x==-Inf) correlation.hjust=-0.05
@@ -721,12 +740,17 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
     xlab(bquote(log[2]~FC))+
     ylab(bquote("-"~log[10]~FDR))+
     geom_hline(yintercept=-log10(p.cutoff),linetype=2)+
-    geom_vline(xintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
+    geom_vline(xintercept=if (lfc.cutoff==0) 0 else c(-lfc.cutoff,lfc.cutoff),linetype=2)+
     ggtitle(analysis)
 
   if (annotate.numbers) {
-    n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),factor(df$Q>p.cutoff,levels=c("FALSE","TRUE")))
-    g=g+annotate("label",x=c(-Inf,0,Inf,-Inf,0,Inf),y=c(Inf,Inf,Inf,-Inf,-Inf,-Inf),label=paste0("n=",as.numeric(n)),hjust=c(-0.1,0.5,1.1,-0.1,0.5,1.1),vjust=c(1.1,1.1,1.1,-0.1,-0.1,-0.1))
+    if (lfc.cutoff!=0) {
+      n=table(cut(df$LFC,breaks=c(-Inf,-lfc.cutoff,lfc.cutoff,Inf)),factor(df$Q>p.cutoff,levels=c("FALSE","TRUE")))
+      g=g+annotate("label",x=c(-Inf,0,Inf,-Inf,0,Inf),y=c(Inf,Inf,Inf,-Inf,-Inf,-Inf),label=paste0("n=",as.numeric(n)),hjust=c(-0.1,0.5,1.1,-0.1,0.5,1.1),vjust=c(1.1,1.1,1.1,-0.1,-0.1,-0.1))
+    } else {
+      n=table(cut(df$LFC,breaks=c(-Inf,lfc.cutoff,Inf)),factor(df$Q>p.cutoff,levels=c("FALSE","TRUE")))
+      g=g+annotate("label",x=c(-Inf,Inf,-Inf,Inf),y=c(Inf,Inf,-Inf,-Inf),label=paste0("n=",as.numeric(n)),hjust=c(-0.1,1.1,-0.1,1.1),vjust=c(1.1,1.1,-0.1,-0.1))
+    }
   }
   g
 }

@@ -173,6 +173,8 @@ cnt=function(m) {
 #'
 #' @concept helper
 estimate.dispersion=function(ss) {
+  checkPackages("DESeq2")
+
   dds=DESeq2::DESeqDataSetFromMatrix(countData = cnt(ss),colData=data.frame(rep(1,ncol(ss))),design = ~1)
   dds=DESeq2::estimateSizeFactors(dds)
   dds=DESeq2::estimateDispersions(dds,quiet=TRUE)
@@ -223,6 +225,14 @@ opt <- new.env()
 opt$lapply=function(...) lapply(...)
 opt$sapply=function(...) simplify2array(opt$lapply(...))
 opt$nworkers=0
+opt$singlemsg=list()
+
+singleMessage=function(msg) {
+  if (is.null(opt$singlemsg[[msg]])) {
+    cat(sprintf("%s\n (This message is only shown once per session)\n",msg))
+    opt$singlemsg[[msg]] = 1
+  }
+}
 
 
 #' Set up parallel execution
@@ -257,4 +267,21 @@ SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
 #' @export
 #' @concept helper
 IsParallel=function() {opt$nworkers>1}
+
+
+checkPackages=function(pp,error=TRUE,warn=TRUE) {
+  missing = c();
+  for (p in pp) {
+    if (!suppressWarnings(requireNamespace(p,quietly = TRUE))) {
+      missing = c(missing,p)
+    }
+  }
+  if (length(missing)>0) {
+    msg = sprintf("Package%s %s %s missing!",if (length(missing)>1) "s" else "",paste(missing,collapse=","),if (length(missing)>1) "are" else "is")
+    if (error) stop(msg)
+    if (warn) warning(msg)
+    return(FALSE)
+  }
+  return(TRUE)
+}
 
