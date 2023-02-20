@@ -22,6 +22,10 @@ navbar:
           href: articles/web/data-matrices-and-analysis-results.html
         - text: "Plotting & web-interface"
           href: articles/web/plotting.html
+        - text: "Fitting pulse-chase data"
+          href: articles/web/pulse-chase.html
+        - text: "Single cell data analysis"
+          href: articles/web/single-cell.html
     - text: Discussions
       href: "https://github.com/erhard-lab/grandR/discussions"
     - text: "News"
@@ -82,10 +86,10 @@ reference:
 - contents:
   - has_concept("shiny")
 - title: QC
-- subtitle: Toxicity checks
-  desc:  Functions to check for 4sU toxicity
+- subtitle: 4sU dropout checks
+  desc:  Functions to check for 4sU dropout
 - contents:
-  - has_concept("toxicity")
+  - has_concept("dropout")
 - subtitle: Temporal recalibration
   desc: Functions for recalibration of labeling times (to get effective labeling from nominal labeling times)
 - contents:

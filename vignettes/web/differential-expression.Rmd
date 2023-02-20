@@ -157,12 +157,12 @@ We see that there are quite some effects for both pairwise comparison.
 
 # Differential analysis of 4sU treatment
 
-To focus on the 4sU effect, we first create toxicity plots. 4sU labeling can have impact on transcription before cell viability suffers. Such an effect would be observable in these plots by a substantial negative correlation, i.e. genes with high NTR (which are to the right), should tend to be downregulated in the 4sU labeled sample vs an equivalent 4sU naive sample. It is important that these analyses are only done by comparing biologically equivalent samples (and not on the SARS infected samples here, as the no4sU sample is from 3h post infection, and all others are later). 
+To focus on the 4sU effect, we first create 4sU dropout plots. 4sU labeling can have impact on transcription before cell viability suffers. Such an effect would be observable in these plots by a substantial negative correlation, i.e. genes with high NTR (which are to the right), should tend to be downregulated in the 4sU labeled sample vs an equivalent 4sU naive sample. It is important that these analyses are only done by comparing biologically equivalent samples (and not on the SARS infected samples here, as the no4sU sample is from 3h post infection, and all others are later). 
 
 
 ```{r fig.height=4, warning=FALSE}
-Condition(banp)="Genotype"  # PlotToxicityTestRankAll will use all no4sU samples within the same Condition as reference
-PlotToxicityTestRankAll(banp)
+Condition(banp)="Genotype"  # Plot4sUDropoutRankAll will use all no4sU samples within the same Condition as reference
+Plot4sUDropoutRankAll(banp)
 Condition(banp) <- c("Genotype","Experimental.time.original","has.4sU") # reset
 ```
 

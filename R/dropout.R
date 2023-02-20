@@ -4,7 +4,7 @@
 #' Find equivalent no4sU samples for 4sU samples
 #'
 #' Identify all no4sU samples in the same condition, and return everything as a list to be used in
-#' \link{PlotToxicityTest}, \link{PlotToxicityTestRank}, \link{PlotToxicityTestAll}, \link{PlotToxicityTestRankAll}
+#' \link{Plot4sUDropout}, \link{Plot4sUDropoutRank}, \link{Plot4sUDropoutAll}, \link{Plot4sUDropoutRankAll}
 #'
 #' @param data a grandR object
 #' @param paired.replicates pair replicates, i.e. only no4sU.A is found for 4sU.A
@@ -13,14 +13,14 @@
 #' @return a named list containing, for each 4sU sample, a vector of equivalent no4sU samples
 #' @export
 #'
-#' @seealso \link{PlotToxicityTest}, \link{PlotToxicityTestRank}, \link{PlotToxicityTestAll}, \link{PlotToxicityTestRankAll}
+#' @seealso \link{Plot4sUDropout}, \link{Plot4sUDropoutRank}, \link{Plot4sUDropoutAll}, \link{Plot4sUDropoutRankAll}
 #'
 #' @examples
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #' Findno4sUPairs(sars)
 #'
-#' @concept toxicity
+#' @concept dropout
 Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
   # R CMD check guard for non-standard evaluation
   no4sU <- NULL
@@ -38,7 +38,7 @@ Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
   pairs
 }
 
-MakeToxicityTestTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=lfc::PsiLFC,slot="count",rm.all.zero=TRUE,correction=1,...) {
+Make4sUDropoutTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=lfc::PsiLFC,slot="count",rm.all.zero=TRUE,correction=1,...) {
   w=rowMeans(GetTable(data,type=slot,columns=w4sU))
   col=no4sU
   n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=col))
@@ -80,7 +80,7 @@ ComputeSummaryStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE,
     re$`Transcription Loss.SE`=l[colnames(data)]
   }
 
-  if (d$metadata$`GRAND-SLAM version`==3) {
+  if (data$metadata$`GRAND-SLAM version`==3) {
     tab=GetTableQC(data,"model.parameters")
     tab=tab[tab$Label==tab$Label[1] & tab$Estimator==tab$Estimator[1],]
     for (sub in unique(tab$Subread)) {
@@ -90,7 +90,7 @@ ComputeSummaryStatistics=function(data,pairs=Findno4sUPairs(data),coldata=FALSE,
   } else {
     tab=GetTableQC(data,"mismatches",stop.if.not.exist=FALSE)
     if (!is.null(tab)) {
-      strand=GetTableQC(d,"strandness",stop.if.not.exist=FALSE)$V1
+      strand=GetTableQC(data,"strandness",stop.if.not.exist=FALSE)$V1
       if (strand=="Antisense") {
         tab=tab[(tab$Orientation=="First" & tab$Genomic=="A" & tab$Read=="G")|(tab$Orientation=="Second" & tab$Genomic=="T" & tab$Read=="C"),]
       } else if (strand=="Sense") {
@@ -154,7 +154,7 @@ CorrectBiasHLNonlinear=function(data,pairs=Findno4sUPairs(data),spline.df=15) {
 
   set.seed(42)
   for (i in 1:length(pairs)) {
-    df=MakeToxicityTestTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,ties='random')
+    df=Make4sUDropoutTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,ties='random')
 
     X <- model.matrix(lfc ~ splines::bs(covar, df=spline.df),data=df)
     fit <- quantreg::rq(lfc ~ splines::bs(covar, df=spline.df), data=df)
@@ -182,7 +182,7 @@ CorrectBiasHLNonlinear=function(data,pairs=Findno4sUPairs(data),spline.df=15) {
 
 
 EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=lfc::PsiLFC, type=c("spearman","quantreg","linear","lowess"),bootstrap=FALSE) {
-  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun)
+  df=Make4sUDropoutTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=rank,ntr=ntr,LFC.fun=LFC.fun)
 
   if (bootstrap) df = df[sample.int(nrow(df),nrow(df),replace=TRUE),]
 
@@ -229,9 +229,9 @@ EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=l
 
 }
 
-#' Perform toxicity tests
+#' Perform 4sU dropout tests
 #'
-#' Testing for toxicity of a 4sU sample is performed by comparing half-lives or NTR ranks against
+#' Testing for RNA dropout of a 4sU sample is performed by comparing half-lives or NTR ranks against
 #' the log2 fold change of the 4sU sample vs equivalent no4sU samples.
 #'
 #' @param data a grandR object
@@ -244,6 +244,12 @@ EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=l
 #' @param slot the slot of the grandR object to take the data from; for \link[lfc]{PsiLFC}, this really should be "count"!
 #' @param hl.quantile the half-life quantile to cut the plot
 #' @param correction correction factor
+#' @param label.corr add statistics as subtitle
+#' @param return.corr instead of only the ggplot object, return a list with slots plot (what is normally returned) and label (the correlation statistics)
+#' @param boxplot.bins how many boxplots for \code{Plot4sUDropoutRank}
+#' @param title the main title for the plot
+#' @param size the point size
+#' @param hl if NULL, compute half-lives from the ntr column; otherwise, must be a vector containing half-lives
 #' @param ... further arguments to be passed to or from other methods.
 #'
 #' @details The deferred versions are useful to be used in conjunction with \link{ServeGrandR} plot.static. Their implementation
@@ -253,44 +259,44 @@ EstimateTranscriptionLossForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fun=l
 #'
 #' @seealso \link{Findno4sUPairs},\link{Defer}
 #'
-#' @name toxicity
-#' @concept toxicity
+#' @name dropout
+#' @concept dropout
 NULL
 #> NULL
 
-#' @rdname toxicity
+#' @rdname dropout
 #' @export
-PlotToxicityTestRankAll=function(data,pairs=Findno4sUPairs(data),...) {
-  setNames(lapply(names(pairs),function(n) PlotToxicityTestRank(data,n,pairs[[n]],...)),names(pairs))
+Plot4sUDropoutRankAll=function(data,pairs=Findno4sUPairs(data),...) {
+  setNames(lapply(names(pairs),function(n) Plot4sUDropoutRank(data,n,pairs[[n]],...)),names(pairs))
 }
-#' @rdname toxicity
+#' @rdname dropout
 #' @export
-PlotToxicityTestAll=function(data,pairs=Findno4sUPairs(data),...) {
-  setNames(lapply(names(pairs),function(n) PlotToxicityTest(data,n,pairs[[n]],...)),names(pairs))
-}
-
-#' @rdname toxicity
-#' @export
-PlotToxicityTestDeferAll=function(data,pairs=NULL,...) {
-  if (is.null(pairs)) pairs=Findno4sUPairs(data)
-  rm(data)
-  setNames(lapply(names(pairs),function(n) Defer(PlotToxicityTest,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),...)),names(pairs))
-}
-#' @rdname toxicity
-#' @export
-PlotToxicityTestRankDeferAll=function(data,pairs=NULL,...) {
-  if (is.null(pairs)) pairs=Findno4sUPairs(data)
-  rm(data)
-  setNames(lapply(names(pairs),function(n) Defer(PlotToxicityTestRank,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),...)),names(pairs))
+Plot4sUDropoutAll=function(data,pairs=Findno4sUPairs(data),...) {
+  setNames(lapply(names(pairs),function(n) Plot4sUDropout(data,n,pairs[[n]],...)),names(pairs))
 }
 
-#' @rdname toxicity
+#' @rdname dropout
 #' @export
-PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",correction=1,label.corr=TRUE,return.corr=FALSE,boxplot.bins=10,title=w4sU,size=1.5) {
+Plot4sUDropoutDeferAll=function(data,pairs=NULL,...) {
+  if (is.null(pairs)) pairs=Findno4sUPairs(data)
+  rm(data)
+  setNames(lapply(names(pairs),function(n) Defer(Plot4sUDropout,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),...)),names(pairs))
+}
+#' @rdname dropout
+#' @export
+Plot4sUDropoutRankDeferAll=function(data,pairs=NULL,...) {
+  if (is.null(pairs)) pairs=Findno4sUPairs(data)
+  rm(data)
+  setNames(lapply(names(pairs),function(n) Defer(Plot4sUDropoutRank,w4sU=n,no4sU=pairs[[n]],add=ggtitle(n),...)),names(pairs))
+}
+
+#' @rdname dropout
+#' @export
+Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",correction=1,label.corr=TRUE,return.corr=FALSE,boxplot.bins=10,title=w4sU,size=1.5) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
-  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(v) rank(v),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
+  df=Make4sUDropoutTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(v) rank(v),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc,c(0.01,0.99))))*1.5
     ylim=c(-d,d)
@@ -302,7 +308,7 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
   df$lfc=ifelse(df$lfc>ylim[2],+Inf,df$lfc)
 
   pfun=if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
-    singleMessage("Install the ggrastr package to get rasterized toxicity plots!")
+    singleMessage("Install the ggrastr package to get rasterized dropout plots!")
     ggplot2::geom_point
   } else ggrastr::geom_point_rast
 
@@ -333,14 +339,14 @@ PlotToxicityTestRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w
   if (return.corr) list(plot=re,label=lab) else re
 }
 
-#' @rdname toxicity
+#' @rdname dropout
 #' @export
-PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,title=w4sU,size=1.5) {
+Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,title=w4sU,size=1.5) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
   time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
-  df=MakeToxicityTestTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
+  df=Make4sUDropoutTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(hl)) hl=quantile(df$covar[is.finite(df$covar)],hl.quantile)
   df=df[df$covar<hl & df$ntr<1 & df$ntr>0,]
   if (is.null(ylim)) {
@@ -349,7 +355,7 @@ PlotToxicityTest=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,
   }
 
   pfun=if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
-    singleMessage("Install the ggrastr package to get rasterized toxicity plots!")
+    singleMessage("Install the ggrastr package to get rasterized dropout plots!")
     ggplot2::geom_point
   } else ggrastr::geom_point_rast
 

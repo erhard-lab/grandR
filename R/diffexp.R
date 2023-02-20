@@ -73,6 +73,7 @@ DESeq2BIC=function(data,name="BIC",mode="total",normalization=mode,formulas=list
 #' @param data A grandR object
 #' @param name the user defined analysis name to store the results
 #' @param mode either "total", "new" or "old"
+#' @param slot which slot to use (should be a count slot, not normalized values)
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param target formula specifying the target model (you can use any column name from the \code{\link{Coldata}(data)})
 #' @param background formula specifying the background model (you can use any column name from the \code{\link{Coldata}(data)})
@@ -98,12 +99,19 @@ DESeq2BIC=function(data,name="BIC",mode="total",normalization=mode,formulas=list
 #' @export
 #'
 #' @concept diffexp
-LikelihoodRatioTest=function(data,name="LRT",mode="total",normalization=mode,target=~Condition,background=~1,columns=NULL, logFC=FALSE, verbose=FALSE) {
+LikelihoodRatioTest=function(data,name="LRT",mode="total",slot="count",normalization=mode,target=~Condition,background=~1,columns=NULL, logFC=FALSE, verbose=FALSE) {
   checkPackages("DESeq2")
 
-  mode.slot=paste0(mode,".count")
-  normalization=paste0(normalization,".count")
+  mode.slot=paste0(mode,".",slot)
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
+
+  if (!is.null(normalization)) {
+    if (!check.mode.slot(data,normalization)) normalization=paste0(normalization,".",slot)
+  } else {
+    normalization = mode.slot
+  }
+  if (!check.mode.slot(data,normalization)) stop("Invalid normalization!")
+
 
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
@@ -177,12 +185,13 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 
 #' Log2 fold changes and Wald tests for differential expression
 #'
-#' This function is a shortcut for first calling \link{PairwiseDESeq2()} and then \link{LFC()}.
+#' This function is a shortcut for first calling \link{PairwiseDESeq2} and then \link{LFC}.
 #'
 #' @param data the grandR object
 #' @param name.prefix the prefix for the new analysis name; a dot and the column names of the contrast matrix are appended; can be NULL (then only the contrast matrix names are used)
 #' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
 #' @param LFC.fun function to compute log fold changes (default: \link[lfc]{PsiLFC}, other viable option: \link[lfc]{NormLFC})
+#' @param slot the slot of the grandR object to take the data from; should contain counts!
 #' @param mode compute LFCs for "total", "new", or "old" RNA
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param verbose print status messages?
@@ -190,6 +199,9 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @details Both \link[lfc]{PsiLFC} and  \link[lfc]{NormLFC}) by default perform normalization by subtracting the median log2 fold change from all log2 fold changes.
 #' When computing LFCs of new RNA, it might be sensible to normalize w.r.t. to total RNA, i.e. subtract the median log2 fold change of total RNA from all the log2 fold change of new RNA.
 #' This can be accomplished by setting mode to "new", and normalization to "total"!
+
+#' @details Normalization can also be a mode.slot! Importantly, do not specify a slot containing normalized values, but specify a slot of unnormalized values
+#' (which are used to compute the size factors for normalization!)
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
 #' \itemize{
@@ -202,11 +214,16 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @seealso \link{PairwiseDESeq2},\link{GetContrasts}
 #' @export
 #'
-Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, mode="total",
+#' @concept diffexp
+Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot="count", mode="total",
                normalization=mode,
                verbose=FALSE) {
-  data=LFC(data,name.prefix = name.prefix, contrasts = contrasts, LFC.fun = LFC.fun, mode=mode,normalization = normalization,verbose=verbose)
-  data=PairwiseDESeq2(data,name.prefix = name.prefix, contrasts = contrasts, mode=mode,normalization = normalization,verbose=verbose)
+
+  contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
+  if (ncol(contrasts)==0) stop("Contrasts do not define any comparison!")
+
+  data=LFC(data,name.prefix = name.prefix, contrasts = contrasts, LFC.fun = LFC.fun, slot=slot, mode=mode,normalization = normalization,verbose=verbose)
+  data=PairwiseDESeq2(data,name.prefix = name.prefix, contrasts = contrasts, slot=slot, mode=mode,normalization = normalization,verbose=verbose)
   data
 
 }
@@ -229,6 +246,9 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, mode
 #' When computing LFCs of new RNA, it might be sensible to normalize w.r.t. to total RNA, i.e. subtract the median log2 fold change of total RNA from all the log2 fold change of new RNA.
 #' This can be accomplished by setting mode to "new", and normalization to "total"!
 #'
+#' @details Normalization can also be a mode.slot! Importantly, do not specify a slot containing normalized values, but specify a slot of unnormalized values
+#' (which are used to compute the size factors for normalization!)
+#'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
 #' \itemize{
 #'  \item{"LFC"}{the log2 fold change}
@@ -250,12 +270,19 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, mode
 LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiLFC, mode="total",
              normalization=NULL,
              verbose=FALSE,...) {
+
+  contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
+  if (ncol(contrasts)==0) stop("Contrasts do not define any comparison!")
+
   mode.slot=paste0(mode,".",slot)
-  if (!is.null(normalization))normalization=paste0(normalization,".",slot)
+  if (!is.null(normalization)) {
+    if (!check.mode.slot(data,normalization)) normalization=paste0(normalization,".",slot)
+    if (!check.mode.slot(data,normalization)) stop("Invalid normalization!")
+  }
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
   ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="LFC",FUN=function(mat,A,B) {
     if (!is.null(normalization)) {
-      norm.mat=as.matrix(GetTable(data,type=normalization))
+      norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
       nlfcs=LFC.fun(rowSums(norm.mat[,A,drop=FALSE]),rowSums(norm.mat[,B,drop=FALSE]),normalizeFun=function(i) i)
       med.element=median(nlfcs)
       lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-med.element,...)
@@ -275,6 +302,7 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
 #' @param separate model overdispersion separately for all pairwise comparison (TRUE), or fit a single model per gene, and extract contrasts (FALSE)
 #' @param mode compute LFCs for "total", "new", or "old" RNA
+#' @param slot which slot to use (should be a count slot, not normalized values)
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param logFC compute and add the log2 fold change as well
 #' @param verbose print status messages?
@@ -282,6 +310,9 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' @details DESeq2 by default performs size factor normalization. When computing differential expression of new RNA,
 #' it might be sensible to normalize w.r.t. to total RNA, i.e. use the size factors computed from total RNA instead of computed from new RNA.
 #' This can be accomplished by setting mode to "new", and normalization to "total"!
+#'
+#' @details Normalization can also be a mode.slot! Importantly, do not specify a slot containing normalized values, but specify a slot of unnormalized values
+#' (which are used to compute the size factors for normalization!)
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
 #' \itemize{
@@ -309,16 +340,27 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #'
 #' @concept diffexp
 PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode="total",
-                        normalization=mode, logFC=FALSE, verbose=FALSE) {
+                        slot="count",
+                        normalization=NULL,
+                        logFC=FALSE, verbose=FALSE) {
   checkPackages("DESeq2")
 
-  mode.slot=paste0(mode,".count")
-  normalization=paste0(normalization,".count")
+  contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
+  if (ncol(contrasts)==0) stop("Contrasts do not define any comparison!")
+
+  mode.slot=paste0(mode,".",slot)
+  if (!is.null(normalization)) {
+    if (!check.mode.slot(data,normalization)) normalization=paste0(normalization,".",slot)
+  } else {
+    normalization = mode.slot
+  }
+  if (!check.mode.slot(data,normalization)) stop("Invalid normalization!")
+
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
 
   if (separate) {
     ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="DESeq2.Wald",FUN=function(mat,A,B) {
-      norm.mat=as.matrix(GetTable(data,type=normalization))
+      norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
       norm.mat=cbind(norm.mat[,A,drop=FALSE],norm.mat[,B,drop=FALSE])
       A=mat[,A,drop=FALSE]
       B=mat[,B,drop=FALSE]
@@ -336,6 +378,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
         Q=l$padj
       )
       if (logFC) re$LFC=l$log2FoldChange
+      rownames(re)<-rownames(data)
       re
     })
   }
@@ -364,7 +407,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
     }
     mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
     mat=mat[,!is.na(cond.vec)]
-    norm.mat=as.matrix(GetTable(data,type=normalization))
+    norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
     norm.mat=norm.mat[,!is.na(cond.vec)]
 
     cond.vec=cond.vec[!is.na(cond.vec)]
@@ -415,7 +458,6 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #' @param seed Seed for the random number generator
 #' @param dispersion overdispersion parameter for each gene; if NULL this is estimated from data
 #' @param sample.level Define how the NTR is sampled from the hierarchical Bayesian model (must be 0,1, or 2; see details)
-#' @param hierarchical Take the NTR from the hierarchical Bayesian model (see details)
 #' @param correct.labeling Labeling times have to be unique; usually execution is aborted, if this is not the case; if this is set to true, the median labeling time is assumed
 #' @param verbose Print status messages
 #'
@@ -793,7 +835,7 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
                          verbose=TRUE, minSize=10, maxSize=500,
                          process.genesets=NULL) {
 
-  checkPackages("clusterProfiler","msigdbr")
+  checkPackages(c("clusterProfiler","msigdbr"))
 
   if (is.null(species)) {
     if (sum(grepl("ENSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="Homo sapiens"
@@ -950,7 +992,7 @@ GetSummarizeMatrix.default=function(x,subset=NULL,average=TRUE,...) {
 #' # This direction of the comparison is more reasonable
 #' GetContrasts(sars,contrast=c("Condition","SARS","Mock"),group="Time")
 #' # Compare SARS vs Mock per time point
-#' GetContrasts(sars,contrast=c("Time","no4sU"), group="Condition",no4sU=TRUE,
+#' GetContrasts(sars,contrast=c("Time.original","no4sU"), group="Condition",no4sU=TRUE,
 #'                                                 name.format="$A vs $B ($GRP)")
 #' # Compare each sample against the respective no4sU sample
 #'

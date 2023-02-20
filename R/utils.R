@@ -1,8 +1,13 @@
 
 
-read.tsv=function(t,verbose=FALSE,stringsAsFactors=TRUE,...) {
+read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
 
-  readit=function(file,...) if (requireNamespace("data.table",quietly = TRUE)) as.data.frame(data.table::fread(file = file,stringsAsFactors=FALSE,check.names=FALSE,...))
+  readit=function(file,...)
+    if (requireNamespace("data.table",quietly = TRUE) && summary(file(file))$class!="gzfile") {
+      as.data.frame(data.table::fread(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,data.table = FALSE,...))
+    } else {
+      read.delim(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,...)
+    }
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
     file <- tempfile()
@@ -277,7 +282,8 @@ checkPackages=function(pp,error=TRUE,warn=TRUE) {
     }
   }
   if (length(missing)>0) {
-    msg = sprintf("Package%s %s %s missing!",if (length(missing)>1) "s" else "",paste(missing,collapse=","),if (length(missing)>1) "are" else "is")
+    msg = sprintf("For this function, you need additional packages. Missing package%s: %s. Please install them e.g. using \n BiocManager::install(c('%s'))\n",
+                  if (length(missing)>1) "s" else "",paste(missing,collapse=","),paste(missing,collapse="','"))
     if (error) stop(msg)
     if (warn) warning(msg)
     return(FALSE)

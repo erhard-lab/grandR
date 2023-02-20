@@ -32,6 +32,7 @@ NULL
 #' @param parent A parent object containing default values for all other parameters (i.e. all parameters not specified are obtained from this object)
 #' @param data,x a grandR object
 #' @param columns which columns (i.e. samples or cells) to return (see details)
+#' @param reorder reorder all factors in coldata (if columns for subset define a different order)
 #' @param f The name of the annotation table according to which the object is split or the new annotation table column name denoting the origin after merging
 #' @param list a list of grandR objects
 #' @param column.name a new name for the Coldata table to annotate the merged objects
@@ -102,6 +103,9 @@ grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$dat
     coldata=cbind(data.frame(Name=factor(rownames(coldata),levels=rownames(coldata))),coldata)
   }
 
+  if ("Condition" %in% colnames(coldata)) {
+    coldata$Condition=as.factor(coldata$Condition)
+  }
 
 
   info=list()
@@ -201,13 +205,19 @@ data.apply=function(data,fun,fun.gene.info=NULL,fun.coldata=NULL,...) {
 
 #' @rdname grandR
 #' @export
-subset.grandR=function(x,columns,...) {
+subset.grandR=function(x,columns,reorder=TRUE,...) {
   columns=substitute(columns)
   columns=if (is.null(columns)) colnames(x) else eval(columns,Coldata(x),parent.frame())
   columns=Columns(x,columns,reorder=TRUE)
 
-  data.apply(x,function(m) m[,columns],fun.coldata = function(t)
-    droplevels(t[columns,]))
+  dr=if(!reorder) droplevels else function(x) {
+    ix <- vapply(x, is.factor, NA)
+    x[ix] <- lapply(x[ix], function(v) factor(v,levels=as.character(unique(v))))
+    x
+  }
+  data.apply(x,function(m) m[,columns],fun.coldata = function(t){
+    dr(t[columns,])
+  })
 }
 
 #' @rdname grandR
@@ -244,6 +254,7 @@ SwapColumns=function(data,s1,s2) {
 }
 
 #' @rdname grandR
+#' @export merge.grandR
 #' @export
 merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
   list=c(list(...),list)
@@ -388,12 +399,22 @@ DropSlot=function(data,pattern=NULL) {
 #' @param name the slot name
 #' @param matrix the data matrix for the new slot
 #' @param set.to.default set the new slot as the default slot?
+#' @param warn issue a warning if the slot name already exists and is overwritten
 #' @export
-AddSlot=function(data,name,matrix,set.to.default=FALSE) {
-  if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
-  if (!all(rownames(matrix)==rownames(data$data$count))) stop("Row names do not match!")
+AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
   if (!is.matrix(matrix)) stop("Must be a matrix!")
+  if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
+
+  missing=setdiff(rownames(data$data$count),rownames(matrix))
+  if (length(missing>0)) {
+    warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(head(missing,5),collapse=",")))
+    matrix = rbind(matrix,matrix(0,nrow=length(missing),ncol=ncol(matrix),dimnames=list(missing,colnames(matrix))))
+  }
+  matrix=matrix[rownames(data$data$count),]
+  if (!all(rownames(matrix)==rownames(data$data$count))) stop("Row names do not match!")
+
   if (grepl(".",name,fixed=TRUE)) stop("Name may not contain a dot!")
+  if (!is.null(data$data[[name]])) warning(sprintf("Slot %s already exists, overwriting!",name))
   data$data[[name]]=matrix
   if (set.to.default) DefaultSlot(data)=name
   data
@@ -545,6 +566,44 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 #' @export
 `GeneInfo<-` <- function(data, column, value) {
   data$gene.info[[column]]=value
+  data
+}
+
+
+#' Update symbols using biomaRt
+#'
+#' If your input files only contained ENSEMBL ids, use this to add gene symbols!
+#'
+#' @param data a grandR object
+#' @param species the species the genes belong to (eg "Homo sapiens"); can be NULL, then the species is inferred from gene ids (see details)
+#' @param current.value What it the current value in the symbols field?
+#'
+#' @return a grandR object with updated symbol names
+#'
+#' @details If no species is given, a very simple automatic inference is done, which will only work when having human or mouse ENSEMBL identifiers as gene ids.
+#' If you need to specify species, it must be one of \code{biomaRt::listDatasets(biomaRt::useMart("ensembl"))$dataset}!
+#'
+#' @details Current.value must be one of \code{biomaRt::listAttributes(biomaRt::useMart("ensembl"))$name}!
+#'
+#' @export
+#'
+#' @concept grandr
+UpdateSymbols = function(data,species=NULL,current.value="ensembl_gene_id") {
+
+  checkPackages(c("biomaRt"))
+
+  if (is.null(species)) {
+    if (sum(grepl("ENSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="hsapiens_gene_ensembl"
+    if (sum(grepl("ENSMUSG0",Genes(data,use.symbols=FALSE)))>nrow(data)/2) species="mmusculus_gene_ensembl"
+  }
+  if (is.null(species)) stop("Cannot recognize species! Specify one of biomaRt::listDatasets(biomaRt::useMart(\"ensembl\"))$dataset")
+
+
+  mart <- biomaRt::useDataset(species, biomaRt::useMart("ensembl"))
+  df <- biomaRt::getBM(filters= "ensembl_gene_id", attributes= c(current.value,"hgnc_symbol"),values=Genes(data,use.symbols = TRUE),mart= mart)
+  map=setNames(df$hgnc_symbol,df[[current.value]])
+
+  GeneInfo(data,"Symbol")=check.and.make.unique(map[as.character(Genes(data,use.symbols = TRUE))],ref=as.character(Genes(data,use.symbols = TRUE)),label="symbols",ref.label=current.value)
   data
 }
 
@@ -876,7 +935,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #'
 #' @export
 #'
-#' @useDynLib grandR
+#' @useDynLib grandR, .registration = TRUE
 #' @concept data
 GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),name.by="Symbol",summarize=NULL) {
 
@@ -1046,6 +1105,36 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
   re
 }
 
+
+#' Copy the NTR slot and save under new name
+#'
+#' @param data the grandR object
+#' @param name the name of the new slot
+#'
+#' @return a grandR object
+#' @export
+#'
+#' @concept data
+SaveNtrSlot=function(data,name) {
+  AddSlot(data,name,data$data$ntr)
+}
+
+#' Copy the NTR slot and save under new name
+#'
+#' @param data the grandR object
+#' @param name the name of the new slot
+#'
+#' @return a grandR object
+#' @export
+#'
+#' @concept data
+UseNtrSlot=function(data,name) {
+  if (!check.slot(data,name,allow.ntr = FALSE)) stop("Illegal slot!")
+  data$data$ntr = data$data[[name]]
+  data
+}
+
+
 #' Significant genes
 #'
 #' Return significant genes for this grandR object
@@ -1197,6 +1286,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 #' @param pattern A regular expression that is matched to analysis names
 #' @param name The user-defined analysis name
 #' @param table The analysis table to add
+#' @param by Specify a column that contains gene names or symbols (see details)
 #' @param warn.present Warn if an analysis with the same name is already present (and then overwrite)
 #'
 #' @return Either the analysis names or a grandR data with added/removed slots or the metatable to be used with AddAnalysis
@@ -1205,8 +1295,13 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 #' A call to an analysis function might produce more than one table (e.g. because kinetic modeling is done for multiple \link{Condition}s). In this case,
 #' AddAnalysisTable produces more than one analysis table.
 #'
-#' @details \code{AddAnalysis} is usually not called directly by the user, but is
+#' @details \code{AddAnalysis} is in most cases  not called directly by the user, but is
 #' used by analysis methods to add their final result to a grandR object (e.g., \link{FitKinetics},\link{LikelihoodRatioTest},\link{LFC},\link{PairwiseDESeq2}).
+#'
+#' @details If it is called by the user (e.g. to add analysis results from external tools or from the literature, see pulse-chase vignette), then
+#' the user must make sure that either the rownames of the given table can be recognized as genes (names or symbols), or that there is a column in the
+#' table giving genes (this must be specified as the "by" parameter). The table does neither have to be sorted the same way the grandR object is, nor does
+#' it have to be complete. \code{AddAnalysis} will take care or reordering and inserting NA for missing genes (and it will issue a warning in case of missing genes).
 #'
 #' @seealso \link{Slots}, \link{DefaultSlot}
 #'
@@ -1240,11 +1335,11 @@ AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE) {
 
   if (!is.null(by)) {
     row.names(table) = table[,by]
-    table <- table[, !names(table) %in% by, drop = TRUE]
+    table <- table[, !names(table) %in% by, drop = FALSE]
   }
 
   if (!equal(Genes(data,rownames(table)),Genes(data))) {
-      warning("Analysis table contains row names not corresponding to all genes!")
+      warning("Analysis table and grandR object does not have the same set of genes! Watch out for NA values!")
     table <- table[Genes(data), ]
     rownames(table) = Genes(data)
   }

@@ -24,6 +24,12 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 
   if (is.null(facet)) {
         use=is.finite(x+y)
+        if (min(x[use])==max(x[use])) {
+          x[use]=0:1
+        }
+        if (min(y[use])==max(y[use])) {
+          y[use]=0:1
+        }
         bw.x=MASS::bandwidth.nrd(x[use])
         if (bw.x==0) bw.x=bandwidth.nrd.ex(x[use])
         bw.y=MASS::bandwidth.nrd(y[use])
@@ -51,7 +57,7 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #' @param x number of principal component to show on the x axis (numeric)
 #' @param y number of principal component to show on the y axis (numeric)
 #' @param columns which columns (i.e. samples or cells) to perform PCA on (see details)
-#' @param do.vsd perform a variance stabilizing transformation for count data?
+#' @param do.vst perform a variance stabilizing transformation for count data?
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
@@ -391,6 +397,8 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param xlim define the x axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param ylim define the y axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param size the point size to use
+#' @param cross add horizontal and vertical lines through the origin?
+#' @param diag if TRUE, add main diagonal; if numeric vector, add these diagonals
 #' @param genes restrict to these genes; can be either numeric indices, gene names, gene symbols or a logical vector
 #' @param highlight highlight these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
 #' @param label label these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
@@ -442,6 +450,7 @@ PlotScatter=function(data,
                      log=FALSE, log.x=log, log.y=log,
                      remove.outlier=1.5, lim=NULL,xlim=lim, ylim=lim,
                      size=0.3,
+                     cross=NULL,diag=NULL,
                      genes=NULL,highlight=NULL, label=NULL, label.repel=1,
                      facet=NULL,
                      color=NULL, colorpalette=NULL,
@@ -598,6 +607,12 @@ PlotScatter=function(data,
   }
 
   g=ggplot(df,aes(A,B,color=color))+cowplot::theme_cowplot()
+  if (!is.null(cross)) g=g+geom_vline(xintercept = 0,linetype=2,color='gray')+geom_hline(yintercept = 0,linetype=2,color='gray')
+  if (!is.null(diag)) {
+    if (is.logical(diag)) diag=0
+      g=g+geom_abline(linetype=2,color='gray',intercept = diag)
+  }
+
   if (!is.null(layers.below)) for (e in layers.below) g=g+e
   g=g+
     point.fun(size=size)+
@@ -724,7 +739,7 @@ PlotAnalyses=function(data,plot.fun,analyses=Analyses(data),add=NULL,...) {
 #' @param analysis the analysis to plot (default: first analysis)
 #' @param p.cutoff p-value cutoff (default: 0.05)
 #' @param lfc.cutoff log fold change cutoff (default: 1)
-#' @param label.numbers if TRUE, label the number of genes
+#' @param annotate.numbers if TRUE, label the number of genes
 #' @param ... further parameters passed to \link{PlotScatter}
 #' @return a ggplot object
 #' @export
@@ -849,8 +864,8 @@ setup.default.aes=function(data,aest) {
   Replicate <- NULL
 
   if (is.null(aest)) aest=aes()
-  if (!is.null(Condition(data))) aest=utils::modifyList(aes(color=Condition),aest)
-  if (!is.null(Coldata(data)$Replicate)) aest=utils::modifyList(aes(shape=Replicate),aest)
+  if (!is.null(Condition(data)) && !any(c("color","colour") %in% names(aest))) aest=utils::modifyList(ggplot2::aes(color=Condition),aest)
+  if (!is.null(Coldata(data)$Replicate)&& !any(c("shape") %in% names(aest))) aest=utils::modifyList(ggplot2::aes(shape=Replicate),aest)
   aest
 }
 
@@ -885,6 +900,9 @@ setup.default.aes=function(data,aest) {
 #' @concept geneplot
 PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE,show.CI=FALSE,
                           aest=NULL,size=2) {
+  # R CMD check guard for non-standard evaluation
+  lower <- upper <- NULL
+
   aest=setup.default.aes(data,aest)
   if (length(slot)!=1) stop("Provide a single slot name!")
   slot=get.mode.slot(data,slot,allow.ntr = FALSE)$slot
@@ -949,7 +967,7 @@ PlotGeneOldVsNew=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE
 PlotGeneTotalVsNtr=function(data,gene,slot=DefaultSlot(data),columns=NULL,log=TRUE,show.CI=FALSE,
                             aest=NULL,size=2) {
   # R CMD check guard for non-standard evaluation
-  lower <- upper <- NULL
+  lower <- upper <- ntr <- NULL
 
   aest=setup.default.aes(data,aest)
   if (length(slot)!=1) stop("Provide a single slot name!")
@@ -1018,7 +1036,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
                               show.CI=FALSE,
                               aest=NULL,size=2,transform=NULL) {
   # R CMD check guard for non-standard evaluation
-  lower <- upper <- NULL
+  lower <- upper <- value <- NULL
 
   aest=setup.default.aes(data,aest)
 
@@ -1097,7 +1115,7 @@ PlotGeneGroupsPoints=function(data,gene,group="Condition",mode.slot=DefaultSlot(
 #' @concept geneplot
 PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.CI=FALSE,xlab=NULL,transform=NULL) {
   # R CMD check guard for non-standard evaluation
-  Name <- Value <- mode.slot <- NULL
+  Name <- Value <- mode.slot <- upper <- lower <- NULL
 
   if (length(slot)!=1) stop("Provide a single slot name!")
   slot=get.mode.slot(data,slot,allow.ntr = FALSE)$slot
@@ -1172,7 +1190,7 @@ PlotGeneSnapshotTimecourse=function(data,gene,time=Design$dur.4sU,
                             log=TRUE,
                             show.CI=FALSE,aest=NULL,size=2) {
   # R CMD check guard for non-standard evaluation
-  x <- colour <- group <- Value <- ntr <- lower <- upper <- NULL
+  x <- colour <- group <- Value <- ntr <- lower <- upper <- linetype <- NULL
 
   aest=setup.default.aes(data,aest)
   if (length(slot)!=1) stop("Provide a single slot name!")

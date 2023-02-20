@@ -438,3 +438,38 @@ ComputeExpressionPercentage=function(data,name,genes=Genes(data),mode.slot=Defau
   Coldata(data,name)=percentage
   data
 }
+
+#' Compute pseudo NTRs from two count matrices
+#'
+#' NTRs can be computed from given new and total counts.
+#'
+#' @param data a grandR object
+#' @param new.slot the slot containing new RNA counts
+#' @param total.slot the slot containing total RNA counts
+#' @param detection.rate the detection rate of T-to-C mismatch reads (see details)
+#'
+#' @details To correct for some bias, a detection rate (as suggested by Cao et al., Nature Biotech 2020) should be provided. This detection rate
+#' defines, how much new RNA is detected on average using the T-to-C mismatch reads.
+#'
+#' @return a new grandR object
+#' @export
+#'
+#' @concept data
+ComputePseudoNtr=function(data,new.slot,total.slot=DefaultSlot(data),detection.rate=1) {
+  if (!check.slot(data,new.slot,allow.ntr=FALSE) || !check.slot(data,total.slot,allow.ntr=FALSE)) stop("Slot unknown!")
+  n=GetMatrix(data,mode.slot=new.slot,name.by="Gene")
+  t=GetMatrix(data,mode.slot=total.slot,name.by="Gene")
+
+  if (is.matrix(t)) {
+    ntr=pmin((n*detection.rate)/t,1)
+    ntr[is.nan(ntr)]=0
+  } else {
+    sX=Matrix::summary(n)
+    sY=Matrix::summary(t)
+    dd=.Call('fastsparsematdiv',sX$i,sX$j,sX$x,sY$i,sY$j,sY$x,detection.rate)
+
+    ntr=Matrix::sparseMatrix(i=sX$i, j=sX$j, x=dd,dimnames=dimnames(t))
+  }
+
+  AddSlot(data,"ntr",ntr,set.to.default=FALSE)
+}

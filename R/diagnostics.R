@@ -285,6 +285,9 @@ PlotConversionFreq=function(data,category,sample=NULL,max.columns=120) {
 #'
 #' @concept diagnostics
 PlotModelNtr=function(data,label="4sU",estimator="Separate",model="Binom") {
+  # R CMD check guard for non-standard evaluation
+  Subread <- NULL
+
   tab=GetTableQC(data,"model.parameters")
 
   tab=tab[tab$Label==label & tab$Estimator==estimator,]
@@ -343,6 +346,8 @@ PlotModelNtr=function(data,label="4sU",estimator="Separate",model="Binom") {
 #'
 #' @concept diagnostics
 PlotModelConv=function(data,label="4sU",estimator="Separate",model="Binom") {
+  # R CMD check guard for non-standard evaluation
+  Type <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
@@ -417,6 +422,9 @@ etbeta_save=function(l=0,u=1,s1=1,s2=1) {
 #'
 #' @concept diagnostics
 PlotModelErr=function(data,label="4sU",estimator="Separate",model="Binom") {
+  # R CMD check guard for non-standard evaluation
+  Subread <- NULL
+
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
   ncond=length(cond)
@@ -551,6 +559,8 @@ PlotModelLabelTimeCourse=function(data,label="4sU",estimator="Separate") {
 #'
 #' @concept diagnostics
 PlotModelCompareErrPrior=function(data,label="4sU",estimator="Separate",model="Binom") {
+  # R CMD check guard for non-standard evaluation
+  `Lower prior p.err` <- `Upper prior p.err` <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
   cond=unique(tab$Condition)
@@ -712,7 +722,7 @@ PlotModelCompareLL=function(data,label="4sU",estimator="Separate") {
 #' Shows the profile likelihoods for all parameters of the tbbinom model.
 #'
 #' @param data a grandR object
-#' @param label which estimator to consider (see \link{GetDiagnosticParameters}); cannot be NULL
+#' @param estimator which estimator to consider (see \link{GetDiagnosticParameters}); cannot be NULL
 #' @param label which label to consider (see \link{GetDiagnosticParameters}); cannot be NULL
 #' @param sample which sample to consider (see \link{GetDiagnosticParameters}); cannot be NULL
 #' @param subread which subread to consider (see \link{GetDiagnosticParameters}); cannot be NULL
@@ -813,7 +823,7 @@ CreatePdfsParameters=function(data,labels=NULL,estimators=NULL) {
   for (lab in unique(tab$Label)) {
     for (estimator in unique(tab$Estimator)) {
 
-      pdf(sprintf("%s.model.parameters.%s.%s.pdf",data$prefix,lab,estimator),width=3+ncond/2,height=7)
+      grDevices::pdf(sprintf("%s.model.parameters.%s.%s.pdf",data$prefix,lab,estimator),width=3+ncond/2,height=7)
       print(PlotModelNtr(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
       print(PlotModelErr(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
       print(PlotModelConv(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
@@ -824,7 +834,7 @@ CreatePdfsParameters=function(data,labels=NULL,estimators=NULL) {
         print(PlotModelShape(data,label=lab,estimator=estimator)$plot+ggtitle(paste(lab," (tbbinom")))
         print(PlotModelLabelTimeCourse(data,label=lab,estimator=estimator)$plot+ggtitle(paste(lab," (tbbinom")))
       }
-      g=dev.off()
+      g=grDevices::dev.off()
     }}
 
   invisible(NULL)
@@ -845,7 +855,7 @@ CreatePdfsComparison=function(data,labels=NULL,estimators=NULL) {
   for (lab in unique(tab$Label)) {
     for (estimator in unique(tab$Estimator)) {
 
-      pdf(sprintf("%s.model.comparison.%s.%s.pdf",data$prefix,lab,estimator),width=9,height=7)
+      grDevices::pdf(sprintf("%s.model.comparison.%s.%s.pdf",data$prefix,lab,estimator),width=9,height=7)
       print(PlotModelCompareErrPrior(data,label=lab,estimator=estimator,model="Binom")$plot+ggtitle(paste(lab," (binom)")))
       if ("TB-Binom ntr" %in% names(tab)) {
         print(PlotModelCompareErrPrior(data,label=lab,estimator=estimator,model="TB-Binom")$plot+ggtitle(paste(lab," (tbbinom)")))
@@ -854,7 +864,7 @@ CreatePdfsComparison=function(data,labels=NULL,estimators=NULL) {
         print(PlotModelCompareConv(data,label=lab,estimator=estimator)$plot+ggtitle(lab))
         print(PlotModelCompareLL(data,label=lab,estimator=estimator)$plot+ggtitle(lab))
       }
-      g=dev.off()
+      g=grDevices::dev.off()
 
     }}
 
@@ -885,7 +895,7 @@ CreatePdfsProfiles=function(data,labels=NULL,estimators=NULL) {
   for (lab in unique(para$Label)) {
     for (estimator in unique(para$Estimator)) {
 
-      pdf(sprintf("%s.model.profile.%s.%s.pdf",data$prefix,lab,estimator),width=21,height=16)
+      grDevices::pdf(sprintf("%s.model.profile.%s.%s.pdf",data$prefix,lab,estimator),width=21,height=16)
       for (cond in unique(tab$Condition)) {
         for (subread in subs) {
           if (sum(tab$Label==lab & tab$Condition==cond & tab$Subread==subread & tab$Estimator==estimator)>0) {
@@ -893,7 +903,7 @@ CreatePdfsProfiles=function(data,labels=NULL,estimators=NULL) {
           }
         }
       }
-      g=dev.off()
+      g=grDevices::dev.off()
     }}
 
   invisible(NULL)

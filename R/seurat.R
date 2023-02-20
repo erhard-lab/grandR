@@ -25,6 +25,7 @@
 #'
 #' @return a Seurat object
 #'
+#' @exportS3Method  Seurat::as.Seurat grandR
 #' @export as.Seurat.grandR
 #' @export
 #'

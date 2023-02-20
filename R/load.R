@@ -307,6 +307,7 @@ MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep
 #' or a function that is called with the condition name vector and is supposed to return this data.frame.
 #' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{ClassifyGenes}
 #' @param read.percent.conv Should the percentage of conversions also be read?
+#' @param read.min2 Should the read count with at least 2 mismatches also be read?
 #' @param verbose Print status updates
 #' @param rename.sample function that is applied to each sample name before parsing (or NULL)
 #'
@@ -347,11 +348,13 @@ ReadGRAND=function(prefix,
                    design=c(Design$Condition,Design$Replicate),
                    classify.genes=ClassifyGenes(),
                    read.percent.conv=FALSE,
+                   read.min2=FALSE,
                    rename.sample=NULL,
                    verbose=FALSE) {
   annotations=c("Gene","Symbol","Length")
   slots=c(`Readcount`="count",MAP="ntr",alpha="alpha",beta="beta")
   if (read.percent.conv) slots=c(slots,`Conversions`="conv",Coverage="cove")
+  if (read.min2) slots=c(slots,`min2`="min2")
   re=read.grand.internal(prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,verbose = verbose,rename.sample = rename.sample)
   re$metadata=c(re$metadata,list(`GRAND-SLAM version`=2,Output="dense"))
   if (read.percent.conv) {
@@ -363,7 +366,55 @@ ReadGRAND=function(prefix,
 
 
 
-ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.genes=ClassifyGenes(),verbose=FALSE,sep="\t") {
+#' Read a count table
+#'
+#' grandR can also be used to analyze standard RNA-seq data, and this function is here to read such data.
+#'
+#' @param file a file containing a count matrix
+#' @param design Either a design vector (see details), or a data.frame providing metadata for all columns (samples/cells),
+#' or a function that is called with the condition name vector and is supposed to return this data.frame.
+#' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{ClassifyGenes}
+#' @param rename.sample function that is applied to each sample name before parsing (or NULL)
+#' @param filter.table function that is applied to the table directly after read it (or NULL)
+#' @param num.samples number of sample columns containing read counts (can be NULL, see details)
+#' @param verbose Print status updates
+#' @param sep The column separator used in the file
+#'
+#' @return a grandR object
+#'
+#' @details The table is assumed to have read counts in the last n columns, which must be named according to sample names.
+#' If num.samples is NULL this n is automatically recognized as the number of numeric columns (so make sure to either
+#' specify num.samples, or that the column immediately prior to the first sample column is *not* numeric).
+#'
+#' @details If these columns are named systematically in a particular way, the design vector provides
+#' a powerful and easy way to create the column annotations.
+#'
+#' @details The column names have to contain dots (.) to separate the fields for the column annotation table.
+#' E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}.
+#' For such names, a design vector of length 3 has to be given, that describes the meaning of each field.
+#' A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}.
+#' Some names are predefined in the list \link{Design}.
+#'
+#' @details The names given in the design vector might even have additional semantics:
+#' E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4,
+#' or 30min into 0.5, or no4sU into 0). Semantics can be user-defined by calling \code{\link{MakeColdata}}
+#' and using the return value as the design parameter, or a function that calls MakeColdata.
+#' In most cases it is easier to manipulate the \code{\link{Coldata}} table after loading data instead of using this mechanism;
+#' the build-in semantics simply provide a convenient way to reduce this kind of manipulation in most cases.
+#'
+#' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
+#' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
+#'
+#' @details Sometimes the table contains more than you want to read. In this case, use the filter.table parameter to preprocess it.
+#' This should be a function that receives a data.frame, and returns a data.frame.
+#'
+#' @details If there are no columns named "Gene" or "Symbol", the first column is used!
+#'
+#' @export
+#'
+#' @concept load
+ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.genes=ClassifyGenes(),rename.sample=NULL,filter.table=NULL, num.samples=NULL,
+                    verbose=FALSE,sep="\t") {
 
   tomat=function(m,names,cnames){
     m=as.matrix(m)
@@ -419,19 +470,22 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   header <- strsplit(readLines(con,n=1),sep)[[1]]
   close(con)
 
-  terms=strsplit(header[length(header)],".",fixed=TRUE)[[1]]
+  conds=header[length(header)]
+  if (!is.null(rename.sample)) conds=rename.sample(conds)
+  terms=strsplit(conds,".",fixed=TRUE)[[1]]
 
   if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
 
 
   if (verbose) cat("Reading file...\n")
   data=read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
+  if (!is.null(filter.table)) data=filter.table(data)
+
   clss=sapply(data,class)
-  firstnumeric=min(which(clss=="numeric"))
-  if (!all(clss[firstnumeric:length(clss)]=="numeric") || firstnumeric==1) stop("Columns (except for the first n) must be numeric!")
+  firstnumeric=max(which(clss!="numeric"))+1 #min(which(clss=="numeric"))
+  if (!all(clss[firstnumeric:length(clss)]=="numeric") || firstnumeric==1 || firstnumeric>ncol(data)) stop("Columns (except for the first n) must be numeric!")
   anno.names=colnames(data)[1:(firstnumeric-1)]
 
-  data[[1]] = check.and.make.unique(data[[1]],label="names")
 
   #if (anyDuplicated(data[[1]])) {
   #  dupp=table(data[[1]])
@@ -441,8 +495,10 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   #}
   if (verbose) cat("Processing...\n")
 
+  if (!is.null(rename.sample)) colnames(data)[firstnumeric:ncol(data)]=sapply(colnames(data)[firstnumeric:ncol(data)],rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
   coldata=MakeColdata(colnames(data)[firstnumeric:ncol(data)],design)
 
+  data[[1]] = check.and.make.unique(data[[1]],label="names")
   gene.info = data.frame(Gene=as.character(data[[1]]),Symbol=as.character(data[[1]]),stringsAsFactors=FALSE)
   for (i in 1:(firstnumeric-1)) gene.info[[anno.names[i]]]=data[[i]]
   gene.info$Type=classify.genes(gene.info)
@@ -455,7 +511,7 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   coldata$no4sU=TRUE
   do.callback()
 
-  # insert name no rep and set this as default condition, if there is no condition field!
+    # insert name no rep and set this as default condition, if there is no condition field!
   re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="Count data"))
   DefaultSlot(re)="count"
   re
@@ -632,13 +688,13 @@ ReadGRAND3_sparse=function(prefix,
 
   gene.info$Type=classify.genes(gene.info)
 
-
+  coldata=MakeColdata(cols,design)
   # use make coldata instead. add no4sU column!
-  coldata=data.frame(Name=cols)
-  spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
-  for (i in 1:length(design)) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
-  names(coldata)[-1]=design
-  rownames(coldata)=coldata$Name
+  #coldata=data.frame(Name=cols)
+  #spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
+  #for (i in 1:length(design)) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
+  #names(coldata)[-1]=design
+  #rownames(coldata)=coldata$Name
 
   coldata$no4sU=Matrix::colSums(ntr)==0
 
@@ -690,7 +746,7 @@ ReadGRAND3_dense=function(prefix,
 #' @return a grandR object
 #' @export
 #'
-#' @useDynLib grandR
+#' @useDynLib grandR, .registration = TRUE
 #' @concept load
 ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,verbose=FALSE) {
 
@@ -867,7 +923,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
 
 
   if (verbose) cat("Reading files...\n")
-  data=read.delim(file,stringsAsFactors=FALSE,check.names=FALSE)
+  data=read.tsv(file,stringsAsFactors=FALSE)
   if (!is.null(rename.sample)) colnames(data)=sapply(colnames(data),rename.sample)
 
   data$Gene = check.and.make.unique(data$Gene,label="gene names")

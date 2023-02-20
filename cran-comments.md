@@ -1,12 +1,14 @@
-## Comments for submission of 15.09.2022, 15:32
+## Comments for submission of 
+
+
+
+
+## Relevant comments from earlier CRAN submission
 
 * Please wrap examples that are generally executable but need > 5 sec in \donttest{}. \dontrun{} should only be used if the example really cannot be executed (e.g. because of missing additional software, missing API keys, ...) by the user. That's why wrapping examples in \dontrun{} adds the comment ("# Not run:") as a warning for the user.
 
 > Changed to \donttest in both cases
 
-
-
-## Relevant comments from earlier CRAN submission
 
 * Please ensure that you do not use more than 2 cores in your examples, vignettes, etc. 
 
