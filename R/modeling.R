@@ -1339,10 +1339,10 @@ FitKineticsGeneSnapshot=function(data,gene,columns=NULL,
     alpha=alpha[use,]
     beta=beta[use,]
 
-    if (n==2) {
+    if (sample.level==2) {
       mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample
-    } else if (n==1) {
-      mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample.param
+    } else if (sample.level==1) {
+      mod=hierarchical.beta.posterior(alpha$Value,beta$Value,compute.marginal.likelihood = FALSE,compute.grid = TRUE,res=50)$sample.mu
     } else {
         fit=beta.approximate.mixture(alpha$Value,beta$Value)
         mod=function(N) rbeta(N,fit$a,fit$b)

@@ -5,7 +5,10 @@ This is the first release of grandR.
 
 
 ## Major updates
-* Toxicity plots
+* Enabled interface with Seurat
+* Implemented estimation for pulse-chase experiments
+* New vignettes for single cell data and pulse-chase data
+* 4sU dropout plots
 * Highlighting genes in the shiny web interface
 
 ## Smaller updates

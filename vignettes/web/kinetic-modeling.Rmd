@@ -72,9 +72,9 @@ sars
 ```
 Make sure that the normalization you use here is appropriate. Calling `Normalize` will add an additional slot which is set to be the default slot.
 
-Before we conduct any kinetic modeling, we inspect the toxicity plots:
+Before we conduct any kinetic modeling, we inspect the 4sU dropout plots:
 ```{r fig.height=4, warning=FALSE}
-PlotToxicityTestRankAll(subset(sars,Condition=="Mock"))
+Plot4sUDropoutRankAll(subset(sars,Condition=="Mock"))
 ```
 4sU labeling can have impact on transcription before cell viability suffers. Such an effect would be observable in these plots by a substantial negative correlation, i.e. genes with high NTR (which are to the right), should tend to be downregulated in the 4sU labeled sample vs an equivalent 4sU naive sample. It is important that these analyses are only done by comparing biologically equivalent samples (and not on the SARS infected samples here, as the no4sU sample is from 3h post infection, and all others are later). Here, there are such effects, but they are not very strong.
 

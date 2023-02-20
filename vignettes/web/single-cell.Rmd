@@ -1,8 +1,7 @@
 ---
 title: "single-cell"
-author: "Lygeri Sakellaridi"
-date: "2023-01-18"
-output: rmarkdown::html_vignette:
+output: 
+  html_document:
     toc: true
     df_print: kable
     fig_width: 7
@@ -10,7 +9,7 @@ output: rmarkdown::html_vignette:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
 ```
 
 ## Loading single-cell data
@@ -49,7 +48,7 @@ d <- ReadNewTotal(genes = "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSM377
                   verbose=TRUE,
                   detection.rate = 0.82)
 ```
-Now, `d` is a grandR object containing the single cell data:
+Now, `d` is a grandR object containing single cell data:
 ```{r}
 d
 ```
