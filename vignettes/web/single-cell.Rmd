@@ -75,8 +75,11 @@ d
 We can also obtain some statistics, e.g. on the percentage of new RNA per cell, and the percentage of mitochondrial gene expression.
 
 ```{r}
-d <- ComputeExpressionPercentage(d,"percent.new",mode.slot="new.count",mode.slot.total="count")
-d <- ComputeExpressionPercentage(d,"percent.mt",genes=Genes(d,"^MT-",regex=TRUE))  # results in 0 for all genes, have been filtered on GEO!
+d <- ComputeExpressionPercentage(d,"percent.new",
+                                 mode.slot="new.count",mode.slot.total="count")
+d <- ComputeExpressionPercentage(d,"percent.mt",
+                                 genes=Genes(d,"^MT-",regex=TRUE))  
+# results in 0 for all genes, have been filtered on GEO!
 ```
 
 The computed percentages are now part of the coldata:
@@ -85,10 +88,12 @@ The computed percentages are now part of the coldata:
 head(Coldata(d))
 ```
 
-Here, the global percentage of new RNA correlates very well with the percentage of intronic reads in each cell (which is part of the table downloaded from GEO), indicating that there are cells that are transcriptionally more active than others:
+Here, the global percentage of new RNA correlates very well with the percentage of intronic reads in each cell (which is part of the table downloaded from GEO), i.e. there are two independent pieces of evidence that there are cells that are transcriptionally more active than others:
 
 ```{r}
-PlotScatter(Coldata(d),percent.new,all_intron/all_reads*100,correlation = FormatCorrelation())
+PlotScatter(Coldata(d),percent.new,all_intron/all_reads*100,
+            correlation = FormatCorrelation(),
+            remove.outlier = FALSE)
 ```
 ``
 
@@ -112,6 +117,14 @@ s <- as.Seurat(d, modalities=c(RNA='total',newRNA="new"), mode="assay")
 s
 ```
 
+The percentage of new RNA could now be used as an additional QC filter:
+
+```{r}
+VlnPlot(s,features = "percent.new",group.by = "treatment_time")
+```
+
+E.g. cells with extremely high amounts of new or old RNA could be filtered out. This step should only be done with care. Here we skip it, since the correlation with the percentage of intronic reads provides independent evidence that the high variance in new RNA content is biological.
+
 Note that the new Seurat object has two assays, RNA and newRNA (which are the names we defined for the modalities). Let's do the normal Seurat workflow for total RNA:
 
 ```{r message=FALSE, warning=FALSE}
@@ -120,8 +133,10 @@ s <- FindVariableFeatures(s)
 s <- ScaleData(s)
 s <- RunPCA(s,verbose = FALSE)
 s <- RunUMAP(s,dims=1:10)
-DimPlot(s,group.by = 'treatment_time') # this was transferred from the grandR Coldata table!
+DimPlot(s,group.by = 'treatment_time') 
+# treatment_time was transferred from the grandR Coldata table!
 ```
+
 And now repeat with new RNA:
 
 ```{r message=FALSE, warning=FALSE}
