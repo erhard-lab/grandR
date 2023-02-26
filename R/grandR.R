@@ -405,6 +405,7 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
   if (!is.matrix(matrix)) stop("Must be a matrix!")
   if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
 
+  rownames(matrix)=Genes(data,rownames(matrix),use.symbols=FALSE)
   missing=setdiff(rownames(data$data$count),rownames(matrix))
   if (length(missing>0)) {
     warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(head(missing,5),collapse=",")))
