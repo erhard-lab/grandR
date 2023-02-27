@@ -331,7 +331,7 @@ banp<-FilterGenes(banp,use=sample.int(nrow(banp),1000))
 reference.columns=FindReferences(banp,reference.function=
                                    function(s) Experimental.time==max(c(0,Experimental.time[Experimental.time<s$Experimental.time])))
 
-SetParallel(cores = 2)  # increase 2 on your system, or omit the cores = 2 for automatic detection
+SetParallel(cores = 2)  # increase on your system, or omit the cores = 2 for automatic detection
 Condition(banp) <- "Experimental.time.original"
 banp <- FitKineticsSnapshot(banp,name.prefix = "MAP",reference.columns=reference.columns,
                             verbose=T,time.experiment = "Experimental.time",N=0)
