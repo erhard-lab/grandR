@@ -173,3 +173,43 @@ as.Seurat.legacy.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NU
   re = if ("Seurat" %in% class(re)) append.meta(re) else lapply(re,append.meta)
   invisible(re)
 }
+#' Create Pseudobulk Table from a Seurat object
+#'
+#' @param data a Seurat object
+#' @param name.column name of the metadata column containing the sample/cell names. Default "Name".
+#' @param pseudobulk.column name of the metadata column containing the Pseudobulk names. Default "Condition".
+#'
+#' @details This function returns a table which can be used as input for GRAND3
+#'
+#' @return a table with two columns "Cell" and "Pseudobulk"
+#'
+CreatePseudobulkTable <- function(data,name.column="Name",pseudobulk.column="Condition") {
+  table = data[[]][,c(name.column,pseudobulk.column)]
+  rownames(table) = seq(nrow(table))
+  colnames(table) = c("Cell","Pseudobulk")
+  return(table)
+}
+
+#' Create Convolution Table from a Seurat object
+#'
+#' @param data a Seurat object
+#' @param n.neighbors the number of neighbors to be convoluted
+#'
+#' @details This function returns a table which can be used as input for GRAND3. Note that a data set contatining multiple time points should be split before convolution.
+#'
+#' @return a table with two columns "Cell" and "Pseudobulk"
+#'
+CreateConvolutionTable<- function(data,n.neighbors=20) {
+  data <- FindNeighbors(data, dims = 1:10, k.param = 50)
+  knn <- data@graphs$RNA_nn
+  knn <- data.frame(knn)
+  tab <- matrix(nrow=0, ncol=2)
+  colnames(tab) <- c("Cell", "Pseudobulk")
+
+  for(x in (1:length(knn[1,]))){
+    for(y in colnames(knn[x,(knn[x,] == 1)])){
+      tab <- rbind(tab, c(y, rownames(knn[x,])))
+    }
+  }
+  return(tab)
+}
