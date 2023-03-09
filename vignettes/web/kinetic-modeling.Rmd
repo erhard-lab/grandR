@@ -95,7 +95,7 @@ PlotGeneProgressiveTimecourse(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALS
 Note that the fit actually changed. Now we are ready to fit the model for each gene. For that, we set `SetParallel(cores = 2)` which will set the number of worker threads to 2 (which is the maximal number of cores for vignettes on CRAN). Omit the `cores = 2` parameter for auto-detection ("number of cores"-2). We also specify the same `steady.state` parameter to `FitKinetics`:
 
 ```{r}
-SetParallel(cores = 2)  # increase 2 on your system, or omit the cores = 2 for automatic detection
+SetParallel(cores = 2)  # increase on your system, or omit the cores = 2 for automatic detection
 sars<-FitKinetics(sars,name = "kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 

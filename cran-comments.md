@@ -1,9 +1,11 @@
-## Comments for submission of 
+# Comments for submission of grandR 0.2.1
+## R CMD check results
+There were no ERRORs or WARNINGs or NOTEs. 
 
 
 
 
-## Relevant comments from earlier CRAN submission
+# Relevant comments from earlier CRAN submission
 
 * Please wrap examples that are generally executable but need > 5 sec in \donttest{}. \dontrun{} should only be used if the example really cannot be executed (e.g. because of missing additional software, missing API keys, ...) by the user. That's why wrapping examples in \dontrun{} adds the comment ("# Not run:") as a warning for the user.
 

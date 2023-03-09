@@ -154,10 +154,11 @@ Transform.VST=function(label="VST") function(m) {
   }
 #' @rdname Transform.no
 #' @export
-Transform.logFC=function(label="log2 FC",LFC.fun=lfc::PsiLFC,columns=NULL,...) {
+Transform.logFC=function(label="log2 FC",LFC.fun=NULL,columns=NULL,...) {
   function(m) {
     if (is.null(columns)) columns=1:ncol(m)
     ref=rowMeans(m[,columns,drop=F])
+    if (is.null(LFC.fun)) LFC.fun=lfc::PsiLFC
     re=apply(m,2,function(v) LFC.fun(v,ref,normalizeFun=function(vv) vv))
     attr(re,"label")=label
     re

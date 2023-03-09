@@ -7,3 +7,5 @@
 ^docs$
 ^pkgdown$
 ^vignettes/web$
+^cheatsheet$
+^CRAN-SUBMISSION$
