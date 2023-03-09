@@ -3,7 +3,7 @@
 read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
 
   readit=function(file,...)
-    if (requireNamespace("data.table",quietly = TRUE) && summary(file(file))$class!="gzfile") {
+    if (requireNamespace("data.table",quietly = TRUE) && !grepl("\\.gz$",file)) {
       as.data.frame(data.table::fread(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,data.table = FALSE,...))
     } else {
       read.delim(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,...)
@@ -21,7 +21,6 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
     if (verbose) cat("Reading file...\n")
     t=readit(t,...)
   }
-
   if (stringsAsFactors==TRUE) t=as.data.frame(lapply(t,function(c) if (is.character(c)) factor(c,levels=unique(c)) else c),check.names=FALSE)
   t
 }
