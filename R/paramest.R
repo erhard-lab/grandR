@@ -195,6 +195,11 @@ n.vector=function(n,c) {
 	re
 }
 
+DropoutMixMatrix=function(mixmat,dropout=c(1,0.97,0.95,0.8,0.7,0.55,0.4,0.3,0.25,0.2,0.15,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1)) {
+  mixmat[,]=apply(mixmat,2,function(v) rbinom(length(v),size=v,prob=dropout[1:length(v)]))
+  mixmat
+}
+
 CreateMixMatrix=function(n.vector=round(dnorm(0:50,mean=30,sd=10)*3E7),tabfun=tabrbinommix,...) {
 	m=matrix(0,nrow=length(n.vector)+1,ncol=length(n.vector))
 	rownames(m)=0:length(n.vector)
@@ -360,7 +365,7 @@ mask.MixMat=function(m,p_err=4E-4,max.frac=0.01) {
   })
   rownames(re)=0:max(ak)
   colnames(re)=an
-  structure(re[ak+1,],class="MixMatrix")
+  structure(re[ak+1,,drop=FALSE],class="MixMatrix")
 }
 logLik.MixMat=function(m,fun,...) {
 	an=GetMixMatn(m)

@@ -69,7 +69,8 @@ check.and.make.unique = function(v,ref=NULL,label="entries",ref.label="reference
 
   if (any(is.na(v) | v=="")) {
     if (is.null(ref)) stop(sprintf("When %s are empty, %s must be provided!",label,ref.label))
-    fun(sprintf("Some %s are empty (n=%d, e.g. %s), replacing by %s ids!",label,sum(is.na(v) | v==""),paste(sample(head(ref[is.na(v) | v==""])),collapse=","),ref.label),call. = FALSE,immediate. = TRUE)
+    howmany=if (sum(is.na(v)|v=="")==length(v)) "All" else "Some"
+    fun(sprintf("%s %s are empty (n=%d, e.g. %s), replacing by %s ids!",howmany,label,sum(is.na(v) | v==""),paste(sample(head(ref[is.na(v) | v==""])),collapse=","),ref.label),call. = FALSE,immediate. = TRUE)
     v[is.na(v) | v==""]=ref[is.na(v) | v==""]
   }
 
@@ -425,6 +426,8 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   }
 
   checknames=function(a,b){
+    if (nrow(a)!=nrow(b)) stop("Number of rows do not match!")
+    if (ncol(a)!=ncol(b)) stop("Number of columns do not match!")
     if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
     if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
 
@@ -966,7 +969,9 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   re=list()
   for (n in names(slots)) {
     cols=intersect(paste0(conds," ",n),names(data))
-    re[[slots[n]]]=tomat(data[,cols],data$Gene,cols)
+    a=tomat(data[,cols],data$Gene,cols)
+    if (ncol(a)==0 && n=="Conversions") stop("Columns for conversions are not available in GRAND-SLAM output; rerun gedi -e Slam with parameter -full!")
+    re[[slots[n]]]=a
   }
   #re$count=tomat(data[,count],data$Gene,names(data)[count])
   ##	re$tpm=comp.tpm(re$count,gene.info$Length)
@@ -993,12 +998,14 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     re$beta=correctmat(re$beta)
   }
 
-  checknames=function(a){
-    if (!all(colnames(a)==coldata$Name)) stop("Column names do not match!")
-    if (!all(rownames(a)==gene.info$Gene)) stop("Row names do not match!")
+  checknames=function(n,a){
+    if (nrow(a)!=nrow(gene.info)) stop(sprintf("Number of rows do not match for %s!",n))
+    if (ncol(a)!=nrow(coldata)) stop(sprintf("Number of columns do not match for %s!",n))
+    if (!all(colnames(a)==rownames(coldata))) stop(sprintf("Column names do not match for %s!",n))
+    if (!all(rownames(a)==gene.info$Gene)) stop(sprintf("Row names do not match for %s!",n))
   }
 
-  for (slot in slots) checknames(re[[slot]])
+  for (slotname in names(re)) checknames(slotname,re[[slotname]])
 
   coldata$no4sU=no4sU.cols
 

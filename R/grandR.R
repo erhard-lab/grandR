@@ -86,11 +86,13 @@ NULL
 #' @concept grandr
 grandR=function(prefix=parent$prefix,gene.info=parent$gene.info,slots=parent$data,coldata=parent$coldata,metadata=parent$metadata,analyses=NULL,plots=NULL,parent=NULL) {
 
-  checknames=function(a){
-    if (!all(colnames(a)==rownames(coldata))) stop("Column names do not match!")
-    if (!all(rownames(a)==gene.info$Gene)) stop("Row names do not match!")
+  checknames=function(name,a){
+    if (nrow(a)!=nrow(gene.info)) stop(sprintf("Number of rows do not match for %s!",name))
+    if (ncol(a)!=nrow(coldata)) stop(sprintf("Number of columns do not match for %s!",name))
+    if (!all(colnames(a)==rownames(coldata))) stop(sprintf("Column names do not match for %s!",name))
+    if (!all(rownames(a)==gene.info$Gene)) stop(sprintf("Row names do not match for %s!",name))
   }
-  for (slot in slots) checknames(slot)
+  for (slotname in names(slots)) checknames(slotname,slots[[slotname]])
   check.and.make.unique(gene.info$Gene,label = "Gene",do.error=TRUE)
   check.and.make.unique(gene.info$Symbol,label = "Symbol",do.error=TRUE)
 
@@ -215,7 +217,7 @@ subset.grandR=function(x,columns,reorder=TRUE,...) {
     x[ix] <- lapply(x[ix], function(v) factor(v,levels=as.character(unique(v))))
     x
   }
-  data.apply(x,function(m) m[,columns],fun.coldata = function(t){
+  data.apply(x,fun=function(m) m[,columns],fun.coldata = function(t){
     dr(t[columns,])
   })
 }
@@ -403,9 +405,11 @@ DropSlot=function(data,pattern=NULL) {
 #' @export
 AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
   if (!is.matrix(matrix)) stop("Must be a matrix!")
+  if (ncol(matrix)!=ncol(data$data$count)) stop("Number of columns do not match!")
   if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
 
-  rownames(matrix)=Genes(data,rownames(matrix),use.symbols=FALSE)
+  ind=ToIndex(data,rownames(matrix))
+  rownames(matrix)[ind]=Genes(data,genes=ind,use.symbols=FALSE)
   missing=setdiff(rownames(data$data$count),rownames(matrix))
   if (length(missing>0)) {
     warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(head(missing,5),collapse=",")))
@@ -589,7 +593,7 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 #' @export
 #'
 #' @concept grandr
-UpdateSymbols = function(data,species=NULL,current.value="ensembl_gene_id") {
+UpdateSymbols = function(data,species=NULL,symbol.name=NULL,current.value="ensembl_gene_id") {
 
   checkPackages(c("biomaRt"))
 
@@ -599,10 +603,15 @@ UpdateSymbols = function(data,species=NULL,current.value="ensembl_gene_id") {
   }
   if (is.null(species)) stop("Cannot recognize species! Specify one of biomaRt::listDatasets(biomaRt::useMart(\"ensembl\"))$dataset")
 
+  symcol = switch (species,
+          hsapiens_gene_ensembl = "hgnc_symbol",
+          mmusculus_gene_ensembl = "mgi_symbol",
+          stop("Please specify the name of the column containing symbols (do: mart <- biomaRt::useDataset(species, biomaRt::useMart('ensembl')); biomaRt::columns(mart)[grep('symbol',biomaRt::columns(mart))] )")
+  )
 
   mart <- biomaRt::useDataset(species, biomaRt::useMart("ensembl"))
-  df <- biomaRt::getBM(filters= "ensembl_gene_id", attributes= c(current.value,"hgnc_symbol"),values=Genes(data,use.symbols = TRUE),mart= mart)
-  map=setNames(df$hgnc_symbol,df[[current.value]])
+  df <- biomaRt::getBM(filters= "ensembl_gene_id", attributes= c(current.value,symcol),values=Genes(data,use.symbols = TRUE),mart= mart)
+  map=setNames(df[[symcol]],df[[current.value]])
 
   GeneInfo(data,"Symbol")=check.and.make.unique(map[as.character(Genes(data,use.symbols = TRUE))],ref=as.character(Genes(data,use.symbols = TRUE)),label="symbols",ref.label=current.value)
   data
@@ -729,6 +738,7 @@ get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
 #' @param data The grandR object
 #' @param gene A vector of genes. Can be either numeric indices, gene names, gene symbols or a logical vector
 #' @param regex Treat gene as a regex and return all that match
+#' @param remove.missing if TRUE, do not return missing genes (return NA otherwise)
 #'
 #' @return Numeric indices corresponding to the given genes
 #'
@@ -743,7 +753,7 @@ get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
 #' @export
 #'
 #' @concept helper
-ToIndex=function(data,gene,regex=FALSE) {
+ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE) {
   if (any(is.na(gene))) {
     warning("There were NA genes, removed!");
     gene=gene[!is.na(gene)]
@@ -757,14 +767,20 @@ ToIndex=function(data,gene,regex=FALSE) {
   if (is.logical(gene) && length(gene)==nrow(data)) return(which(gene))
   if (all(gene %in% data$gene.info$Gene)) return(setNames(1:nrow(data),data$gene.info$Gene)[gene])
   if (all(gene %in% data$gene.info$Symbol)) return(setNames(1:nrow(data),data$gene.info$Symbol)[gene])
-  if (sum(gene %in% data$gene.info$Gene) > sum(gene %in% data$gene.info$Symbol)) {
-    mis=setdiff(gene,data$gene.info$Gene)
-    warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(head(mis,5),collapse=",")))
-    return(setNames(1:nrow(data),data$gene.info$Gene)[intersect(gene,data$gene.info$Gene)])
-  }
-  mis=setdiff(gene,data$gene.info$Symbol)
+
+  col = if (sum(gene %in% data$gene.info$Gene) > sum(gene %in% data$gene.info$Symbol)) "Gene" else "Symbol"
+
+  mis=setdiff(gene,data$gene.info[[col]])
   warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(head(mis,5),collapse=",")))
-  return(setNames(1:nrow(data),data$gene.info$Symbol)[intersect(gene,data$gene.info$Symbol)])
+  re=setNames(1:nrow(data),data$gene.info[[col]])
+  ind=intersect(gene,data$gene.info[[col]])
+  if (remove.missing) {
+    return(re[ind])
+  } else {
+    set.na = setdiff(data$gene.info[[col]], gene)
+    re[set.na] = NA
+    return(re)
+  }
 }
 
 #' Obtain a genes x values table
