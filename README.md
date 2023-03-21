@@ -57,4 +57,6 @@ There are also additional vignettes:
 - [Loading data and working with grandR objects](https://grandR.erhard-lab.de/articles/web/loading-data.html): Learn more about programming with grandR
 - [Working with data matrices and analysis results](https://grandR.erhard-lab.de/articles/web/data-matrices-and-analysis-results.html): Learn more about how to retrieve data from grandR objects
 - [Plotting](https://grandR.erhard-lab.de/articles/web/plotting.html): Learn about the plotting helper functions and the shiny web-interface of grandR
+- [Pulse-chase](https://grandR.erhard-lab.de/articles/web/pulse-chase.html): Learn how to fit pulse-chase data with grandR
+- [Single cell](https://grandR.erhard-lab.de/articles/web/single-cell.html): Learn how to load and process single cell data with grandR
 

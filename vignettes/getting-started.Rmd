@@ -17,11 +17,11 @@ vignette: >
 knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95))
 ```
 
-Here we will show a very basic example how to use grandR to perform differential gene expression analysis. For much more vignettes, see the [grandR website](https://grandr.erhard-lab.de).
+Here we will show a very basic example how to use grandR to perform kinetic modeling. For much more vignettes, see the [grandR website](https://grandr.erhard-lab.de).
 
-We will use data from [[1]](https://www.nature.com/articles/s41586-021-03689-8). These are SLAM-seq data from multiple time points (1h,2h,4h,6h and 20h) after acute depletion of BANP. BANP is a transcriptional activator that binds to unmethylated CGCG motifs in CpG island promoters. 
+We will use data from [[1]](https://www.nature.com/articles/s41586-021-03610-3). These are SLAM-seq data from multiple time points (1h,2h,3h,4h) after infecting Calu-3 cells with SARS-CoV-2 (or mock as control). 
 
-We first load the grandR package and the read the GRAND-SLAM output table directly from zenodo:
+We first load the grandR package and the read the GRAND-SLAM that is part of the grandR package:
 
 ```{r warning=FALSE}
 suppressPackageStartupMessages({
@@ -29,41 +29,45 @@ suppressPackageStartupMessages({
     library(ggplot2)
     library(patchwork)
 })
-data <- ReadGRAND("https://zenodo.org/record/6976391/files/BANP.tsv.gz",
-                  design=c("Cell","Experimental.time","Genotype",Design$dur.4sU,Design$has.4sU,Design$Replicate))
+
+sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+                 design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+sars <- Normalize(sars)
+sars
 ```
 
-The GRAND-SLAM output contains any gene with at least 1 read, so let's filter this (by default: at least 100 reads in half of the samples)
+The GRAND-SLAM output normally contains any gene with at least 1 read, i.e. >30k genes. The data set that is part of grandR has been prefiltered and only consists of 1045 genes. For a complete workflow including filter see the [full vignette](https://grandr.erhard-lab.de/articles/web/kinetic-modeling.html). Note that we also normalized the read counts (by using size factors), which added an additional data "slot". 
+
+We start by creating a plot showing the kinetics for a gene:
 
 ```{r}
-data <- FilterGenes(data)
+PlotGeneProgressiveTimecourse(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 
-Let's do a quick quality control and check the principal component analysis. We have to setup the `Condition` first to get nice colors:
+Note that this automatically fit the kinetic model for this gene, separately for the two conditions. Modeling used the default data slot, which are the size-factor normalized values, as indicated above. By using the `steady.state` parameter, we defined the mock infected control samples to be in steady state, whereas the virus infected samples should not be assumed to be in steady state.
+
+We now fit the kinetic model for all genes:
 ```{r}
-Condition(data) <- c("Genotype","Experimental.time.original","has.4sU")
-PlotPCA(data)
+SetParallel(cores = 2)  # increase on your system, or omit the cores = 2 for automatic detection
+sars<-FitKinetics(sars,"kinetics",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 
-Now we perform differential gene expression analysis:
-```{r}
-# differential expression, see differential expression vignette
-contrasts <- GetContrasts(data,contrast=c("Experimental.time.original","0h"),columns = Genotype=='dTag')
-data <- LFC(data,name.prefix = "total",contrasts = contrasts)
-data <- PairwiseDESeq2(data,name.prefix = "total",contrasts = contrasts)
-data <- LFC(data,name.prefix = "new",contrasts = contrasts,mode="new", normalization = "total")
-data <- PairwiseDESeq2(data,name.prefix = "new",contrasts = contrasts,mode="new", normalization = "total")
-```
-
-The MA plots indicate that changes in new RNA are much more pronounced than changes in total RNA, even after 4h:
+Modeling results are stored in two "analysis tables":
 
 ```{r fig.height=3, fig.width=6, warning=FALSE}
-MAPlot(data,analysis = "total.4h vs 0h")|
-  MAPlot(data,analysis = "new.4h vs 0h")
+Analyses(sars)
 ```
 
-We can easily obtain significantly differentially regulated genes (by default: Q<0.05 & abs(LFC)>=1):
+We can retrieve this table (for more information, see the [data handling vignette](https://grandr.erhard-lab.de/articles/web/data-matrices-and-analysis-results.html):
+
 ```{r}
-genes <- GetSignificantGenes(data,analysis = "new.4h vs 0h", criteria = Q<0.05 & LFC< -1)
-GetAnalysisTable(data,analyses = "4h vs 0h",genes = genes, columns = "LFC|Q", gene.info = FALSE)
+head(GetAnalysisTable(sars))
+```
+
+We can also easily plot the RNA half-lives of mock infected cells against virus infected cells:
+
+```{r fig.height=4, fig.width=4}
+PlotScatter(sars,`kinetics.Mock.Half-life`,`kinetics.SARS.Half-life`,
+            lim=c(0,24),correlation = FormatCorrelation())+
+  geom_abline()
 ```

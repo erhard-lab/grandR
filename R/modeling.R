@@ -1558,17 +1558,30 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
     } else {
       fitted=plyr::ldply(fit,function(f) data.frame(time=c(tt,tt),Value=c(f.old.nonequi(tt,f$f0,f$Synthesis,f$Degradation),f.new(tt,f$Synthesis,f$Degradation)),Type=rep(c("Old","New"),each=length(tt))),.id="Condition")
     }
-    breaks=if (exact.tics) sort(unique(df[[time]])) else scales::breaks_extended(5)(df[[time]])
-
     g=ggplot(df,aes(time,Value,color=Type))+cowplot::theme_cowplot()
-    if (show.CI) g=g+geom_errorbar(mapping=aes(ymin=lower,ymax=upper),width=0.1)
+    if (show.CI) g=g+geom_errorbar(mapping=aes(ymin=lower,ymax=upper),width=max(df$time)*0.02)
     g=g+geom_point(size=2)+
         geom_line(data=df.median[df.median$Type=="Total",],size=1)+
-        scale_x_continuous(labels = scales::number_format(accuracy = max(0.01,my.precision(breaks))),breaks=breaks)+
-        xlab("4sU labeling [h]")+
         scale_color_manual("RNA",values=c(Total="gray",New="#e34a33",Old="#2b8cbe"))+
         ylab("Expression")+
         geom_line(data=fitted,aes(ymin=NULL,ymax=NULL),linetype=2,size=1)
+
+    if (exact.tics) {
+      timeorig=paste0(time,".original")
+      if (timeorig %in% names(df)) {
+        brdf=unique(df[,c(time,timeorig)])
+        brdf=brdf[order(brdf[[time]]),]
+        brdf[[timeorig]]=gsub("_",".",brdf[[timeorig]])
+        g=g+scale_x_continuous(NULL,labels = brdf[[timeorig]],breaks=brdf[[time]])+RotatateAxisLabels(45)
+      } else {
+        breaks=sort(unique(df$time))
+        g=g+scale_x_continuous("4sU labeling [h]",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks))),breaks=breaks)
+      }
+    } else {
+      breaks=scales::breaks_extended(5)(df[[time]])
+      g=g+scale_x_continuous("4sU labeling [h]",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks))),breaks=breaks)
+    }
+
     if (!is.null(Coldata(data)$Condition)) g=g+facet_wrap(~Condition,nrow=1)
     if (return.tables) list(gg=g,df=df,df.median=df.median,fitted=fitted) else g
 }
