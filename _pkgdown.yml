@@ -26,6 +26,8 @@ navbar:
           href: articles/web/pulse-chase.html
         - text: "Single cell data analysis"
           href: articles/web/single-cell.html
+        - text: "Detecting and correcting 4sU dropout"
+          href: articles/web/4sU-dropout.html
     - text: Discussions
       href: "https://github.com/erhard-lab/grandR/discussions"
     - text: "News"

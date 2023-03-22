@@ -522,7 +522,7 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 
 
 GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
-  ll=try.file(paste0(data$prefix,".",name),possible.suffixes = c(".tsv.tz",".tsv",""),stop.if.not.exist=stop.if.not.exist)
+  ll=try.file(paste0(data$prefix,".",name),possible.suffixes = c(".tsv.gz",".tsv",""),stop.if.not.exist=stop.if.not.exist)
   if (is.null(ll)) {
     warning(paste0("Cannot find QC table ",name))
     return(NULL)
