@@ -82,6 +82,7 @@ Make4sUDropoutTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transf
 #'   \item{Frction labelled: the global NTR}
 #' }
 #'
+#' @concept dropout
 #'
 #' @export
 #'

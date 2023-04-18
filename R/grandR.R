@@ -593,7 +593,7 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 #' @export
 #'
 #' @concept grandr
-UpdateSymbols = function(data,species=NULL,symbol.name=NULL,current.value="ensembl_gene_id") {
+UpdateSymbols = function(data,species=NULL,current.value="ensembl_gene_id") {
 
   checkPackages(c("biomaRt"))
 

@@ -800,6 +800,7 @@ ListGeneSets=function() {
 #' @param data the grandR object that contains the data to analyze
 #' @param analysis the analysis to use, can be more than one and can be regexes (see details)
 #' @param criteria an expression to define criteria for GSEA/ORA (see details)
+#' @param genes specify genes directly (use analysis and criteria if NULL; see details)
 #' @param species the species the genes belong to (eg "Homo sapiens"); can be NULL, then the species is inferred from gene ids (see details)
 #' @param category the category defining gene sets (see \link{ListGeneSets})
 #' @param subcategory the category defining gene sets (see \link{ListGeneSets})
@@ -830,7 +831,7 @@ ListGeneSets=function() {
 #'
 #' @export
 #' @concept genesets
-AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
+AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC, genes=NULL,
                          species = NULL, category = NULL, subcategory = NULL,
                          verbose=TRUE, minSize=10, maxSize=500,
                          process.genesets=NULL) {
@@ -856,8 +857,8 @@ AnalyzeGeneSets=function(data, analysis=Analyses(data)[1], criteria=LFC,
     map=setNames(process.genesets(ugs),ugs)
     gs$gs_name=map[as.character(gs$gs_name)]
   }
+  if (is.null(genes)) genes=eval(substitute(GetSignificantGenes(data,analysis=analysis,criteria=criteria,as.table=TRUE,use.symbols=FALSE,gene.info=FALSE)),enclos = parent.frame()) # this is necessary to call the eval subs function!
 
-  genes=eval(substitute(GetSignificantGenes(data,analysis=analysis,criteria=criteria,as.table=TRUE,use.symbols=FALSE,gene.info=FALSE)),enclos = parent.frame()) # this is necessary to call the eval subs function!
   if (mode(genes[,1])=="numeric") {
     checkPackages("fgsea")
 

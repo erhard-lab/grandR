@@ -3,6 +3,8 @@ template:
   bootstrap: 5
   bootswatch: flatly
 lang: en
+search:
+  exclude: ['.github/issue_template.md']
 navbar:
   title: "grandR"
   left:
