@@ -59,4 +59,5 @@ There are also additional vignettes:
 - [Plotting](https://grandR.erhard-lab.de/articles/web/plotting.html): Learn about the plotting helper functions and the shiny web-interface of grandR
 - [Pulse-chase](https://grandR.erhard-lab.de/articles/web/pulse-chase.html): Learn how to fit pulse-chase data with grandR
 - [Single cell](https://grandR.erhard-lab.de/articles/web/single-cell.html): Learn how to load and process single cell data with grandR
+- [4sU dropout](https://grandR.erhard-lab.de/articles/web/4sU-dropout.html): Learn how to perform analysis of 4sU dropout
 

@@ -1,5 +1,5 @@
 Package: grandR
-Version: 0.2.1.1
+Version: 0.2.2
 Title: Comprehensive Analysis of Nucleotide Conversion Sequencing Data
 Authors@R: c(
     person("Florian", "Erhard", email = "Florian.Erhard@uni-wuerzburg.de", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-3574-6983")),
@@ -66,6 +66,7 @@ Suggests: knitr,
     graphics,
     shiny,
     ggrastr,
-    viridisLite
+    viridisLite,
+    deSolve
 RoxygenNote: 7.2.1
 VignetteBuilder: knitr

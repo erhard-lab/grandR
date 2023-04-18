@@ -17,6 +17,7 @@
 #' @param read.length the read length for simulation
 #' @param p.old the probability for a conversion in reads originating from old RNA
 #' @param p.new the probability for a conversion in reads originating from new RNA
+#' @param p.new.fit the probability for a conversion in reads originating from new RNA that is used for fitting (to simulate bias in the estimation of p.new)
 #' @param seed seed value for the random number generator (set to make it deterministic!)
 #'
 #' @return a matrix containing, per column, the simulated counts, the simulated NTRs,
@@ -54,10 +55,12 @@ SimulateReadsForSample=function(num.reads=2E7,
                                 read.length=75,
                                 p.old=1E-4,
                                 p.new=0.04,
+                                p.new.fit=p.new,
                                 seed=NULL) {
 
   if(!is.null(seed)) set.seed(seed)
 
+  ntr=pmin(pmax(ntr,0),1)
   mat=cbind(rel.abundance/sum(rel.abundance,na.rm=TRUE),ntr)
   mu=mat[,1]*num.reads
   mat=cbind(mat,rnbinom(length(mu),mu=mu,size=1/dispersion))
@@ -84,6 +87,7 @@ SimulateReadsForSample=function(num.reads=2E7,
 
     para=model.par(ntr=ntr,p.err=p.old,p.conv=p.new)
     mixmat=CreateMixMatrix(n.vector = u.histo,par=para)
+    para=model.par(ntr=ntr,p.err=p.old,p.conv=p.new.fit)
     fit.ntr(mixmat,para,plot=FALSE,beta.approx=beta.approx,conversion.reads=conversion.reads)
   },seed=seed))
   if (!beta.approx & !conversion.reads) {sim.ntr=t(sim.ntr); colnames(sim.ntr)="ntr"}
@@ -183,6 +187,118 @@ SimulateTimeCourse=function(condition,gene.info,s,d,f0=s/d,s.variation=1, d.vari
   gene.info$true_f0=f0
   gene.info$true_d=d
   gene.info$true_s=s
+
+  re=grandR(prefix="Simulated",gene.info=gene.info,slots=data,coldata=coldata,metadata=list(Description="Simulated data"))
+  DefaultSlot(re)="count"
+
+  re
+}
+
+
+#' Simulate a complete time course of metabolic labeling - nucleotide conversion RNA-seq data.
+#'
+#' This function takes a vector of \emph{true} synthesis rates and RNA half-lives, and then simulates
+#' data for multiple time points and replicates. Both synthesis rate and RNA half-lives are assumed to be constant,
+#' but the system might not be in steady-state.
+#'
+#' @param condition A user-defined condition name (which is placed into the \code{\link{Coldata}} of the final grandR object)
+#' @param gene.info either a data frame containing gene annotation or a vector of gene names
+#' @param s a vector of synthesis rates (see details)
+#' @param d a vector of degradation rates (see details)
+#' @param dispersion a vector of dispersion parameters (estimate from data using DESeq2, e.g. by the estimate.dispersion utility function)
+#' @param num.reads a vector representing the number of reads for each sample
+#' @param t a single number denoting the time
+#' @param replicates a single number denoting the number of replicates
+#' @param beta.approx should the beta approximation of the NTR posterior be computed?
+#' @param conversion.reads also output the number of reads with conversion
+#' @param verbose Print status updates
+#' @param seed seed value for the random number generator (set to make it deterministic!)
+#' @param ... provided to \code{\link{SimulateReadsForSample}}
+#'
+#' @details Both rates can be either (i) a single number (constant rate), (ii) a data frame with names "offset",
+#' "factor" and "exponent" (for linear functions, see \link{ComputeNonConstantParam}; only one row allowed) or
+#' (iii) a unary function time->rate. Functions
+#'
+#' @return a grandR object containing the simulated data in its data slots and the true parameters in the gene annotation table
+#' @export
+#'
+#' @seealso \link{SimulateTimeCourse}
+#'
+#' @concept simulation
+SimulateTimeCourseNonConstant=function(condition,gene.info,s,d, dispersion,num.reads=1E7,t=2,replicates=3,beta.approx=FALSE,conversion.reads=FALSE,verbose=TRUE,seed=NULL,...) {
+  # R CMD check guard for non-standard evaluation
+  Name <- NULL
+
+  N=if (is.data.frame(s)) nrow(s) else length(s)
+
+  f0=(if (is.data.frame(s)) s$offset else sapply(s,function(FUN) FUN(0)))/(if (is.data.frame(d)) d$offset else sapply(d,function(FUN) FUN(0)))
+
+  if (!is.data.frame(gene.info)) gene.info=data.frame(Gene=as.character(gene.info),Symbol=as.character(gene.info))
+
+  timepoints=rep(t,replicates)
+  num.reads=rep(num.reads,length(timepoints))
+
+  tt=gsub("^h$","no4sU",gsub("[_0]+h$","h",gsub(".","_",sprintf("%.2fh",timepoints),fixed=TRUE)))
+  names=as.character(plyr::ddply(data.frame(Name=factor(tt,levels=unique(tt))),plyr::.(Name),function(s) data.frame(Name=paste(condition,s$Name,LETTERS[1:length(s$Name)],sep=".")))$Name)
+  coldata=MakeColdata(names,design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+  coldata$no4sU=timepoints==0
+
+  data=list(
+    count=matrix(nrow = N,ncol=length(timepoints)),
+    ntr=matrix(nrow = N,ncol=length(timepoints)),
+    true_count=matrix(nrow = N,ncol=length(timepoints)),
+    true_ntr=matrix(nrow = N,ncol=length(timepoints))
+  )
+  if (beta.approx)
+    data=c(data,list(
+      alpha=matrix(nrow = N,ncol=length(timepoints)),
+      beta=matrix(nrow = N,ncol=length(timepoints))
+    ))
+  if (conversion.reads)
+    data=c(data,list(
+      conversion_reads=matrix(nrow = N,ncol=length(timepoints))
+    ))
+  data=lapply(data,function(m) {rownames(m)=gene.info$Gene; colnames(m)=names; m})
+
+  if (!is.null(seed)) set.seed(seed)
+
+  for (i in seq_along(timepoints)) {
+    if (verbose) cat(sprintf("Simulating %s (%d/%d)...\n",names[i],i,length(timepoints)))
+
+    #new=sapply(1:nrow(s),function(gi){
+    #  f.nonconst.linear(t=timepoints[i],f0 = 0, so=s$offset[gi],sf=s$factor[gi],se=s$exponent[gi], do=d$offset[gi],df=d$factor[gi],de=d$exponent[gi])
+    #})
+    #old=sapply(1:nrow(s),function(gi){
+    #  f.nonconst.linear(t=timepoints[i],f0 = s$offset[gi]/d$offset[gi], so=0,sf=0,se=1, do=d$offset[gi],df=d$factor[gi],de=d$exponent[gi])
+    #})
+    new=sapply(1:N,function(gi){
+      f.nonconst(t=timepoints[i],f0 = 0, s=if(is.data.frame(s)) s[gi,] else s[[gi]],d=if(is.data.frame(d)) d[gi,] else d[[gi]])
+    })
+    old=sapply(1:N,function(gi){
+      f.nonconst(t=timepoints[i],f0 = f0[gi], s=0,d=if(is.data.frame(d)) d[gi,] else d[[gi]])
+    })
+
+    total=new+old
+    ntr=if (timepoints[i]==0) rep(NA,length(total)) else new/total
+    sim=SimulateReadsForSample(num.reads=num.reads[i],rel.abundance=total,ntr=ntr,dispersion=dispersion,beta.approx = beta.approx,conversion.reads=conversion.reads,seed=if (is.null(seed)) NULL else runif(1,min=0,max=.Machine$integer.max),...)
+
+    data$count[,i]=sim[,"count"]
+    data$ntr[,i]=sim[,"ntr"]
+    data$true_count[,i]=sim[,"true_freq"]*num.reads[i]
+    data$true_ntr[,i]=sim[,"true_ntr"]
+    if (beta.approx){
+      data$alpha[,i]=sim[,"alpha"]
+      data$beta[,i]=sim[,"beta"]
+    }
+    if (conversion.reads){
+      data$conversion_reads[,i]=sim[,"conversion.reads"]
+    }
+  }
+
+  gene.info$true_f0=f0
+  gene.info$true_d=if (is.data.frame(d)) EvaluateNonConstantParam(t,d)$value else sapply(d,function(FUN) FUN(t))
+  gene.info$true_s=if (is.data.frame(s)) EvaluateNonConstantParam(t,s)$value else sapply(s,function(FUN) FUN(t))
+
 
   re=grandR(prefix="Simulated",gene.info=gene.info,slots=data,coldata=coldata,metadata=list(Description="Simulated data"))
   DefaultSlot(re)="count"

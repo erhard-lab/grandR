@@ -134,7 +134,7 @@ dbinommix=function(k,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.co
 
 # Generate expected number vectors
 etbbinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.mconv=par$p.mconv,shape=par$shape) setNames(dtbbinommix(0:size,size,ntr=ntr,p.err=p.err,p.mconv=p.mconv,shape=shape)*n,0:size)
-ebinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.conv=par$p.conv)  setNames(dbinommix(0:size,size,ntr,p.err,p.conv)*n,0:size)
+ebinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.conv=par$p.conv)  setNames(dbinommix(0:size,size,ntr=ntr,p.err=p.err,p.conv=p.conv)*n,0:size)
 etbbinom=function(n,size,l,u,shape=0)  setNames(dtbbinom(0:size,size,l,u,exp(shape),exp(-shape))*n,0:size)
 ebinom=function(n,size,prob=1E-4)  setNames(dbinom(0:size,size,prob)*n,0:size)
 
