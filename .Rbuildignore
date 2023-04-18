@@ -9,3 +9,4 @@
 ^vignettes/web$
 ^cheatsheet$
 ^CRAN-SUBMISSION$
+^.github$

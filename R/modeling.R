@@ -200,6 +200,112 @@ f.new=function(t,s,d) s/d*(1-exp(-t*d))
 
 
 
+#' Function to compute the abundance of new or old RNA at time t for non-constant rates.
+#'
+#' The standard mass action kinetics model of gene expression arises from the differential equation
+#' \eqn{df/dt = s(t) - d(t)  f(t)}, with s(t) being the synthesis rate at time t, d(t) the degradation rate at time t and \eqn{f0=f(0)} (the abundance at time 0).
+#' Here, both s and d have the following form \eqn{s(t)=so+sf \cdot t^{se}}.
+#'
+#'
+#' @param t time in h (can be a vector)
+#' @param so synthesis date offset
+#' @param sf synthesis date factor
+#' @param se synthesis date exponent
+#' @param do degradation rate offset
+#' @param df degradation rate factor
+#' @param de degradation rate exponent
+#' @param f0 the abundance at time t=0
+#'
+#' @return the RNA abundance at time t
+#' @seealso \link{f.nonconst}
+#'
+#' @export
+#' @concept kinetics
+f.nonconst.linear=function(t,f0,so,sf,se,do,df,de) {
+  if (length(t)>1) return(sapply(t,function(tt) f.nonconst.linear(tt,f0,so,sf,se,do,df,de)))
+
+  ee=exp(-t*(df*t^de+do*de+do)/(de+1))
+  ff=function(x) exp(x*((df*x^de)/(de+1)+do))*(so+sf*x^se)
+  ii=integrate(ff,0,t)$value
+  ee*(ii+f0)
+}
+
+#' Function to compute the abundance of new or old RNA at time t for non-constant rates.
+#'
+#' The standard mass action kinetics model of gene expression arises from the differential equation
+#' \eqn{df/dt = s(t) - d(t)  f(t)}, with s(t) being the synthesis rate at time t, d(t) the degradation rate at time t and \eqn{f0=f(0)} (the abundance at time 0).
+#' Here, both s and d have the following form \eqn{s(t)=so+sf \cdot t^{se}}.
+#'
+#'
+#' @param t time in h (can be a vector)
+#' @param f0 the abundance at time t=0
+#' @param s the synthesis rate (see details)
+#' @param d the degradation rate (see details)
+#'
+#' @details Both rates can be either (i) a single number (constant rate), (ii) a data frame with names "offset",
+#' "factor" and "exponent" (for linear functions, see \link{ComputeNonConstantParam}; only one row allowed) or
+#' (iii) a unary function time->rate. Functions
+#'
+#' @return the RNA abundance at time t
+#' @seealso \link{f.nonconst.linear}
+#'
+#' @export
+#' @concept kinetics
+f.nonconst=function(t,f0,s,d) {
+
+  if (is.numeric(s)) s = ComputeNonConstantParam(start=s)
+  if (is.numeric(d)) d = ComputeNonConstantParam(start=d)
+  if (is.data.frame(s) && nrow(s)!=1) stop("Only a single row data frame allowed!")
+  if (is.data.frame(d) && nrow(d)!=1) stop("Only a single row data frame allowed!")
+
+  if (is.function(s) || is.function(d)) {
+    checkPackages("deSolve")
+
+    sfun=if (is.data.frame(s)) function(t) s$offset+s$factor*t^s$exponent else s
+    dfun=if (is.data.frame(d)) function(t) d$offset+d$factor*t^d$exponent else d
+
+    re=deSolve::ode(y=f0,times=c(0,t),func=function(t,y,parms,...) list(sfun(t)-dfun(t)*y))
+    return(re[-1,2])
+  }
+
+  so=s$offset
+  sf=s$factor
+  se=s$exponent
+  do=d$offset
+  df=d$factor
+  de=d$exponent
+
+  sapply(t,function(tt) {
+  ee=exp(-tt*(df*tt^de+do*de+do)/(de+1))
+  ff=function(x) exp(x*((df*x^de)/(de+1)+do))*(so+sf*x^se)
+  ii=integrate(ff,0,tt)$value
+  ee*(ii+f0)
+  })
+}
+
+#' Compute and evaluate functions for non constant rates
+#'
+#' For simplicity, non constant rates here have the following form $o+f*t^e$.
+#'
+#'
+#' @param start the value at t=0
+#' @param end the value at t=end.time
+#' @param exponent the exponent (e above)
+#' @param end.time the end time
+#' @param t vector of times
+#' @param param output of \code{ComputeNonConstantParam()}, only a single row!
+#'
+#' @return data frame containing either the parameters o, f and e (ComputeNonConstantParam), or containing the value of $o+f*t^e$ for the given times (EvaluateNonConstantParam).
+#'
+#' @describeIn ComputeNonConstantParam compute a data frame containing the parameters for non constant rates
+#' @export
+#' @concept kinetics
+ComputeNonConstantParam=function(start,end=start,exponent=1,end.time=2) data.frame(offset=start,factor=(end-start)/end.time^exponent,exponent=exponent)
+#' @describeIn ComputeNonConstantParam compute a data frame containing the rates for the given parameter set (computed from \code{ComputeNonConstantParam})
+#' @export
+EvaluateNonConstantParam=function(t,param) data.frame(t=t,value=param$offset+param$factor*t^param$exponent)
+
+
 #' Fit kinetic models to all genes.
 #'
 #' Fit the standard mass action kinetics model of gene expression by different methods. Some methods require steady state assumptions, for others
@@ -1558,22 +1664,33 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
     } else {
       fitted=plyr::ldply(fit,function(f) data.frame(time=c(tt,tt),Value=c(f.old.nonequi(tt,f$f0,f$Synthesis,f$Degradation),f.new(tt,f$Synthesis,f$Degradation)),Type=rep(c("Old","New"),each=length(tt))),.id="Condition")
     }
-    breaks=if (exact.tics) sort(unique(df[[time]])) else scales::breaks_extended(5)(df[[time]])
-
     g=ggplot(df,aes(time,Value,color=Type))+cowplot::theme_cowplot()
-    if (show.CI) g=g+geom_errorbar(mapping=aes(ymin=lower,ymax=upper),width=0.1)
+    if (show.CI) g=g+geom_errorbar(mapping=aes(ymin=lower,ymax=upper),width=max(df$time)*0.02)
     g=g+geom_point(size=2)+
         geom_line(data=df.median[df.median$Type=="Total",],size=1)+
-        scale_x_continuous(labels = scales::number_format(accuracy = max(0.01,my.precision(breaks))),breaks=breaks)+
-        xlab("4sU labeling [h]")+
         scale_color_manual("RNA",values=c(Total="gray",New="#e34a33",Old="#2b8cbe"))+
         ylab("Expression")+
         geom_line(data=fitted,aes(ymin=NULL,ymax=NULL),linetype=2,size=1)
+
+    if (exact.tics) {
+      timeorig=paste0(time,".original")
+      if (timeorig %in% names(df)) {
+        brdf=unique(df[,c(time,timeorig)])
+        brdf=brdf[order(brdf[[time]]),]
+        brdf[[timeorig]]=gsub("_",".",brdf[[timeorig]])
+        g=g+scale_x_continuous(NULL,labels = brdf[[timeorig]],breaks=brdf[[time]])+RotatateAxisLabels(45)
+      } else {
+        breaks=sort(unique(df$time))
+        g=g+scale_x_continuous("4sU labeling [h]",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks))),breaks=breaks)
+      }
+    } else {
+      breaks=scales::breaks_extended(5)(df[[time]])
+      g=g+scale_x_continuous("4sU labeling [h]",labels = scales::number_format(accuracy = max(0.01,my.precision(breaks))),breaks=breaks)
+    }
+
     if (!is.null(Coldata(data)$Condition)) g=g+facet_wrap(~Condition,nrow=1)
     if (return.tables) list(gg=g,df=df,df.median=df.median,fitted=fitted) else g
 }
-
-
 
 
 #' Simulate the kinetics of old and new RNA for given parameters.
@@ -1584,8 +1701,8 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
 #' This model dictates the time evolution of old and new RNA abundance after metabolic labeling starting at time t=0.
 #' This function simulates data according to this model.
 #'
-#' @param s the synthesis rate
-#' @param d the degradation rate
+#' @param s the synthesis rate (see details)
+#' @param d the degradation rate (see details)
 #' @param hl the RNA half-life
 #' @param f0 the abundance at time t=0
 #' @param min.time the start time to simulate
@@ -1593,6 +1710,9 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
 #' @param N how many time points from min.time to max.time to simuate
 #' @param name add a Name column to the resulting data frame
 #' @param out which values to put into the data frame
+#'
+#' @details Both rates can be either (i) a single number (constant rate), (ii) a data frame with names "offset",
+#' "factor" and "exponent" (for linear functions, see \link{ComputeNonConstantParam}) or (iii) a unary function time->rate. Functions
 #'
 #' @return a data frame containing the simulated values
 #' @export
@@ -1603,12 +1723,20 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
 #' head(SimulateKinetics(hl=2))   # simulate steady state kinetics for an RNA with half-life 2h
 #'
 #' @concept kinetics
-SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=s/d,min.time=-1,max.time=10,N = 1000,name=NULL,out=c("Old","New","Total","NTR")) {
+SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=NULL,min.time=-1,max.time=10,N = 1000,name=NULL,out=c("Old","New","Total","NTR")) {
     times=seq(min.time,max.time,length.out=N)
-    ode.new=function(t,s,d) ifelse(t<0,0,s/d*(1-exp(-t*d)))
-    ode.old=function(t,f0,s,d) ifelse(t<0,f0,f0*exp(-t*d))
-    old=ode.old(times,f0,s,d)
-    new=ode.new(times,s,d)
+    if (is.numeric(s)) s = ComputeNonConstantParam(start=s)
+    if (is.numeric(d)) d = ComputeNonConstantParam(start=d)
+    if (is.null(f0)) f0=s$offset/d$offset
+    #ode.new=function(t,s,d) ifelse(t<0,0,s/d*(1-exp(-t*d)))
+    #ode.old=function(t,f0,s,d) ifelse(t<0,f0,f0*exp(-t*d))
+    #old=ode.old(times,f0,s,d)
+    #new=ode.new(times,s,d)
+    #old=c(rep(f0,sum(times<0)),f.nonconst.linear(t = times[times>=0],f0 = f0,so = 0,sf=0,se=1,do = d$offset,df=d$factor,de=d$exponent))
+    #new=c(rep(0,sum(times<0)),f.nonconst.linear(t = times[times>=0],f0 = 0,so = s$offset,sf=s$factor,se=s$exponent,do = d$offset,df=d$factor,de=d$exponent))
+    old=c(rep(f0,sum(times<0)),f.nonconst(t = times[times>=0],f0 = f0,s=0,d=d))
+    new=c(rep(0,sum(times<0)),f.nonconst(t = times[times>=0],f0 = 0,s=s,d=d))
+
     re=data.frame(
         Time=times,
         Value=c(old,new,old+new,new/(old+new)),
@@ -1647,10 +1775,11 @@ PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
     if (!old) sim.df=sim.df[sim.df$Type!="Old",]
     if (!new) sim.df=sim.df[sim.df$Type!="New",]
     if (!total) sim.df=sim.df[sim.df$Type!="Total",]
+    sim.df$Type=droplevels(sim.df$Type)
     ggplot(sim.df,aes(Time,Value,color=Type))+
       cowplot::theme_cowplot()+
       geom_line(size=1)+
-        scale_color_manual(NULL,values=c(Old="#54668d",New="#953f36",Total="#373737",NTR="#e4c534"))+
+        scale_color_manual(NULL,values=c(Old="#54668d",New="#953f36",Total="#373737",NTR="#e4c534")[levels(sim.df$Type)])+
         facet_wrap(~ifelse(Type=="NTR","NTR","Timecourse"),scales="free_y",ncol=1)+
         ylab(NULL)+
         scale_x_continuous(breaks=scales::pretty_breaks())+

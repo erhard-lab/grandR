@@ -10,9 +10,12 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
     }
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
-    file <- tempfile()
-    if (verbose) cat("Downloading file...\n")
-    download.file(url, file, quiet=!verbose)
+    fn=gsub(".*/","",gsub("\\?.*","",t))
+    fn1 = gsub("\\..*","",fn)
+    ext=substr(fn,nchar(fn1)+1,nchar(fn))
+    file <- tempfile(pattern = fn1,fileext = ext)
+    if (verbose) cat(sprintf("Downloading file to %s...\n",file))
+    download.file(t, file, quiet=!verbose)
     if (verbose) cat("Reading file...\n")
     t=readit(file,...)
     if (verbose) cat("Deleting temporary file...\n")

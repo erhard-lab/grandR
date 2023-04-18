@@ -1,4 +1,16 @@
 
+# grandR 0.2.2
+
+This is the release of grandR including improvements for the submission of the grand-Correct preprint
+
+## Major updates
+* Enable simulation with non-constant rates
+* 4sU dropout plots and grand-Correct functionality
+
+## Smaller updates
+* Fixed a bug that caused warning messages after loading files.
+
+
 # grandR 0.2.1
 
 This is the release of grandR including improvements for the revised version of the manuscript.

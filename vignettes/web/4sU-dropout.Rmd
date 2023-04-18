@@ -1,0 +1,100 @@
+---
+title: "4sU dropout correction"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    df_print: kable
+    fig_width: 7
+    fig_height: 6
+    fig_crop: no  
+vignette: >
+  %\VignetteIndexEntry{4sU dropout correction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+  
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment=NA,R.options=list(width = 95), warning=FALSE, message=FALSE)
+```
+
+Here, we will show a basic example of how to correct 4sU induced dropout in a SLAM-seq data set.
+
+We used the progressive 4sU labeling data from (paper) with labeling times from 15 min to 120 min.
+
+At first, we load the grandR package, read in the GRAND-SLAM output and only retain genes with at least 200 reads in half of the samples.
+
+```{r}
+library(grandR)
+library(ggplot2)
+r <- ReadGRAND("https://zenodo.org/record/7753473/files/nih_kinetics_rescued.tsv.gz",design=c(Design$dur.4sU,Design$Replicate))
+r <- FilterGenes(r,minval = 200)
+```
+
+
+Now, we can check if we observe any dropout effects in our data set, e.g. the 120 min labeling sample.
+
+For this, we create a dropout plot, showing us the log2 fold change for all genes between the 120 min labeling sample vs. a 4sU naïve  sample.
+
+```{r}
+Plot4sUDropoutRank(r,"120min.A",ylim=c(-0.5,0.5),title=NULL,size=0.6,label.corr = FALSE,invert.ranks=TRUE)
+```
+
+Additionally, with the Scatter plot, we can compare both replicates and confirm that the dropout effects are consistent among both replicates.
+
+```{r}
+co=GetContrasts(r,contrast=c("duration.4sU.original","no4sU"),group="Replicate",no4sU=TRUE)
+r=LFC(r,contrasts=co)
+PlotScatter(r,`total.120min vs no4sU.A.LFC`,`total.120min vs no4sU.B.LFC`,lim=c(-1,1),correlation=FormatCorrelation(method="spearman"),xlab=bquote(log[2]~"FC 2h vs 0h (Rep. A)"),ylab=bquote(log[2]~"FC 2h vs 0h (Rep. B)"))
+```
+
+4sU dropout plots give a good impression about such an effect, but we can also quantify the dropout per sample.
+
+For this, we compute a summary of the statistics in our data set and plot the dropout rate over time and as we can see, the dropout rates increase consistently in both replicates for longer labeling times.
+
+```{r}
+stat.r=ComputeSummaryStatistics(r,coldata=TRUE)
+
+ggplot(stat.r,aes(duration.4sU*60,`4sU dropout`,group=Replicate))+
+  coord_cartesian(ylim=c(0,0.4))+
+  geom_point(position=position_dodge(width=8))+
+  cowplot::theme_cowplot()+
+  xlab("4sU labeling [min]")+
+  ylab("4sU dropout")+
+  scale_x_continuous(breaks=c(0,15,30,60,90,120))+
+  scale_y_continuous(labels = scales::label_percent(1),breaks=c(0,0.2,0.4))+
+  RotatateAxisLabels()
+```
+
+
+Now that we've checked our data for 4sU dropout, we can use grandR to correct for this. 
+
+Looking at the same plots for the corrected data set, we do not observe dropout effects anymore, successfully removing 4sU induced quantification bias in our data.
+
+```{r}
+
+rc=Correct4sUDropoutHLFactor(r)
+
+Plot4sUDropoutRank(rc,"120min.A",ylim=c(-0.5,0.5),title=NULL,size=0.6,label.corr = FALSE,invert.ranks=TRUE)
+
+rc=LFC(rc,contrasts=co)
+PlotScatter(rc,`total.120min vs no4sU.A.LFC`,`total.120min vs no4sU.B.LFC`,lim=c(-1,1),correlation=FormatCorrelation(method="spearman"),xlab=bquote(log[2]~"FC 2h vs 0h (Rep. A)"),ylab=bquote(log[2]~"FC 2h vs 0h (Rep. B)"))+scale_x_continuous(breaks=c(-1,0,1))+scale_y_continuous(breaks=c(-1,0,1))
+
+stat.rc=ComputeSummaryStatistics(rc,coldata=TRUE)
+stat.rc$Corrected="Corrected"
+stat.r$Corrected="Not corrected"
+stat=rbind(stat.r,stat.rc)
+stat$Corrected=factor(stat$Corrected,levels=c("Not corrected","Corrected"))
+
+colors=setNames(RColorBrewer::brewer.pal(6,"Paired")[c(2,6)],c("Corrected","Not corrected"))
+
+ggplot(stat,aes(duration.4sU*60,`4sU dropout`,color=Corrected,group=Replicate))+
+  coord_cartesian(ylim=c(0,0.4))+
+  geom_point(position=position_dodge(width=8))+
+  cowplot::theme_cowplot()+
+  xlab("4sU labeling [min]")+
+  ylab("4sU dropout")+
+  scale_x_continuous(breaks=c(0,15,30,60,90,120))+
+  scale_y_continuous(labels = scales::label_percent(1),breaks=c(0,0.2,0.4))+
+  scale_color_manual(NULL,values=colors)+
+  RotatateAxisLabels()
+```

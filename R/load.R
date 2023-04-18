@@ -522,24 +522,34 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 
 
 GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
-  fn=paste0(data$prefix,".",name,".tsv.gz")
-  if (!file.exists(fn)) {
-    fn2=paste0(data$prefix,".",name,".tsv")
-    if (!file.exists(fn2)) {
-      fn3=paste0(data$prefix,".",name)
-      if (!file.exists(fn3)) {
-        if (stop.if.not.exist) stop(paste0("Cannot find QC table ",fn," or ",fn2))
-        else warning(paste0("Cannot find QC table ",fn," or ",fn2))
-      }
-      fn=fn3
-    } else {
-      fn = fn2
-    }
+  ll=try.file(paste0(data$prefix,".",name),possible.suffixes = c(".tsv.gz",".tsv",""),stop.if.not.exist=stop.if.not.exist)
+  if (is.null(ll)) {
+    warning(paste0("Cannot find QC table ",name))
+    return(NULL)
   }
-  if (!file.exists(fn)) return(NULL)
-
   header = !name %in% c("clip","strandness")
-  read.tsv(fn,header=header)
+  re=read.tsv(ll$file,header=header)
+  ll$callback()
+  return(re)
+
+#  fn=paste0(data$prefix,".",name,".tsv.gz")
+#  if (!file.exists(fn)) {
+#    fn2=paste0(data$prefix,".",name,".tsv")
+#    if (!file.exists(fn2)) {
+#      fn3=paste0(data$prefix,".",name)
+#      if (!file.exists(fn3)) {
+#        if (stop.if.not.exist) stop(paste0("Cannot find QC table ",fn," or ",fn2))
+#        else warning(paste0("Cannot find QC table ",fn," or ",fn2))
+#      }
+#      fn=fn3
+#    } else {
+#      fn = fn2
+#    }
+#  }
+#  if (!file.exists(fn)) return(NULL)
+#
+#  header = !name %in% c("clip","strandness")
+#  read.tsv(fn,header=header)
 }
 
 
@@ -802,11 +812,13 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
   re
 }
 
-try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/data.tsv.gz"),verbose=FALSE) {
+try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/data.tsv.gz"),verbose=FALSE, stop.if.not.exist=TRUE) {
   do.callback=function() {}
 
+  cut.suffix=function(p) {for (s in possible.suffixes) p=gsub(paste0(s,"$"),"",p); p}
+
   for (suffix in possible.suffixes) {
-    if (file.exists(paste0(prefix,suffix))) return(list(file=paste0(prefix,suffix),prefix=prefix,callback=do.callback))
+    if (file.exists(paste0(prefix,suffix))) return(list(file=paste0(prefix,suffix),prefix=cut.suffix(prefix),callback=do.callback))
   }
 
 
@@ -821,19 +833,25 @@ try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/da
 
 
     if (!is.null(url)) {
-      file <- tempfile()
+      fn=gsub(".*/","",gsub("\\?.*","",url))
+      fn1 = gsub("\\..*","",fn)
+      ext=substr(fn,nchar(fn1)+1,nchar(fn))
+      file <- tempfile(pattern = fn1,fileext = ext)
+
       if (verbose) cat(sprintf("Downloading file (url: %s, destination: %s) ...\n",url,file))
       download.file(url, file, quiet=!verbose)
       do.callback=function() {
         if (verbose) cat("Deleting temporary file...\n")
         unlink(file)
       }
-      return(list(file=file,prefix=prefix,callback=do.callback))
+      prefix=gsub("\\?.*","",prefix) # cut ?x=y extensions
+      return(list(file=file,prefix=cut.suffix(prefix),callback=do.callback))
     }
   } else {
-    stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
+    if (stop.if.not.exist) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
   }
-  stop("File not found!")
+  if (stop.if.not.exist) stop("File not found!")
+  return(NULL)
 }
 
 read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate),
