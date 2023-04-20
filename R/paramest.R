@@ -5,17 +5,17 @@ MAX_ERR=1E-2
 
 model.par=function(ntr=0.1,p.err=4E-4,p.conv=0.05,p.mconv=0.05,shape=5) {
 	r=list(ntr=ntr,p.err=p.err,p.conv=p.conv,p.mconv=p.mconv,shape=shape,logLik=NA)
-	class(r)="grandR.model"
+	class(r)="grmodel"
 	r
 }
 model.par.empty=function(ntr=NA,p.err=NA,p.conv=NA,p.mconv=NA,shape=NA) {
 	r=list(ntr=ntr,p.err=p.err,p.conv=p.conv,p.mconv=p.mconv,shape=shape,logLik=NA)
-	class(r)="grandR.model"
+	class(r)="grmodel"
 	r
 }
 default.model.par=model.par()
 
-print.grandR.model=function(m) {
+print_grmodel=function(m) {
 	if (!is.na(m$p.conv) && !is.na(m$p.mconv)) {
 		cat(sprintf("\nUntrained grandR model:\n\n ntr=%.3f\n p.err=%.3g\n p.conv=%.3g\n p.mconv=%.3g\n shape=%.2f",m$ntr,m$p.err,m$p.conv,m$p.mconv,m$shape))
 	} else if (!is.na(m$p.conv)) {
@@ -31,7 +31,7 @@ is.binom=function(par) !is.na(par$p.conv)
 is.tbbinom=function(par) is.na(par$p.conv)
 
 
-logLik.grandR.model=function(par, k, size) {
+logLik_grmodel=function(par, k, size) {
 	if (!is.na(par$p.conv) && !is.na(par$p.mconv)) {
 		stop("Model not trained!")
 	} else if (!is.na(par$p.conv)) {
@@ -304,12 +304,7 @@ computeMixMatrix=function(m1,m2,fun) {
 
 GetMixMatk=function(mixmat) as.integer(rownames(mixmat))
 GetMixMatn=function(mixmat) as.integer(colnames(mixmat))
-as.data.frame.MixMatrix=function(x) {
-	df=reshape2::melt(unclass(x),varnames=c("k","n"),value.name="Count")
-	df=df[df$Count>0,]
-	rownames(df)=NULL
-	df
-}
+
 
 
 `[.MixMatrix`=function(x,k=0:dim(x)[1],n=1:dim(x)[2]) {
@@ -335,7 +330,7 @@ as.data.frame.MixMatrix=function(x) {
 ComputeComponentLikelihoods=function(mixmat,par) {
 	k=rep(rep(GetMixMatk(mixmat),dim(mixmat)[2]),times=as.numeric(mixmat))
 	n=rep(rep(GetMixMatn(mixmat),each=dim(mixmat)[1]),times=as.numeric(mixmat))
-	logLik(par,k,n)
+	logLik_grmodel(par,k,n)
 }
 
 ComputeCombinationLogLikelihood=function(llold,llnew) {
@@ -367,7 +362,7 @@ mask.MixMat=function(m,p_err=4E-4,max.frac=0.01) {
   colnames(re)=an
   structure(re[ak+1,,drop=FALSE],class="MixMatrix")
 }
-logLik.MixMat=function(m,fun,...) {
+logLik_MixMat=function(m,fun,...) {
 	an=GetMixMatn(m)
 	ak=GetMixMatk(m)
 	re=sum(sapply(an,function(n) {
@@ -379,7 +374,7 @@ logLik.MixMat=function(m,fun,...) {
 
 fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE) {
   start=0
-  optfun=function(p) logLik.MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
+  optfun=function(p) logLik_MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
   start=optfun(par$ntr)
   opt=optimize(optfun,maximum=TRUE,lower=0,upper=1)
   if (!beta.approx) {
@@ -422,7 +417,7 @@ binom.optim=function(mixmat,par,fix=c(F,F,F)) {
 	first[!fix]=1:sum(!fix)
 	sel=function(p,i) if (fix[i]) pp[i] else p[first[i]]
 	start=0
-	optfun=function(p) logLik.MixMat(mixmat,dbinommix,ntr=sel(p,1),p.err=sel(p,2),p.conv=sel(p,3))-start
+	optfun=function(p) logLik_MixMat(mixmat,dbinommix,ntr=sel(p,1),p.err=sel(p,2),p.conv=sel(p,3))-start
 	start=optfun(pp[!fix])
 
 	if (sum(!fix)==1) {
@@ -453,7 +448,7 @@ tbbinom.optim=function(mixmat,par,fix=c(F,F,F,F)) {
   sel=function(p,i) if (fix[i]) pp[i] else p[first[i]]
 
   start=0
-  optfun=function(p) logLik.MixMat(mixmat,dtbbinommix,ntr=sel(p,1),p.err=sel(p,2),p.mconv=sel(p,3),shape=sel(p,4))-start
+  optfun=function(p) logLik_MixMat(mixmat,dtbbinommix,ntr=sel(p,1),p.err=sel(p,2),p.mconv=sel(p,3),shape=sel(p,4))-start
   start=optfun(pp[!fix])
 
   if (sum(!fix)==1) {
@@ -482,7 +477,7 @@ binom.optim2=function(mixmat,par) {
 
   mlsse=function(v) if (length(v)==0) 0 else lsse(v)
   ll=function(p) {
-    a=logLik.MixMat(mixmat,dbinom,prob=p)
+    a=logLik_MixMat(mixmat,dbinom,prob=p)
     b=sum(sapply(GetMixMatn(mixmat),function(n) {
       v=unclass(mixmat[0:n,n])[,1]
       mlsse(dbinom((0:n)[!is.na(v)],size=n,prob=p,log=TRUE))*sum(v[!is.na(v)])
@@ -514,7 +509,7 @@ tbbinom.optim2=function(mixmat,par,fix=c(F,F)) {
   #ll=function(p,D,kmin=2) sum(dbinom(D[D>=kmin],size=20,prob=p,log = TRUE) - lsse(dbinom(kmin:20,size=20,prob=p,log=TRUE)))
   mlsse=function(v) if (length(v)==0) 0 else lsse(v)
   ll=function(p,shape) {
-    a=logLik.MixMat(mixmat,dtbbinom,l=p_err,u=p,shape=shape)
+    a=logLik_MixMat(mixmat,dtbbinom,l=p_err,u=p,shape=shape)
     b=sum(sapply(GetMixMatn(mixmat),function(n) {
       v=unclass(mixmat[0:n,n])[,1]
       mlsse(dtbbinom((0:n)[!is.na(v)],size=n,l=p_err,u=p,shape=shape,log=TRUE))*sum(v[!is.na(v)])
@@ -628,18 +623,25 @@ table.MixMatrix.KL=function(mixmat,percentage=0.95,models=list()) {
 
 table.MixMatrix.compare=function(mixmat,percentage=0.95,models=list()) {
 
+  adf=function(x) {
+    df=reshape2::melt(unclass(x),varnames=c("k","n"),value.name="Count")
+    df=df[df$Count>0,]
+    rownames(df)=NULL
+    df
+  }
+
 	ns=sort(colSums(mixmat)/sum(mixmat),decreasing=T)
 	nminmax=range(as.integer(names(ns[cumsum(ns)<percentage])))
 	mixmat.cut=mixmat[,nminmax[1]:nminmax[2]]
 	mixmat.scaled=t(t(mixmat.cut)/colSums(mixmat.cut))
-	df=cbind(data.frame(Type="Data"),as.data.frame(mixmat.scaled))
+	df=cbind(data.frame(Type="Data"),adf(mixmat.scaled))
 
 	for (i in 1:length(models)) {
 		emixmat=CreateMixMatrix(n.vector=colSums(mixmat.cut),tabfun=if(is.binom(models[[i]])) ebinommix else etbbinommix,par=models[[i]])
 		emixmat[emixmat<1]=0
 		emixmat=emixmat[rowSums(emixmat)>0,]
 		emixmat.scaled=t(t(emixmat)/colSums(emixmat))
-		df=rbind(df,cbind(data.frame(Type=names(models)[i]),as.data.frame(mixmat.scaled)))
+		df=rbind(df,cbind(data.frame(Type=names(models)[i]),adf(mixmat.scaled)))
 	}
 	df=df[df$k>0,]
 	df
