@@ -199,9 +199,10 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @details Both \link[lfc]{PsiLFC} and  \link[lfc]{NormLFC}) by default perform normalization by subtracting the median log2 fold change from all log2 fold changes.
 #' When computing LFCs of new RNA, it might be sensible to normalize w.r.t. to total RNA, i.e. subtract the median log2 fold change of total RNA from all the log2 fold change of new RNA.
 #' This can be accomplished by setting mode to "new", and normalization to "total"!
-
+#'
 #' @details Normalization can also be a mode.slot! Importantly, do not specify a slot containing normalized values, but specify a slot of unnormalized values
-#' (which are used to compute the size factors for normalization!)
+#' (which are used to compute the size factors for normalization!) Can also be a numeric vector of size factors with the same length as the data as columns.
+#' Then each value is divided by the corresponding size factor entry.
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
 #' \itemize{
@@ -222,7 +223,7 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot
   contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
   if (ncol(contrasts)==0) stop("Contrasts do not define any comparison!")
 
-  data=LFC(data,name.prefix = name.prefix, contrasts = contrasts, LFC.fun = LFC.fun, slot=slot, mode=mode,normalization = normalization,verbose=verbose)
+  data=LFC(data,name.prefix = name.prefix, contrasts = contrasts, LFC.fun = LFC.fun, slot=slot, mode=mode,normalization = normalization,compute.M = FALSE,verbose=verbose)
   data=PairwiseDESeq2(data,name.prefix = name.prefix, contrasts = contrasts, slot=slot, mode=mode,normalization = normalization,verbose=verbose)
   data
 
@@ -239,6 +240,7 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot
 #' @param LFC.fun function to compute log fold changes (default: \link[lfc]{PsiLFC}, other viable option: \link[lfc]{NormLFC})
 #' @param mode compute LFCs for "total", "new", or "old" RNA
 #' @param normalization normalize on "total", "new", or "old" (see details)
+#' @param compute.M also compute the mean expression (in log10 space)
 #' @param verbose print status messages?
 #' @param ... further arguments forwarded to LFC.fun
 #'
@@ -247,7 +249,8 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot
 #' This can be accomplished by setting mode to "new", and normalization to "total"!
 #'
 #' @details Normalization can also be a mode.slot! Importantly, do not specify a slot containing normalized values, but specify a slot of unnormalized values
-#' (which are used to compute the size factors for normalization!)
+#' (which are used to compute the size factors for normalization!) Can also be a numeric vector of size factors with the same length as the data as columns.
+#' Then each value is divided by the corresponding size factor entry.
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
 #' \itemize{
@@ -269,6 +272,7 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot
 #' @concept diffexp
 LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiLFC, mode="total",
              normalization=NULL,
+             compute.M=TRUE,
              verbose=FALSE,...) {
 
   contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
@@ -276,20 +280,31 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 
   mode.slot=paste0(mode,".",slot)
   if (!is.null(normalization)) {
-    if (!check.mode.slot(data,normalization)) normalization=paste0(normalization,".",slot)
-    if (!check.mode.slot(data,normalization)) stop("Invalid normalization!")
+    if (is.numeric(normalization)) {
+      if (length(normalization)!=ncol(data)) stop("Invalid normalization, for size factors make sure that it matches the columns of data!")
+    } else {
+      if (!check.mode.slot(data,normalization)) normalization=paste0(normalization,".",slot)
+      if (!check.mode.slot(data,normalization)) stop("Invalid normalization!")
+    }
   }
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
   ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="LFC",FUN=function(mat,A,B) {
     if (!is.null(normalization)) {
-      norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
-      nlfcs=LFC.fun(rowSums(norm.mat[,A,drop=FALSE]),rowSums(norm.mat[,B,drop=FALSE]),normalizeFun=function(i) i)
-      med.element=median(nlfcs)
-      lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-med.element,...)
+      if (is.numeric(normalization)) {
+        shift=log2(sum(normalization[A])/sum(normalization[B]))
+        lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-shift,...)
+      } else {
+        norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
+        nlfcs=LFC.fun(rowSums(norm.mat[,A,drop=FALSE]),rowSums(norm.mat[,B,drop=FALSE]),normalizeFun=function(i) i)
+        med.element=median(nlfcs)
+        lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-med.element,...)
+      }
     } else {
       lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),...)
     }
-    if (is.data.frame(lfcs)) lfcs else data.frame(LFC=lfcs)
+    lfcs = if (is.data.frame(lfcs)) lfcs else data.frame(LFC=lfcs)
+    if (compute.M) lfcs$M=10^(0.5*(log10(rowSums(mat[,A,drop=FALSE])+0.5)+log10(rowSums(mat[,B,drop=FALSE])+0.5)))
+    lfcs
   })
 }
 
@@ -312,7 +327,8 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' This can be accomplished by setting mode to "new", and normalization to "total"!
 #'
 #' @details Normalization can also be a mode.slot! Importantly, do not specify a slot containing normalized values, but specify a slot of unnormalized values
-#' (which are used to compute the size factors for normalization!)
+#' (which are used to compute the size factors for normalization!) Can also be a numeric vector of size factors with the same length as the data as columns.
+#' Then each value is divided by the corresponding size factor entry.
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
 #' \itemize{
@@ -350,18 +366,28 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 
   mode.slot=paste0(mode,".",slot)
   if (!is.null(normalization)) {
-    if (!check.mode.slot(data,normalization)) normalization=paste0(normalization,".",slot)
+    if (is.numeric(normalization)) {
+      if (length(normalization)!=ncol(data)) stop("Invalid normalization, for size factors make sure that it matches the columns of data!")
+    } else {
+      if (!check.mode.slot(data,normalization)) normalization=paste0(normalization,".",slot)
+      if (!check.mode.slot(data,normalization)) stop("Invalid normalization!")
+    }
   } else {
     normalization = mode.slot
   }
-  if (!check.mode.slot(data,normalization)) stop("Invalid normalization!")
 
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
 
   if (separate) {
     ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="DESeq2.Wald",FUN=function(mat,A,B) {
-      norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
-      norm.mat=cbind(norm.mat[,A,drop=FALSE],norm.mat[,B,drop=FALSE])
+      if (is.numeric(normalization)) {
+        nsf = normalization[A|B]
+      } else {
+        norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
+        norm.mat=cbind(norm.mat[,A,drop=FALSE],norm.mat[,B,drop=FALSE])
+        nsf=DESeq2::estimateSizeFactorsForMatrix(norm.mat)
+      }
+
       A=mat[,A,drop=FALSE]
       B=mat[,B,drop=FALSE]
       coldata=data.frame(comparison=c(rep("A",ncol(A)),rep("B",ncol(B))))
@@ -369,7 +395,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
       dds <- DESeq2::DESeqDataSetFromMatrix(countData = cnt(cbind(A,B)),
                                     colData = coldata,
                                     design= ~ comparison-1)
-      DESeq2::sizeFactors(dds)<-DESeq2::estimateSizeFactorsForMatrix(norm.mat)
+      DESeq2::sizeFactors(dds)<-nsf
       l=DESeq2::results(DESeq2::DESeq(dds,quiet=!verbose))
       re=data.frame(
         M=l$baseMean,
@@ -407,8 +433,15 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
     }
     mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
     mat=mat[,!is.na(cond.vec)]
-    norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
-    norm.mat=norm.mat[,!is.na(cond.vec)]
+
+    if (is.numeric(normalization)) {
+      nsf = normalization[!is.na(cond.vec)]
+    } else {
+      norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
+      norm.mat=norm.mat[,!is.na(cond.vec)]
+      nsf=DESeq2::estimateSizeFactorsForMatrix(norm.mat)
+    }
+
 
     cond.vec=cond.vec[!is.na(cond.vec)]
     coldata=data.frame(comparisons=factor(cond.vec,levels=as.character(1:length(groups))))
@@ -418,7 +451,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
                                   colData = coldata,
                                   design= ~ comparisons-1)
 
-    DESeq2::sizeFactors(dds)<-DESeq2::estimateSizeFactorsForMatrix(norm.mat)
+    DESeq2::sizeFactors(dds)<-nsf
     dds <- DESeq2::DESeq(dds,quiet=!verbose)
 
     for (i in 1:length(contrasts)) {
@@ -1053,8 +1086,8 @@ GetContrasts.default=function(x,contrast,columns=NULL,group=NULL,name.format=NUL
       if (is.null(columns)) columns=TRUE
       ll=if (is.factor(coldata[,contrast[1]])) levels(droplevels(coldata[columns,contrast[1]])) else unique(coldata[columns,contrast[1]])
       if (length(ll)<2) stop("Less than 2 levels in contrast: ")
-      re=combn(ll,2,FUN=function(v) make.col(c(contrast,v),group,use)[,1])
-      colnames(re)=combn(ll,2,FUN=function(v) names(make.col(c(contrast,v),group,use))[1])
+      re=utils::combn(ll,2,FUN=function(v) make.col(c(contrast,v),group,use)[,1])
+      colnames(re)=utils::combn(ll,2,FUN=function(v) names(make.col(c(contrast,v),group,use))[1])
       as.data.frame(re,check.names=FALSE)
     }
   }

@@ -6,7 +6,7 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
     if (requireNamespace("data.table",quietly = TRUE) && !grepl("\\.gz$",file)) {
       as.data.frame(data.table::fread(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,data.table = FALSE,...))
     } else {
-      read.delim(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,...)
+      utils::read.delim(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,...)
     }
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
@@ -15,7 +15,7 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
     ext=substr(fn,nchar(fn1)+1,nchar(fn))
     file <- tempfile(pattern = fn1,fileext = ext)
     if (verbose) cat(sprintf("Downloading file to %s...\n",file))
-    download.file(t, file, quiet=!verbose)
+    utils::download.file(t, file, quiet=!verbose)
     if (verbose) cat("Reading file...\n")
     t=readit(file,...)
     if (verbose) cat("Deleting temporary file...\n")

@@ -91,7 +91,7 @@ ServeGrandR=function(data,
 	      paste0(title,"-", Sys.Date(), ".tsv")
 	    },
 	    content = function(file) {
-	      write.table(df[input$tab_rows_all,], file,row.names=F,col.names=T,quote=F,sep="\t")
+	      utils::write.table(df[input$tab_rows_all,], file,row.names=F,col.names=T,quote=F,sep="\t")
 	    }
 	  )
 
@@ -114,7 +114,7 @@ ServeGrandR=function(data,
 	      on.exit(shiny::removeModal())
 	      ggg=as.character(df[input$tab_rows_all,1])
 	      tab=GetTable(data,type=input$datamodality,ntr.na = FALSE,gene.info = TRUE,genes = ggg)
-	      write.table(tab, gzfile(file),row.names=F,col.names=T,quote=F,sep="\t")
+	      utils::write.table(tab, gzfile(file),row.names=F,col.names=T,quote=F,sep="\t")
 	    }
 	  )
 
@@ -203,7 +203,7 @@ ServeGrandR=function(data,
 	  })
 
 	  if (show.sessionInfo) output$sessionInfo <- shiny::renderPrint({
-	    capture.output(sessionInfo())
+	    utils::capture.output(utils::sessionInfo())
 	  })
 
 
@@ -317,7 +317,7 @@ ServeGrandR=function(data,
 	  htmltools::tags$script(htmltools::HTML(sprintf("
         	var header = $('.navbar> .container-fluid');
           header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">grandR v%s</span></div>')",
-	                                                 packageVersion("grandR")
+	                                                 utils::packageVersion("grandR")
         	)))
 	)
 

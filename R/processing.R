@@ -439,6 +439,67 @@ ComputeExpressionPercentage=function(data,name,genes=Genes(data),mode.slot=Defau
   data
 }
 
+
+#' Compute statistics for all columns (i.e. samples or cells)
+#'
+#' @param data a grandR object
+#'
+#' @return a new grandR object containing additional columns in the \link{Coldata} table:
+#' \itemize{
+#'   \item{p.conv.X: the T-to-C mismatch frequency in the given ("X") subread category}
+#'   \item{percent.new: new overall percentage of new RNA}
+#'   \item{total.reads: the total number of reads (or UMIs, if UMIs were sequences)}
+#'   \item{total.genes: the total number of genes detected}
+#' }
+#'
+#' @export
+#'
+#' @concept data
+ComputeColumnStatistics=function(data) {
+  if (data$metadata$`GRAND-SLAM version`==3) {
+    tab=GetTableQC(data,"model.parameters")
+    tab=tab[tab$Label==tab$Label[1] & tab$Estimator==tab$Estimator[1],]
+    for (sub in unique(tab$Subread)) {
+      m=setNames(tab$`Binom p.conv`[tab$Subread==sub],tab$Condition[tab$Subread==sub])
+      Coldata(data,paste("p.conv",sub))=m[colnames(data)]
+    }
+  } else {
+    tab=GetTableQC(data,"mismatches",stop.if.not.exist=FALSE)
+    if (!is.null(tab)) {
+      strand=GetTableQC(data,"strandness",stop.if.not.exist=FALSE)$V1
+      if (strand=="Antisense") {
+        tab=tab[(tab$Orientation=="First" & tab$Genomic=="A" & tab$Read=="G")|(tab$Orientation=="Second" & tab$Genomic=="T" & tab$Read=="C"),]
+      } else if (strand=="Sense") {
+        tab=tab[(tab$Orientation=="First" & tab$Genomic=="T" & tab$Read=="C")|(tab$Orientation=="Second" & tab$Genomic=="A" & tab$Read=="G"),]
+      } else {
+        tab=tab[(tab$Genomic=="T" & tab$Read=="C")|(tab$Genomic=="A" & tab$Read=="G"),]
+      }
+      tab=tab[tab$Category=="Exonic",]
+      tab=plyr::ddply(tab,c("Condition"),function(s) data.frame(Coverage=sum(s$Coverage),Mismatches=sum(s$Mismatches)))
+      m=setNames(tab$Mismatches/tab$Coverage,tab$Condition)
+      Coldata(data,"raw.conversions")=m[colnames(data)]
+    }
+
+    tab=GetTableQC(data,"rates",stop.if.not.exist=FALSE)
+    if (!is.null(tab)) {
+      m=unlist(tab[tab$Rate=="single_new",-1])
+      Coldata(data,"p.conv.single")=m[colnames(data)]
+      Coldata(data,"p.conv.single")[Coldata(data,"no4sU")]=NA
+      m=unlist(tab[tab$Rate=="double_new",-1])
+      if (any(m!=0)) {
+        Coldata(data,"p.conv.double")=m[colnames(data)]
+        Coldata(data,"p.conv.double")[Coldata(data,"no4sU")]=NA
+      }
+    }
+  }
+
+  data=ComputeExpressionPercentage(data,"percent.new",mode.slot="new.count",mode.slot.total="count")
+
+  Coldata(data,"total.reads") = Matrix::colSums(GetMatrix(data,mode.slot="count"))
+  Coldata(data,"total.genes") = Matrix::colSums(GetMatrix(data,mode.slot="count")>0)
+  data
+}
+
 #' Compute pseudo NTRs from two count matrices
 #'
 #' NTRs can be computed from given new and total counts.
@@ -473,3 +534,62 @@ ComputePseudoNtr=function(data,new.slot,total.slot=DefaultSlot(data),detection.r
 
   AddSlot(data,"ntr",ntr,set.to.default=FALSE)
 }
+
+#' Pool reads across columns
+#'
+#' Pool read counts, ntrs, and alpha/beta values across columns defined by a pooling matrix
+#'
+#' @param data grandR object
+#' @param pooling a pooling matrix (see details)
+#'
+#' @details The pooling matrix must have as many rows as there are columns (i.e., samples or cells) in data,
+#' and as many columns as you want to have columns in the resulting object. The matrix should consist of 0 and 1,
+#' where 1 indicates a column of the original object that should go into a column of the new object. In essence,
+#' to obtain the new count matrix, the old count matrix is matrix-multiplied with the pooling matrix.
+#'
+#' @details The new ntr matrix is computed by componentwise division of the new count and total count matrices derived
+#' as just described. alpha and beta are computed using matrix multiplication, i.e. summing up all alpha and beta values
+#' of all the columns belonging to a pool.
+#'
+#' @return a new grandR object
+#' @export
+#'
+#' @concept data
+PoolColumns=function(data,pooling=GetSummarizeMatrix(data,average=FALSE,no4sU=TRUE)) {
+  dd=list()
+  dd$count = GetMatrix(data,mode.slot="count",summarize=pooling,name.by="Gene")
+  newcount = GetMatrix(data,mode.slot="new.count",summarize=pooling,name.by="Gene")
+  if (is.matrix(dd$count)) {
+    dd$ntr=newcount/dd$count
+  } else {
+    sX=Matrix::summary(newcount)
+    sY=Matrix::summary(dd$count)
+    dd=.Call('fastsparsematdiv',sX$i,sX$j,sX$x,sY$i,sY$j,sY$x,1.0)
+    ntr=Matrix::sparseMatrix(i=sX$i, j=sX$j, x=dd,dimnames=dimnames(dd$count))
+  }
+  if (all(c("alpha","beta") %in% Slots(data))) {
+    dd$alpha=GetMatrix(data,mode.slot="alpha",summarize=pooling,name.by="Gene")
+    dd$beta=GetMatrix(data,mode.slot="beta",summarize=pooling,name.by="Gene")
+  }
+
+  cd=data.frame(Name=colnames(pooling))
+  rownames(cd)=colnames(pooling)
+  for (add in setdiff(names(Coldata(data)),"Name")) {
+    col=Coldata(data,add)
+    col=apply(pooling,2,function(cc) {
+      h=unique(col[cc!=0])
+      if (length(h)!=1) h=NA
+      h
+    })
+    if (sum(is.na(col))<length(col)) {
+      cd[[add]]=col
+    }
+  }
+
+  return(grandR(data$prefix,gene.info=data$gene.info,slots=dd,coldata=cd,metadata=data$metadata,analyses=data$analyses))
+}
+
+
+
+
+

@@ -361,7 +361,7 @@ PlotHeatmap=function(data,
 #' fun(data$x,data$y)
 #'
 #' @concept globalplot
-FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g") {
+FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g",slope.format=NULL) {
   function(x,y) {
     if (length(x)!=length(y)) stop("Cannot compute correlation, unequal lengths!")
     use=is.finite(x)&is.finite(y)
@@ -373,7 +373,11 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
     formatted.n=if (!is.null(n.format)) sprintf(sprintf("n=%s",n.format),length(x))
     formatted.p=if (!is.null(p.format)) sprintf(sprintf("p%s%s",if (cc$p.value<2.2e-16) "<" else "=",p.format),if (cc$p.value<2.2e-16) 2.2e-16 else cc$p.value)
     formatted.coeff=if (!is.null(coeff.format)) sprintf(sprintf("%s=%s",p.name,coeff.format),cc$estimate)
-    paste(c(formatted.n,formatted.coeff,formatted.p),collapse="\n")
+    formatted.slope=if (!is.null(slope.format)) {
+      pca=prcomp(cbind(x,y))$rotation[,1]
+      sprintf(sprintf("s=%s",slope.format),pca[2]/pca[1])
+    }
+    paste(c(formatted.n,formatted.coeff,formatted.p,formatted.slope),collapse="\n")
   }
 }
 
@@ -620,7 +624,6 @@ PlotScatter=function(data,
     xlab(xlab)+ylab(ylab)
 
   if (!is.null(df$facet)) g=g+facet_wrap(~facet)
-
   if (!is.null(colorscale)) g=g+colorscale
 
   if (!is.null(highlight)) {
@@ -800,6 +803,7 @@ MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
   if (is.numeric(analysis)) analysis=Analyses(data)[analysis]
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",gsub(".*.M","M",names(df))))
+  if (is.null(df$Q)) df$Q=1
   aes=utils::modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
   g=ggplot(df,mapping=aes)+
     cowplot::theme_cowplot()+

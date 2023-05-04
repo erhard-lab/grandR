@@ -1,6 +1,5 @@
 
 #' @import stats
-#' @import utils
 #' @import ggplot2
 #' @import patchwork
 NULL
@@ -412,7 +411,7 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
   rownames(matrix)[ind]=Genes(data,genes=ind,use.symbols=FALSE)
   missing=setdiff(rownames(data$data$count),rownames(matrix))
   if (length(missing>0)) {
-    warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(head(missing,5),collapse=",")))
+    warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(utils::head(missing,5),collapse=",")))
     matrix = rbind(matrix,matrix(0,nrow=length(missing),ncol=ncol(matrix),dimnames=list(missing,colnames(matrix))))
   }
   matrix=matrix[rownames(data$data$count),]
@@ -662,14 +661,19 @@ Coldata=function(data,column=NULL,value=NULL) {
   } else if (is.null(value)) {
     setNames(data$coldata[[column]],rownames(data$coldata))
   } else {
-    data$coldata[[column]]=value
+    Coldata(data,column)<-value
     data
   }
 }
 #' @rdname Coldata
 #' @export
 `Coldata<-` <- function(data, column, value) {
-  data$coldata[[column]]=value
+  if (!is.null(value) && length(value)!=nrow(data$coldata)) {
+    if (is.null(names(value)) || !all(names(value) %in% rownames(data$coldata))) stop("If the given value does not have the same length as the grandR object columns, names must match!")
+    data$coldata[names(value),column]=value
+  } else {
+    data$coldata[[column]]=value
+  }
   data
 }
 
@@ -771,7 +775,7 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE) {
   col = if (sum(gene %in% data$gene.info$Gene) > sum(gene %in% data$gene.info$Symbol)) "Gene" else "Symbol"
 
   mis=setdiff(gene,data$gene.info[[col]])
-  warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(head(mis,5),collapse=",")))
+  warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(utils::head(mis,5),collapse=",")))
   re=setNames(1:nrow(data),data$gene.info[[col]])
   ind=intersect(gene,data$gene.info[[col]])
   if (remove.missing) {
@@ -839,7 +843,7 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE) {
 #'
 #' @concept data
 GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol") {
-
+  if (is.null(genes)) genes=Genes(data)
   genes=ToIndex(data,genes)
 
   mode.slot=check.mode.slot(data,type)
@@ -963,6 +967,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
   columns=Columns(data,columns)
 
+  if (is.null(genes)) genes=Genes(data)
   genes=ToIndex(data,genes)
 
   tno="t"
@@ -1356,9 +1361,12 @@ AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE) {
   }
 
   if (!equal(Genes(data,rownames(table)),Genes(data))) {
-      warning("Analysis table and grandR object does not have the same set of genes! Watch out for NA values!")
-    table <- table[Genes(data), ]
-    rownames(table) = Genes(data)
+      warning("Analysis table and grandR object do not have the same set of genes! Watch out for NA values!")
+    ntab=table[rep(NA,nrow(data)),]
+    rownames(ntab) = Genes(data)
+    ind=setNames(1:nrow(ntab),Genes(data))
+    ntab[ind[rownames(table)],]=table
+    table <- ntab
   }
 
   if (is.null(data$analysis)) data$analysis=list()

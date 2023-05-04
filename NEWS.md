@@ -1,3 +1,8 @@
+# grandR 0.2.3
+
+## Smaller updates
+* compute.M for LFC
+* size factors to normalize Pairwise, LFC and PairwiseDESeq2
 
 # grandR 0.2.2
 

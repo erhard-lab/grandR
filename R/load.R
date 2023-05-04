@@ -70,7 +70,7 @@ check.and.make.unique = function(v,ref=NULL,label="entries",ref.label="reference
   if (any(is.na(v) | v=="")) {
     if (is.null(ref)) stop(sprintf("When %s are empty, %s must be provided!",label,ref.label))
     howmany=if (sum(is.na(v)|v=="")==length(v)) "All" else "Some"
-    fun(sprintf("%s %s are empty (n=%d, e.g. %s), replacing by %s ids!",howmany,label,sum(is.na(v) | v==""),paste(sample(head(ref[is.na(v) | v==""])),collapse=","),ref.label),call. = FALSE,immediate. = TRUE)
+    fun(sprintf("%s %s are empty (n=%d, e.g. %s), replacing by %s ids!",howmany,label,sum(is.na(v) | v==""),paste(sample(utils::head(ref[is.na(v) | v==""])),collapse=","),ref.label),call. = FALSE,immediate. = TRUE)
     v[is.na(v) | v==""]=ref[is.na(v) | v==""]
   }
 
@@ -79,7 +79,7 @@ check.and.make.unique = function(v,ref=NULL,label="entries",ref.label="reference
     if (is.null(ref) || anyDuplicated(ref)) ext = sprintf(" Cannot guarantee maintaining consistency for %s across reading several files, watch out if you merge grandR objects!",label)
     dupp=table(v)
     dupp=names(dupp)[which(dupp>1)]
-    fun(sprintf("Duplicate %s (n=%d, e.g. %s) present, making unique!%s",label,length(dupp),paste(head(sample(dupp)),collapse=","),ext),call. = FALSE,immediate. = TRUE)
+    fun(sprintf("Duplicate %s (n=%d, e.g. %s) present, making unique!%s",label,length(dupp),paste(utils::head(sample(dupp)),collapse=","),ext),call. = FALSE,immediate. = TRUE)
 
     if (!is.null(ref)) {
       df=data.frame(id=1:length(v),v=as.character(v),ref=as.character(ref),stringsAsFactors = FALSE)
@@ -277,7 +277,7 @@ MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep
   if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
 
   str2fac=function(s) if (is.character(s)) factor(s,levels=unique(s)) else s
-  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,str2fac(type.convert(sapply(spl,function(v) v[i]),as.is=TRUE,na.strings=c("DKSALDJLKSADLKSJDLKSJDLJDA")))) # stupid function!
+  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,str2fac(utils::type.convert(sapply(spl,function(v) v[i]),as.is=TRUE,na.strings=c("DKSALDJLKSADLKSJDLKSJDLJDA")))) # stupid function!
   names(coldata)[-1]=design[!is.na(design)]
   if (rownames) rownames(coldata)=coldata$Name
 
@@ -450,7 +450,7 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
     if (!is.null(url)) {
       file <- tempfile()
       if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
-      download.file(url, file, quiet=!verbose)
+      utils::download.file(url, file, quiet=!verbose)
       prefix=gsub(".tsv(.gz)?$","",url)
       do.callback=function() {
         if (verbose) cat("Deleting temporary file...\n")
@@ -481,7 +481,7 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 
 
   if (verbose) cat("Reading file...\n")
-  data=read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
+  data=utils::read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
   if (!is.null(filter.table)) data=filter.table(data)
 
   clss=sapply(data,class)
@@ -819,7 +819,7 @@ ReadGRAND3_sparse=function(prefix,
 
   if (verbose) cat("Reading count matrix...\n")
   count=Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz"))
-  gene.info=read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
+  gene.info=utils::read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
   if (ncol(gene.info)==4) gene.info$Length=1
   gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
 
@@ -947,9 +947,9 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
 
   callbacks=list(genes$callback,cells$callback,new.matrix$callback,total.matrix$callback)
 
-  cols=read.csv(cells$file,check.names = FALSE,stringsAsFactors = FALSE)
+  cols=utils::read.csv(cells$file,check.names = FALSE,stringsAsFactors = FALSE)
   rownames(cols)=cols[,1]
-  gene.info=setNames(read.csv(genes$file,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
+  gene.info=setNames(utils::read.csv(genes$file,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
 
   if (verbose) cat("Reading total count matrix...\n")
   count=Matrix::readMM(total.matrix$file)
@@ -1016,7 +1016,7 @@ try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/da
       file <- tempfile(pattern = fn1,fileext = ext)
 
       if (verbose) cat(sprintf("Downloading file (url: %s, destination: %s) ...\n",url,file))
-      download.file(url, file, quiet=!verbose)
+      utils::download.file(url, file, quiet=!verbose)
       do.callback=function() {
         if (verbose) cat("Deleting temporary file...\n")
         unlink(file)
@@ -1064,7 +1064,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   #   if (!is.null(url)) {
   #     file <- tempfile()
   #     if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
-  #     download.file(url, file, quiet=!verbose)
+  #     utils::download.file(url, file, quiet=!verbose)
   #     prefix=gsub(".tsv(.gz)?$","",url)
   #     do.callback=function() {
   #       if (verbose) cat("Deleting temporary file...\n")
