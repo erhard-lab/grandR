@@ -400,16 +400,18 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
   df$lfc=ifelse(df$lfc<ylim[1],-Inf,df$lfc)
   df$lfc=ifelse(df$lfc>ylim[2],+Inf,df$lfc)
 
-  pfun=if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
+  pointslayer=ggplot2::geom_point(alpha=1,size=size)
+  if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
     singleMessage("Install the ggrastr package to get rasterized dropout plots!")
-    ggplot2::geom_point
-  } else ggrastr::geom_point_rast
+  } else {
+    pointslayer = ggrastr::rasterize(pointslayer)
+  }
 
 
   re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide='none')+
-    pfun(alpha=1,size=size)+
+    pointslayer+
     geom_hline(yintercept=0)+
     #geom_smooth(method="loess",formula=y~x)+
     xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
@@ -447,15 +449,16 @@ Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,yl
     ylim=c(-d,d)
   }
 
-  pfun=if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
+  pointslayer=ggplot2::geom_point(alpha=1,size=size)
+  if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
     singleMessage("Install the ggrastr package to get rasterized dropout plots!")
-    ggplot2::geom_point
-  } else ggrastr::geom_point_rast
-
+  } else {
+    pointslayer = ggrastr::rasterize(pointslayer)
+  }
   ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide="none")+
-    pfun(alpha=1,size=size)+
+    pointslayer+
     geom_hline(yintercept=0)+
     geom_smooth(method="loess",color='red')+
     xlab("RNA half-life [h]")+ylab("log FC 4sU/no4sU")+

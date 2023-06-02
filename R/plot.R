@@ -605,12 +605,6 @@ PlotScatter=function(data,
     }
   }
 
-  point.fun=function(...) geom_point(...)
-  if ((is.null(rasterize) && nrow(df)>1000) || rlang::is_true(rasterize)) {
-    checkPackages("ggrastr")
-    point.fun=function(...) ggrastr::geom_point_rast(...)
-  }
-
   g=ggplot(df,aes(A,B,color=color))+cowplot::theme_cowplot()
   if (!is.null(cross)) g=g+geom_vline(xintercept = 0,linetype=2,color='gray')+geom_hline(yintercept = 0,linetype=2,color='gray')
   if (!is.null(diag)) {
@@ -619,9 +613,15 @@ PlotScatter=function(data,
   }
 
   if (!is.null(layers.below)) for (e in layers.below) g=g+e
-  g=g+
-    point.fun(size=size)+
-    xlab(xlab)+ylab(ylab)
+
+  if ((is.null(rasterize) && nrow(df)>1000) || rlang::is_true(rasterize)) {
+    checkPackages("ggrastr")
+    g=g+ggrastr::rasterize(geom_point(size=size))
+  } else {
+    g=g+geom_point(size=size)
+  }
+
+  g=g+xlab(xlab)+ylab(ylab)
 
   if (!is.null(df$facet)) g=g+facet_wrap(~facet)
   if (!is.null(colorscale)) g=g+colorscale
