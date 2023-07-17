@@ -1028,7 +1028,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       summarize=NULL
     } else {
       if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
-      summarize=summarize[columns,]
+      summarize=summarize[columns,,drop=FALSE]
       summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
     }
 
