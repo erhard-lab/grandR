@@ -978,6 +978,8 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
   rownames(re)=Genes(data,genes,use.symbols = name.by=="Symbol")
 
   conv=function(v) { mode(v)="integer"; v}
+  round5up = function(x) trunc(x+0.5)
+  round5down = function(x) ceiling(x-0.5)
 
   if (is.matrix(re)) {  # plain old R matrix!
     mf = switch(tolower(substr(tno,1,1)),t=1,n=as.matrix(data$data$ntr[genes,columns,drop=FALSE]),o=1-as.matrix(data$data$ntr[genes,columns,drop=FALSE]),stop(paste0(mode.slot," unknown!")))
@@ -995,7 +997,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round5up(R[[3]])),dims=dim(re),
                                   dimnames=dimnames(re)))
 
       # all that have zero in ntr matrix will be zero, so this is fine
@@ -1009,7 +1011,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult1m',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round5down(R[[3]])),dims=dim(re),
                                   dimnames=dimnames(re)))
 
       #sX <- Matrix::summary(re)
