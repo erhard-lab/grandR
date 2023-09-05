@@ -41,8 +41,8 @@ Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
 Make4sUDropoutTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=lfc::PsiLFC,slot="count",rm.all.zero=TRUE,correction=1,...) {
   w=rowMeans(GetTable(data,type=slot,columns=w4sU))
   col=no4sU
-  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=col))
-  ntr=apply(GetTable(data,"ntr",columns=ntr),1,mean,rm.na=TRUE)
+  n=if (is.numeric(no4sU)) no4sU else rowMeans(GetTable(data,type=slot,columns=col))
+  ntr=if (is.numeric(ntr)) ntr else apply(GetTable(data,"ntr",columns=ntr),1,mean,rm.na=TRUE)
   use=!is.na(w+n+ntr)
   w=w[use]
   n=n[use]
@@ -421,7 +421,7 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
 
   if (!is.na(boxplot.bins) && boxplot.bins>1) {
     bin=max(df$covar)/boxplot.bins
-    df$cat=floor((df$covar-1)/bin)*bin+bin/2
+    df$cat=floor(pmax(df$covar-1,0)/bin)*bin+bin/2
     pp=kruskal.test(lfc~cat,data=df)$p.value
     pp=if (pp<2.2E-16) pp = bquote("<"~2.2 %*% 10^-16) else pp = sprintf("= %.2g",pp)
     re=re+
@@ -431,7 +431,7 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
 
   re=re+ggtitle(title,subtitle = if (label.corr) lab)
 
-  if (return.corr) list(plot=re,label=lab) else re
+  if (return.corr) list(plot=re,label=lab,df=df) else re
 }
 
 #' @rdname dropout
@@ -440,7 +440,7 @@ Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,yl
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
-  time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
+  time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[if (is.numeric(ntr)) w4sU else ntr,Design$dur.4sU] else 1
   df=Make4sUDropoutTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(hl)) hl=quantile(df$covar[is.finite(df$covar)],hl.quantile)
   df=df[df$covar<hl & df$ntr<1 & df$ntr>0,]

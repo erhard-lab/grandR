@@ -965,11 +965,11 @@ GetSummarizeMatrix.default=function(x,subset=NULL,average=TRUE,...) {
 	rownames(re)=names(v)
 	colnames(re)=unique(v)
 	if (!is.null(subset)) {
-  	save=re[subset,]
+  	save=re[subset,,drop=FALSE]
   	re[,]=0
   	re[subset,]=save
 	}
-	re=re[,colSums(re)>0]
+	re=re[,colSums(re)>0,drop=FALSE]
 	if (average) re=t(t(re)/colSums(re))
 	re
 }

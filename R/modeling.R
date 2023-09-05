@@ -1220,6 +1220,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
   }
 
   if (is.null(conditions)) conditions=levels(Condition(data))
+  original.dispersion = dispersion
 
   for (n in conditions) {
     if (verbose) cat(sprintf("Computing snapshot kinetics for %s...\n",n))
@@ -1228,7 +1229,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
     if (is.null(reference.columns)) ss=A
     if (is.matrix(reference.columns)) ss=apply(reference.columns[,Columns(data,A),drop=FALSE]==1,1,any)
     if (length(Columns(data,ss))==0) stop("No reference columns found; check your reference.columns parameter!")
-    dispersion = if (sum(ss)==1) rep(0.1,nrow(data)) else if (!is.null(dispersion)) rep(dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss))
+    dispersion = if (sum(ss)==1) rep(0.1,nrow(data)) else if (!is.null(original.dispersion)) rep(original.dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss))
     if (verbose) {
       if (any(ss & A)) {
         cat(sprintf("Sampling from steady state for %s...\n",paste(colnames(data)[A],collapse = ",")))

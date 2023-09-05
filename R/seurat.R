@@ -47,6 +47,8 @@ as.Seurat.grandR=function(data,modalities=c(RNA="total",newRNA="new"),hls=NULL,t
     if ("prev" %in% modalities) {
       stopifnot(!is.null(hls));
       mats$prev=mats$old*exp(time*log(2)/pmin(pmax(hls,0.25),24))
+      rownames(mats$prev)=rownames(mats$total)
+      colnames(mats$prev)=colnames(mats$total)
     }
   }
 #  if (any(c("old.lower","new.upper") %in% modalities)) {
