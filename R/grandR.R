@@ -403,7 +403,7 @@ DropSlot=function(data,pattern=NULL) {
 #' @param warn issue a warning if the slot name already exists and is overwritten
 #' @export
 AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
-  if (!is.matrix(matrix)) stop("Must be a matrix!")
+  if (!is.matrix(matrix) & !is(matrix, 'sparseMatrix')) stop("Must be a matrix!")
   if (ncol(matrix)!=ncol(data$data$count)) stop("Number of columns do not match!")
   if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
 
