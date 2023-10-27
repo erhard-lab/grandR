@@ -1,8 +1,22 @@
+# grandR 0.2.4
+
+## Shiny improvement
+* If there are global plots, there is now an additional page showing the highlighted genes
+* Defer now allows to specify desired figure width and height
+* Fixed bug that caused all global plots to be executed before rendering the main table
+
+## Smaller updates
+* fixed subsetting of grandR to only a single column
+* improved handling of factors in coldata during merging
+* Updated ReadGRAND3 to most recent Grand3 version (mode output)
+* Improved ComputeColumnStatistics (percentage calculations)
+
 # grandR 0.2.3
 
 ## Smaller updates
 * compute.M for LFC
 * size factors to normalize Pairwise, LFC and PairwiseDESeq2
+
 
 # grandR 0.2.2
 

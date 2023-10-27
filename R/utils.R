@@ -55,6 +55,7 @@ equal = function(a,b) length(a)==length(b) && all(a==b)
 #' @param ... additional parameters to be used when the deferred function is called
 #' @param add list containing additional elements to be added \code{+} to the result of the deferred function
 #' @param cache use caching mechanism
+#' @param width.height a vector containing the desired width and height (not checked!)
 #'
 #' @return a function that can be called
 #' @export
@@ -83,10 +84,10 @@ equal = function(a,b) length(a)==length(b) && all(a==b)
 #' f1(4) # these are equal, as the result of rnorm is cached
 #'
 #' @concept helper
-Defer=function(FUN,...,add=NULL, cache=TRUE) {
+Defer=function(FUN,...,add=NULL, cache=TRUE,width.height=NULL) {
   param=list(...)
   value=NULL
-  function(data,...) {
+  re=function(data,...) {
     pp=list(...)
     if (length(pp)>0) {
       re=do.call(FUN,c(list(data),utils::modifyList(param,pp)))
@@ -100,6 +101,11 @@ Defer=function(FUN,...,add=NULL, cache=TRUE) {
     }
     value
   }
+  if (!is.null(width.height)) {
+    attr(re,"width")=width.height[1]
+    attr(re,"height")=width.height[2]
+  }
+  re
 }
 
 

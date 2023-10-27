@@ -9,6 +9,7 @@
 #' @param height the height for the gene plots in pixel
 #' @param plot.gene a list of gene plots; can be NULL, then the stored gene plots are used (see \link{Plots})
 #' @param plot.global  a list of global plots; can be NULL, then the stored global plots are used (see \link{Plots})
+#' @param highlight a vector of gene names that are highlighted in the beginning
 #' @param df.identifier the main identifier (column name) from the table; this is used when calling the gene plot functions;
 #' @param title the title to show in the header of the website
 #' @param show.sessionInfo whether to show session info
@@ -30,6 +31,7 @@ ServeGrandR=function(data,
                      sizes=NA,height=400,
                      plot.gene=NULL,
                      plot.global=NULL,
+                     highlight=NULL,
                      df.identifier="Symbol",
                      title=Title(data),
                      show.sessionInfo=FALSE,
@@ -181,7 +183,7 @@ ServeGrandR=function(data,
       output[[paste0(n,"plot")]]=create(n)
     }
 
-    highlighted.genes <- shiny::reactiveValues(genes = c())
+    highlighted.genes <- shiny::reactiveValues(genes = highlight)
     for (n in names(plot.global)) {
       create=function(n) {
         env=new.env()
@@ -196,18 +198,29 @@ ServeGrandR=function(data,
           if (is.null(w)) w=7*100
           w
         }
-        shiny::renderPlot({plot.global[[n]](data,highlight=highlighted.genes$genes,label=df[[df.identifier]][input$tab_rows_selected])},width=getwidth,height=getheight,env=env)
+        shiny::renderPlot({
+          re=plot.global[[n]](data,highlight=highlighted.genes$genes,label=df[[df.identifier]][input$tab_rows_selected])
+          ddf$ddf=attr(re,"df")
+          re
+          },width=getwidth,height=getheight,env=env)
       }
       output[[make.names(paste0(n,"plotset"))]]=create(n)
       e=new.env()
-      e$ddf=attr(plot.global[[n]](data),"df")
       e$n=n
-
+      ddf <- shiny::reactiveValues(ddf=NULL)
       shiny::observe({
-        brushgenes=rownames(shiny::brushedPoints(ddf, input[[make.names(paste0(n,"plotsetbrush"))]]))
+        brushgenes=if (is.null(ddf$ddf)) NULL else rownames(shiny::brushedPoints(ddf$ddf, input[[make.names(paste0(n,"plotsetbrush"))]]))
         shiny::updateTextAreaInput(session, make.names(paste0(n,"plotsetgenes")), value = paste(brushgenes,collapse="\n"), label=sprintf("Selected genes (n=%d)",length(brushgenes)))
       },env=e)
     }
+    shiny::observe({
+      shiny::updateTextAreaInput(session, "highlightedgenes", value = paste0(highlighted.genes$genes,collapse="\n"), label=sprintf("Highlighted genes (n=%d)",length(highlighted.genes$genes)))
+    })
+    shiny::observeEvent(input[["updatehighlight"]], {
+      highlighted.genes$genes <- strsplit(input[["highlightedgenes"]],"\n")[[1]]
+      for (n in names(plot.global)) session$resetBrush(make.names(paste0(n,"plotsetbrush")))
+    })
+
 
     lapply(names(plot.global),function(n) {
       shiny::observeEvent(input$tab_rows_selected, {
@@ -257,6 +270,14 @@ ServeGrandR=function(data,
                                                                     )
                                                                   )
     )),list(title="Global level"))
+    plist=c(list(shiny::tabPanel("Highlighted Genes",
+                                 shiny::fluidRow(
+                                   shiny::column(4,
+                                                 shiny::textAreaInput("highlightedgenes", label="Highlighted genes",height = 300,cols=40),
+                                                 shiny::actionButton("updatehighlight", label="Update highlight")
+                                   )
+                                 )
+    )),plist)
 
     plot.global.ui=do.call(shiny::"navbarMenu",plist)
   }

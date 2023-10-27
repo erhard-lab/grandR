@@ -398,6 +398,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param log.x  if TRUE, use log scale for the x axis
 #' @param log.y  if TRUE, use log scale for the y axis
 #' @param remove.outlier configure how outliers are selected (is the coef parameter to \link[grDevices]{boxplot.stats}); can be FALSE, in which case no points are considered outliers (see details)
+#' @param show.outlier if TRUE, show outlier as gray points at the border of the plotting plane
 #' @param lim define the both x and y axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param xlim define the x axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param ylim define the y axis limits (vector of length 2 defining the lower and upper bound, respectively)
@@ -453,7 +454,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 PlotScatter=function(data,
                      x=NULL, y=NULL, analysis=NULL,xcol=NULL,ycol=NULL, xlab=NULL, ylab=NULL,
                      log=FALSE, log.x=log, log.y=log,
-                     remove.outlier=1.5, lim=NULL,xlim=lim, ylim=lim,
+                     remove.outlier=1.5, show.outlier=TRUE,lim=NULL,xlim=lim, ylim=lim,
                      size=0.3,
                      cross=NULL,diag=NULL,
                      genes=NULL,highlight=NULL, label=NULL, label.repel=1,
@@ -561,11 +562,16 @@ PlotScatter=function(data,
     }
     if (is.null(xlim)) xlim=range(df$A[is.finite(df$A)])
     if (is.null(ylim)) ylim=range(df$B[is.finite(df$B)])
+
     clip=function(v,ch,lim,minus) ifelse(!is.finite(v),v,ifelse(ch<lim[1],minus,ifelse(ch>lim[2],Inf,v)))
     df$A.trans=clip(df$A.trans,df$A,xlim,-Inf)
     df$B.trans=clip(df$B.trans,df$B,ylim,-Inf)
     df$A=clip(df$A,df$A,xlim,if (log.x) 0 else -Inf)
     df$B=clip(df$B,df$B,ylim,if (log.y) 0 else -Inf)
+    if (!show.outlier) {
+      use = is.finite(df$A) & is.finite(df$B)
+      df=df[use,]
+    }
   }
   else {
     xlim=range(df$A[!is.infinite(df$A)])
