@@ -414,7 +414,7 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
     warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(utils::head(missing,5),collapse=",")))
     matrix = rbind(matrix,matrix(0,nrow=length(missing),ncol=ncol(matrix),dimnames=list(missing,colnames(matrix))))
   }
-  matrix=matrix[rownames(data$data$count),]
+  matrix=matrix[rownames(data$data$count),,drop = FALSE]
   if (!all(rownames(matrix)==rownames(data$data$count))) stop("Row names do not match!")
 
   if (grepl(".",name,fixed=TRUE)) stop("Name may not contain a dot!")
