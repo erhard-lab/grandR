@@ -873,8 +873,10 @@ ReadGRAND3_sparse=function(prefix,
     rownames(beta)=gene.info$Gene
     re$beta=beta
   }
-  gene.info$Mode=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
-  gene.info$Mode=factor(gene.info$Mode,levels=unique(gene.info$Mode))
+  if (is.null(gene.info$Mode)) {
+    gene.info$Mode=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
+    gene.info$Mode=factor(gene.info$Mode,levels=unique(gene.info$Mode))
+  }
 
   gene.info$Type=classify.genes(gene.info)
 

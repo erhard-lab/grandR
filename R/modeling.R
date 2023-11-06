@@ -1759,6 +1759,7 @@ SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=NULL,min.time=-1,max.time=
 #' @param old show old RNA?
 #' @param new show new RNA?
 #' @param total show total RNA?
+#' @param line.size which line size to use
 #'
 #' @return a ggplot object
 #'
@@ -1768,7 +1769,7 @@ SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=NULL,min.time=-1,max.time=
 #' @examples
 #' PlotSimulation(SimulateKinetics(hl=2))
 #' @concept kinetics
-PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
+PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE, line.size = 1) {
   # R CMD check guard for non-standard evaluation
   Time <- Value <- Type <- NULL
 
@@ -1779,7 +1780,7 @@ PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
     sim.df$Type=droplevels(sim.df$Type)
     ggplot(sim.df,aes(Time,Value,color=Type))+
       cowplot::theme_cowplot()+
-      geom_line(size=1)+
+      geom_line(size=line.size)+
         scale_color_manual(NULL,values=c(Old="#54668d",New="#953f36",Total="#373737",NTR="#e4c534")[levels(sim.df$Type)])+
         facet_wrap(~ifelse(Type=="NTR","NTR","Timecourse"),scales="free_y",ncol=1)+
         ylab(NULL)+

@@ -216,8 +216,8 @@ subset.grandR=function(x,columns,reorder=TRUE,...) {
     x[ix] <- lapply(x[ix], function(v) factor(v,levels=as.character(unique(v))))
     x
   }
-  data.apply(x,fun=function(m) m[,columns],fun.coldata = function(t){
-    dr(t[columns,])
+  data.apply(x,fun=function(m) m[,columns,drop=FALSE],fun.coldata = function(t){
+    dr(t[columns,,drop=FALSE])
   })
 }
 
@@ -276,7 +276,9 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
     for (common in intersect(names(re$coldata),names(add$coldata))) {
       if(is.factor(re$coldata[[common]])) {
         r = c(as.character(re$coldata[[common]]),as.character(add$coldata[[common]]))
-        r=factor(r,levels=union(levels(re$coldata[[common]]),levels(add$coldata[[common]])))
+        oll=levels(add$coldata[[common]])
+        if (is.null(oll)) oll = unique(add$coldata[[common]])
+        r=factor(r,levels=union(levels(re$coldata[[common]]),oll))
       } else {
         r = c(re$coldata[[common]],add$coldata[[common]])
       }

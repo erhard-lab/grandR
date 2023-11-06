@@ -443,6 +443,7 @@ ComputeExpressionPercentage=function(data,name,genes=Genes(data),mode.slot=Defau
 #' Compute statistics for all columns (i.e. samples or cells)
 #'
 #' @param data a grandR object
+#' @param verbose output status messages
 #'
 #' @return a new grandR object containing additional columns in the \link{Coldata} table:
 #' \itemize{
@@ -450,18 +451,22 @@ ComputeExpressionPercentage=function(data,name,genes=Genes(data),mode.slot=Defau
 #'   \item{percent.new: new overall percentage of new RNA}
 #'   \item{total.reads: the total number of reads (or UMIs, if UMIs were sequences)}
 #'   \item{total.genes: the total number of genes detected}
+#'   \item{percentage per type: the percentage (up to 100!) of the counts of each type in the GeneInfo}
 #' }
 #'
 #' @export
 #'
 #' @concept data
-ComputeColumnStatistics=function(data) {
+ComputeColumnStatistics=function(data,verbose=TRUE) {
+  if (verbose) cat(sprintf("Obtaining model parameters...\n"))
   if (data$metadata$`GRAND-SLAM version`==3) {
-    tab=GetTableQC(data,"model.parameters")
-    tab=tab[tab$Label==tab$Label[1] & tab$Estimator==tab$Estimator[1],]
-    for (sub in unique(tab$Subread)) {
-      m=setNames(tab$`Binom p.conv`[tab$Subread==sub],tab$Condition[tab$Subread==sub])
-      Coldata(data,paste("p.conv",sub))=m[colnames(data)]
+    tab=GetTableQC(data,"model.parameters",stop.if.not.exist = FALSE)
+    if (!is.null(tab)) {
+      tab=tab[tab$Label==tab$Label[1] & tab$Estimator==tab$Estimator[1],]
+      for (sub in unique(tab$Subread)) {
+        m=setNames(tab$`Binom p.conv`[tab$Subread==sub],tab$Condition[tab$Subread==sub])
+        Coldata(data,paste("p.conv",sub))=m[colnames(data)]
+      }
     }
   } else {
     tab=GetTableQC(data,"mismatches",stop.if.not.exist=FALSE)
@@ -493,10 +498,21 @@ ComputeColumnStatistics=function(data) {
     }
   }
 
+  if (verbose) cat(sprintf("Compute percentage new...\n"))
   data=ComputeExpressionPercentage(data,"percent.new",mode.slot="new.count",mode.slot.total="count")
 
+  if (verbose) cat(sprintf("Compute total reads...\n"))
   Coldata(data,"total.reads") = Matrix::colSums(GetMatrix(data,mode.slot="count"))
+  if (verbose) cat(sprintf("Compute total genes...\n"))
   Coldata(data,"total.genes") = Matrix::colSums(GetMatrix(data,mode.slot="count")>0)
+
+  if (!is.null(GeneInfo(data)$Type)) {
+    for (t in levels(GeneInfo(d)$Type)) {
+      if (verbose) cat(sprintf("Compute percent for %s...\n",t))
+      Coldata(data,paste0("percent.",t)) = Matrix::colSums(GetMatrix(data,mode.slot="count",genes = GeneInfo(d)$Type==t))/Coldata(data,"total.reads")*100
+    }
+  }
+
   data
 }
 
@@ -586,7 +602,9 @@ PoolColumns=function(data,pooling=GetSummarizeMatrix(data,average=FALSE,no4sU=TR
     }
   }
 
-  return(grandR(data$prefix,gene.info=data$gene.info,slots=dd,coldata=cd,metadata=data$metadata,analyses=data$analyses))
+  re=grandR(data$prefix,gene.info=data$gene.info,slots=dd,coldata=cd,metadata=data$metadata,analyses=data$analyses)
+  DefaultSlot(re)="count"
+  re
 }
 
 
