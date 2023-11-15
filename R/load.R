@@ -185,10 +185,14 @@ Semantics.time=function(s,name) {
   s=gsub("_",".",s)
 
   h=grepl("[0-9.]+h(p.)?",s)
-  time[h]=as.numeric(gsub("([0-9.]+)h(p.)?","\\1",s[h]))
-
   min=grepl("[0-9.]+min",s)
-  time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))/60
+
+  if (sum(h)>0) {
+    time[h]=as.numeric(gsub("([0-9.]+)h(p.)?","\\1",s[h]))
+    time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))/60
+  } else {
+    time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))
+  }
 
   nounit=grepl("^[0-9.]+$",s)
   time[nounit]=as.numeric(s[nounit])

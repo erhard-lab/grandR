@@ -1111,6 +1111,53 @@ GetContrasts.default=function(x,contrast,columns=NULL,group=NULL,name.format=NUL
   re
 }
 
+
+#' Create a contrast matrix for two given conditions
+#'
+#' Each column of a contrast matrix represents a pairwise comparison of all samples or cells of
+#' a grandR object (or a column annotation table). Elements being 1 are contrasted vs. elements being -1
+#' (and all 0 are irrelevant for this comparison).
+#'
+#' @param d A grandR object or a column annotation table
+#' @param name the name of the contrast
+#' @param A definition of the condition of interest, see details
+#' @param B definition of the reference condition , see details
+#'
+#' @details This creates a contrast A vs B (i.e. the fold change would be A/B)
+#'
+#' @details Columns that belong to A or B can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
+#' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
+#' conveniently build a logical vector (e.g., columns=Condition="x").
+#'
+#' @return A data frame with a single column representig a contrast matrix to be used in \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}
+#'
+#' @seealso \code{\link{ApplyContrasts}}, \code{\link{LFC}}, \code{\link{PairwiseDESeq2}}, \code{\link{GetContrasts}}
+#'
+#' @export
+#'
+#' @concept diffexp
+GetPairContrasts=function(d,name,A,B) {
+
+  A=substitute(A)
+  B=substitute(B)
+  A=if (is.null(A)) Columns(d) else eval(A,Coldata(d),parent.frame())
+  B=if (is.null(B)) Columns(d) else eval(B,Coldata(d),parent.frame())
+  A=Columns(d,A)
+  B=Columns(d,B)
+
+  if (length(intersect(A,B))>0) stop("Must be mutually exclusive!")
+
+  re = matrix(0,nrow = ncol(d),ncol = 1)
+  rownames(re) = colnames(d)
+  colnames(re) = name
+
+  re[A,1] = 1
+  re[B,1] = -1
+
+  as.data.frame(re)
+}
+
+
 # Normalization of NTRs such that: median logFC new RNA vs. new RNA is 0, there is no correlation of this logFC vs the NTR
 NormalizeEffectiveLabeling=function(data,reference=colnames(data),slot="norm",verbose=FALSE) {
   checkPackages("quantreg")
