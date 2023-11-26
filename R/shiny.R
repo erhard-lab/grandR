@@ -63,6 +63,10 @@ ServeGrandR=function(data,
 
   #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
 
+  htmls = list.files(pattern="html$")
+  names(htmls) = gsub(".html","",htmls)
+  addResourcePath("htmls", getwd())
+
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
   server=function(input, output,session) {
     # R CMD check guard for non-standard evaluation
@@ -242,8 +246,18 @@ ServeGrandR=function(data,
       utils::capture.output(utils::sessionInfo())
     })
 
-
   } # end server
+
+
+  html.ui=NULL
+  html.list.ui = ""
+  if (length(htmls)>0) {
+    html.ui=shiny::navbarMenu(title = "Reports")
+    appends = sapply(names(htmls),function(name) {
+      sprintf("$('.dropdown-toggle[data-value=\"Reports\"] + .dropdown-menu').append('<li><a target=\"_blank\" href=\"%s\">%s</a></li>');",paste0("htmls/",htmls[name]),name)
+    })
+    html.list.ui = paste(appends,collapse="\n")
+  }
 
 
   plot.static.ui=NULL
@@ -287,7 +301,6 @@ ServeGrandR=function(data,
     more=shiny::navbarMenu("More",
                            shiny::tabPanel("Info",shiny::verbatimTextOutput("sessionInfo"))
     )
-
 
   ui=list(
     shiny::tabPanel("Gene level",
@@ -340,6 +353,7 @@ ServeGrandR=function(data,
 
     plot.global.ui,
     plot.static.ui,
+    html.ui,
 
     more,
 
@@ -360,10 +374,15 @@ ServeGrandR=function(data,
     ),
 
     htmltools::tags$script(htmltools::HTML(sprintf("
+          %s
         	var header = $('.navbar> .container-fluid');
           header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">grandR v%s</span></div>')",
+                                                   html.list.ui,
                                                    utils::packageVersion("grandR")
     )))
+
+
+
   )
 
   ui=ui[!sapply(ui,is.null)]

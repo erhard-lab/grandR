@@ -4,6 +4,7 @@
 * If there are global plots, there is now an additional page showing the highlighted genes
 * Defer now allows to specify desired figure width and height
 * Fixed bug that caused all global plots to be executed before rendering the main table
+* Html files that are in the same ordner are linked (under menu Reports)
 
 ## Smaller updates
 * fixed subsetting of grandR to only a single column
