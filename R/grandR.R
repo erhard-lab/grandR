@@ -65,7 +65,7 @@ NULL
 #'   \item{subset}{Create a new grandR object with a subset of the columns (use \code{\link{FilterGenes}} to subset on genes)}
 #'   \item{split}{Split the grandR object into a list of multiple grandR objects (according to the levels of an annotation table column)}
 #'   \item{RenameColumns}{Rename the column names according to a lookup table (map) or a function (invoked on the current names)}
-#'   \item{SwapColumns}{Swap the order of two columns (samples or cells)}
+#'   \item{SwapColumns}{Swap two columns (samples or cells); this is what you do if samples were mislabeled!}
 #'   \item{Metadata}{Obtain global metadata}
 #'   \item{merge}{Merge several grandR objects into one}
 #' }
@@ -246,6 +246,7 @@ RenameColumns=function(data,map=NULL,fun=NULL) {
 SwapColumns=function(data,s1,s2) {
   i1=if(is.numeric(s1)) s1 else which(rownames(data$coldata)==s1)
   i2=if(is.numeric(s2)) s2 else which(rownames(data$coldata)==s2)
+  if (length(i1)!=1 || length(i2)!=1) stop("Unknown columns!")
   return(data.apply(data,function(t) {
     tmp=t[,i1]
     t[,i1]=t[,i2]
@@ -1314,6 +1315,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 #' @param table The analysis table to add
 #' @param by Specify a column that contains gene names or symbols (see details)
 #' @param warn.present Warn if an analysis with the same name is already present (and then overwrite)
+#' @param warn.genes Warn if genes are missing (and then add NA)
 #'
 #' @return Either the analysis names or a grandR data with added/removed slots or the metatable to be used with AddAnalysis
 #'
@@ -1355,7 +1357,7 @@ Analyses=function(data, description=FALSE) {
 
 #' @describeIn Analyses Add an analysis table
 #' @export
-AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE) {
+AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE,warn.genes=TRUE) {
   if (!is.data.frame(table)) stop("Cannot add; analysis table must be a data frame!")
   #if (!equal(Genes(data,rownames(table)),Genes(data))) stop("Analysis table must contain row names corresponding to all genes!")
 
@@ -1365,11 +1367,11 @@ AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE) {
   }
 
   if (!equal(Genes(data,rownames(table)),Genes(data))) {
-      warning("Analysis table and grandR object do not have the same set of genes! Watch out for NA values!")
-    ntab=table[rep(NA,nrow(data)),]
-    rownames(ntab) = Genes(data)
-    ind=setNames(1:nrow(ntab),Genes(data))
-    ntab[ind[rownames(table)],]=table
+    if (warn.genes) warning("Analysis table and grandR object do not have the same set of genes! Watch out for NA values!")
+    ntab=table[rep(NA,nrow(data)),,drop=FALSE]
+    rownames(ntab) = Genes(data,use.symbols = FALSE)
+    ind=setNames(1:nrow(ntab),Genes(data,use.symbols = FALSE))
+    ntab[ind[Genes(d,rownames(table),use.symbols = FALSE)],]=table
     table <- ntab
   }
 

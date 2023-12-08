@@ -157,6 +157,7 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",slot="count",normaliza
 #' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
 #' @param mode.slot which slot to take expression values from
 #' @param FUN a function taking 1. the data matrix, 2. a logical vector indicating condition A and 3. a logical vector indicating condition B
+#' @param genes restrict analysis to these genes; NULL means all genes
 #' @param verbose print status messages?
 #' @param ... further parameters forward to FUN
 #'
@@ -169,15 +170,15 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",slot="count",normaliza
 #' @export
 #'
 #' @concept helper
-ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbose=FALSE,FUN,...) {
+ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,genes=NULL,verbose=FALSE,FUN,...) {
   if (is.null(mode.slot)) stop("Need to specify mode.slot!")
 
-  mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
+  mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE,genes = genes))
   mode.slot=get.mode.slot(data,mode.slot)
   for (n in names(contrasts)) {
     if (verbose) cat(sprintf("Computing %s for %s...\n",analysis,n))
     re.df=FUN(mat,contrasts[[n]]==1,contrasts[[n]]==-1,...)
-    data=AddAnalysis(data,name = if (is.null(name.prefix)) n else paste0(name.prefix,".",n),table = re.df)
+    data=AddAnalysis(data,name = if (is.null(name.prefix)) n else paste0(name.prefix,".",n),table = re.df,warn.genes = is.null(genes))
   }
   data
 }
@@ -194,6 +195,7 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @param slot the slot of the grandR object to take the data from; should contain counts!
 #' @param mode compute LFCs for "total", "new", or "old" RNA
 #' @param normalization normalize on "total", "new", or "old" (see details)
+#' @param genes restrict analysis to these genes; NULL means all genes
 #' @param verbose print status messages?
 #'
 #' @details Both \link[lfc]{PsiLFC} and  \link[lfc]{NormLFC}) by default perform normalization by subtracting the median log2 fold change from all log2 fold changes.
@@ -218,13 +220,14 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,verbo
 #' @concept diffexp
 Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot="count", mode="total",
                normalization=mode,
+               genes = NULL,
                verbose=FALSE) {
 
   contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
   if (ncol(contrasts)==0) stop("Contrasts do not define any comparison!")
 
-  data=LFC(data,name.prefix = name.prefix, contrasts = contrasts, LFC.fun = LFC.fun, slot=slot, mode=mode,normalization = normalization,compute.M = FALSE,verbose=verbose)
-  data=PairwiseDESeq2(data,name.prefix = name.prefix, contrasts = contrasts, slot=slot, mode=mode,normalization = normalization,verbose=verbose)
+  data=LFC(data,name.prefix = name.prefix, contrasts = contrasts, LFC.fun = LFC.fun, slot=slot, mode=mode,normalization = normalization,compute.M = FALSE,genes=genes,verbose=verbose)
+  data=PairwiseDESeq2(data,name.prefix = name.prefix, contrasts = contrasts, slot=slot, mode=mode,normalization = normalization,genes=genes,verbose=verbose)
   data
 
 }
@@ -241,6 +244,7 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot
 #' @param mode compute LFCs for "total", "new", or "old" RNA
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param compute.M also compute the mean expression (in log10 space)
+#' @param genes restrict analysis to these genes; NULL means all genes
 #' @param verbose print status messages?
 #' @param ... further arguments forwarded to LFC.fun
 #'
@@ -273,6 +277,7 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot
 LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiLFC, mode="total",
              normalization=NULL,
              compute.M=TRUE,
+             genes=NULL,
              verbose=FALSE,...) {
 
   contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
@@ -288,13 +293,13 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
     }
   }
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
-  ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="LFC",FUN=function(mat,A,B) {
+  ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,genes=genes,verbose=verbose,analysis="LFC",FUN=function(mat,A,B) {
     if (!is.null(normalization)) {
       if (is.numeric(normalization)) {
         shift=log2(sum(normalization[A])/sum(normalization[B]))
         lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-shift,...)
       } else {
-        norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
+        norm.mat=as.matrix(GetTable(data,type=normalization,genes=genes,ntr.na=FALSE))
         nlfcs=LFC.fun(rowSums(norm.mat[,A,drop=FALSE]),rowSums(norm.mat[,B,drop=FALSE]),normalizeFun=function(i) i)
         med.element=median(nlfcs)
         lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-med.element,...)
@@ -320,6 +325,7 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' @param slot which slot to use (should be a count slot, not normalized values)
 #' @param normalization normalize on "total", "new", or "old" (see details)
 #' @param logFC compute and add the log2 fold change as well
+#' @param genes restrict analysis to these genes; NULL means all genes
 #' @param verbose print status messages?
 #'
 #' @details DESeq2 by default performs size factor normalization. When computing differential expression of new RNA,
@@ -358,7 +364,9 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode="total",
                         slot="count",
                         normalization=NULL,
-                        logFC=FALSE, verbose=FALSE) {
+                        logFC=FALSE,
+                        genes=NULL,
+                        verbose=FALSE) {
   checkPackages("DESeq2")
 
   contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
@@ -379,11 +387,11 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
 
   if (separate) {
-    ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,verbose=verbose,analysis="DESeq2.Wald",FUN=function(mat,A,B) {
+    ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,genes=genes,verbose=verbose,analysis="DESeq2.Wald",FUN=function(mat,A,B) {
       if (is.numeric(normalization)) {
         nsf = normalization[A|B]
       } else {
-        norm.mat=as.matrix(GetTable(data,type=normalization,ntr.na=FALSE))
+        norm.mat=as.matrix(GetTable(data,type=normalization,genes=genes,ntr.na=FALSE))
         norm.mat=cbind(norm.mat[,A,drop=FALSE],norm.mat[,B,drop=FALSE])
         nsf=DESeq2::estimateSizeFactorsForMatrix(norm.mat)
       }
@@ -431,7 +439,7 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
       cond.vec[c==1]=A
       cond.vec[c==-1]=B
     }
-    mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE))
+    mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE,genes=genes))
     mat=mat[,!is.na(cond.vec)]
 
     if (is.numeric(normalization)) {
@@ -464,8 +472,8 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
         Q=l$padj
       )
       if (logFC) re.df$LFC=l$log2FoldChange
-      rownames(re.df)<-rownames(data)
-      data=AddAnalysis(data,name = if (is.null(name.prefix)) n else paste0(name.prefix,".",n),table = re.df)
+      rownames(re.df)<-Genes(data,genes=genes,use.symbols = FALSE)
+      data=AddAnalysis(data,name = if (is.null(name.prefix)) n else paste0(name.prefix,".",n),table = re.df,warn.genes = is.null(genes))
     }
     return(data)
   }

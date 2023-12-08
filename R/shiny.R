@@ -65,7 +65,7 @@ ServeGrandR=function(data,
 
   htmls = list.files(pattern="html$")
   names(htmls) = gsub(".html","",htmls)
-  addResourcePath("htmls", getwd())
+  shiny::addResourcePath("htmls", getwd())
 
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
   server=function(input, output,session) {

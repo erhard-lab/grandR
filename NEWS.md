@@ -11,6 +11,7 @@
 * improved handling of factors in coldata during merging
 * Updated ReadGRAND3 to most recent Grand3 version (mode output)
 * Improved ComputeColumnStatistics (percentage calculations)
+* Differential gene expression analysis for a subset of the genes (including normalization to only those genes)
 
 # grandR 0.2.3
 
