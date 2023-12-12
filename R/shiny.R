@@ -4,7 +4,7 @@
 #' Fire up a shiny web server for exploratory analysis of grandR data.
 #'
 #' @param data the grandR object (or a file name to an rds file containing a grandR object)
-#' @param table the table to display (can be NULL; see details)
+#' @param table the table to display (can be NULL or a named list; see details)
 #' @param sizes the widths for the gene plots to show (12 is full screen with); must be a vector as long as there are gene plots
 #' @param height the height for the gene plots in pixel
 #' @param plot.gene a list of gene plots; can be NULL, then the stored gene plots are used (see \link{Plots})
@@ -16,7 +16,7 @@
 #' @param help a list of characters that is shown as help text at the beginning (when no gene plot is shown); should describe the contents of your table
 #'
 #' @details If the table parameter is NULL, either an analysis table named "ServeGrandR" is
-#' used (if it exists), otherwise the columns "Q", "LFC", "Synthesis" and "Half-life" of all analysis tables are used.
+#' used (if it exists), otherwise the columns "Q", "LFC", "Synthesis" and "Half-life" of all analysis tables are used. If it is a list, a menu is created in the navbar
 #'
 #' @details The gene plots must be functions that accept two parameters: the grandR object and a gene identifier. You can either use
 #' functions directly (e.g. \code{plot.gene=list(PlotGeneOldVsNew)}), or use \link{Defer} in cases you need to specify additional parameters,
@@ -42,12 +42,22 @@ ServeGrandR=function(data,
   if (is.character(data) && file.exists(data)) data = readRDS(data)
 
   plot.static=list()
-  df=table
-  if (is.null(df)) {
-    df=if ("ServeGrandR" %in% Analyses(data)) GetAnalysisTable(data,analyses = "ServeGrandR",regex = FALSE,gene.info = FALSE,prefix.by.analysis=FALSE) else GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q|log2FC|ROPE",gene.info = FALSE)
+  if (is.null(table)) {
+    table=if ("ServeGrandR" %in% Analyses(data)) GetAnalysisTable(data,analyses = "ServeGrandR",regex = FALSE,gene.info = FALSE,prefix.by.analysis=FALSE) else GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q|log2FC|ROPE",gene.info = FALSE)
   }
 
-  if (ncol(df)==0) stop("Empty table given!")
+
+  if (is.data.frame(table)) table = list(Table=table)
+
+  for (i in 1:length(table)) {
+    df=table[[i]]
+    if (ncol(df)==0) stop("Empty table given!")
+    if (!df.identifier %in% names(df) && !is.null(rownames(df))) df=cbind(setNames(data.frame(rownames(df),stringsAsFactors = FALSE),df.identifier),df,stringsAsFactors = FALSE)
+    if (!df.identifier %in% names(df)) stop("Neither identifier nor row names found in table")
+    table[[i]] = df
+  }
+  #gene.level.map=setNames(make.names(names(table)),names(table))
+  #names(table) = make.names(names(table))
 
   if (is.null(plot.gene)) plot.gene=data$plots$gene
   if (is.null(plot.global)) plot.global=data$plots$global
@@ -59,7 +69,6 @@ ServeGrandR=function(data,
   if (length(sizes)!=length(plot.gene)) stop("sizes need to be length 1 or same length as plots!")
   sizes=c(sizes,rep(1,8))
 
-  if (!df.identifier %in% names(df) && !is.null(rownames(df))) df=cbind(setNames(data.frame(rownames(df),stringsAsFactors = FALSE),df.identifier),df,stringsAsFactors = FALSE)
 
   #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
 
@@ -69,104 +78,141 @@ ServeGrandR=function(data,
 
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
   server=function(input, output,session) {
-    # R CMD check guard for non-standard evaluation
-    ddf <- NULL
 
-    df.rounded = as.data.frame(lapply(df,function(v) if(is.numeric(v)) round(v,5) else v),check.names=FALSE,stringsAsFactors = FALSE)
 
-    dttab=DT::datatable(df.rounded,
-                        callback = DT::JS("$('div#buttons').css('float','left').css('margin-right','50px'); $('div#clip').css('float','left'); $('div#buttons').append($('#pdf')); $('div#buttons').append($('#downloadraw')); $('div#buttons').append($('#download1')); $('div#buttons').append($('#clip')); "),
-                        selection = 'single',
-                        rownames = FALSE,
-                        filter = "top",
-                        escape = FALSE,
-                        options = list(
-                          pageLength = 10,
-                          lengthMenu =list(c(5, 10, 25, 50, 100,-1),c(5, 10, 25, 50, 100,"All")),
-                          dom = '<"#buttons">lfrtip'
-                        ))
-    dttab=DT::formatRound(dttab,names(df)[sapply(df,class)=="numeric"], 2)
-    if (any(grepl("LFC$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.LFC$",names(df))], 2)
-    if (any(grepl("\\.Q$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.Q$",names(df))], 2)
-    if (any(grepl("\\.P$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.P$",names(df))], 2)
-    if (any(grepl("\\.Half-life$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Half-life$",names(df))], 2)
-    if (any(grepl("\\.Synthesis$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Synthesis$",names(df))], 2)
-    output$tab <- DT::renderDataTable(dttab)
-    output$download1 <- shiny::downloadHandler(
-      filename = function() {
-        paste0(title,"-", Sys.Date(), ".tsv")
-      },
-      content = function(file) {
-        utils::write.table(df[input$tab_rows_all,], file,row.names=F,col.names=T,quote=F,sep="\t")
-      }
-    )
+    highlighted.genes <- shiny::reactiveValues(genes = highlight,selected.gene=NULL,filtered.rows=NULL,active.table=NULL)
 
-    shiny::observeEvent(input$pdf, {
-      shiny::showModal(shiny::modalDialog(
-        shiny::numericInput("pdfwidth","Width",value=7,min=2,max=20,step=1),
-        shiny::numericInput("pdfheight","Height",value=4,min=2,max=20,step=1),
 
-        title="Generate pdf",easyClose=TRUE,footer=htmltools::tagList(
-          shiny::modalButton("Cancel"),
-          shiny::downloadButton("pdfdoit", "OK")
+
+    for (n in names(table)) {
+      create = function(ns,df) {
+        # R CMD check guard for non-standard evaluation
+        output=list()
+        ddf <- NULL
+
+        df.rounded = as.data.frame(lapply(df,function(v) if(is.numeric(v)) round(v,5) else v),check.names=FALSE,stringsAsFactors = FALSE)
+
+        dttab=DT::datatable(df.rounded,
+                            callback = DT::JS(sprintf("$('div[id=\"%s\"] > div > div#buttons').css('float','left').css('margin-right','50px'); $('div[id=\"%s\"]').css('float','left'); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); ",ns("tab"),ns("clip"),ns("tab"),ns("pdf"),ns("tab"),ns("downloadraw"),ns("tab"),ns("download1"),ns("tab"),ns("clip"))),
+                            selection = 'single',
+                            rownames = FALSE,
+                            filter = "top",
+                            escape = FALSE,
+                            options = list(
+                              pageLength = 10,
+                              lengthMenu =list(c(5, 10, 25, 50, 100,-1),c(5, 10, 25, 50, 100,"All")),
+                              dom = '<"#buttons">lfrtip'
+                            ))
+        dttab=DT::formatRound(dttab,names(df)[sapply(df,class)=="numeric"], 2)
+        if (any(grepl("LFC$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.LFC$",names(df))], 2)
+        if (any(grepl("\\.Q$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.Q$",names(df))], 2)
+        if (any(grepl("\\.P$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.P$",names(df))], 2)
+        if (any(grepl("\\.Half-life$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Half-life$",names(df))], 2)
+        if (any(grepl("\\.Synthesis$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Synthesis$",names(df))], 2)
+        output$tab <- DT::renderDataTable(dttab)
+        output$download1 <- shiny::downloadHandler(
+          filename = function() {
+            paste0(title,"-", Sys.Date(), ".tsv")
+          },
+          content = function(file) {
+            utils::write.table(df[highlighted.genes$filtered.rows,], file,row.names=F,col.names=T,quote=F,sep="\t")
+          }
         )
-      ))
-    })
-    output$pdfdoit <- shiny::downloadHandler(
-      filename = function() {
-        if (length(input$tab_rows_selected)==1) paste0(df[[df.identifier]][input$tab_rows_selected],"-", Sys.Date(), ".pdf") else paste0(Sys.Date(), ".pdf")
-      },
-      content = function(file) {
-        on.exit(shiny::removeModal())
-        pdf(file,width=input$pdfwidth,height=input$pdfheight)
-        for (i in 1:length(plot.gene)) print(plot.gene[[i]](data=data,gene=df[[df.identifier]][input$tab_rows_selected]))
-        dev.off()
-      }
-    )
 
-    mods=list(`Raw data`=unlist(lapply(Slots(data),function(sl) if(sl %in% c("ntr","alpha","beta")) sl else paste0(c("","new.","old."),sl))),Analyses=Analyses(data))
-    shiny::observeEvent(input$downloadraw, {
-      shiny::showModal(shiny::modalDialog(
-        shiny::selectInput("datamodality","Data modality",choices=mods,selected=DefaultSlot(data),selectize = FALSE),
+        shiny::observeEvent(input[[ns("pdf")]], {
+          shiny::showModal(shiny::modalDialog(
+            shiny::numericInput(ns("pdfwidth"),"Width",value=7,min=2,max=20,step=1),
+            shiny::numericInput(ns("pdfheight"),"Height",value=4,min=2,max=20,step=1),
 
-        title="Download data",easyClose=TRUE,footer=htmltools::tagList(
-          shiny::modalButton("Cancel"),
-          shiny::downloadButton("downloadrawdoit", "OK")
+            title="Generate pdf",easyClose=TRUE,footer=htmltools::tagList(
+              shiny::modalButton("Cancel"),
+              shiny::downloadButton(ns("pdfdoit"), "OK")
+            )
+          ))
+        })
+        output$pdfdoit <- shiny::downloadHandler(
+          filename = function() {
+            if (!is.null(highlighted.genes$selected.gene)) paste0(highlighted.genes$selected.gene,"-", Sys.Date(), ".pdf") else paste0(Sys.Date(), ".pdf")
+          },
+          content = function(file) {
+            on.exit(shiny::removeModal())
+            pdf(file,width=input[[ns("pdfwidth")]],height=input[[ns("pdfheight")]])
+            for (i in 1:length(plot.gene)) print(plot.gene[[i]](data=data,gene=highlighted.genes$selected.gene))
+            dev.off()
+          }
         )
-      ))
-    })
-    output$downloadrawdoit <- shiny::downloadHandler(
-      filename = function() {
-        paste0(title,"-", Sys.Date(), ".tsv.gz")
-      },
-      content = function(file) {
-        on.exit(shiny::removeModal())
-        ggg=as.character(df[input$tab_rows_all,1])
-        tab=GetTable(data,type=input$datamodality,ntr.na = FALSE,gene.info = TRUE,genes = ggg)
-        utils::write.table(tab, gzfile(file),row.names=F,col.names=T,quote=F,sep="\t")
+
+        mods=list(`Raw data`=unlist(lapply(Slots(data),function(sl) if(sl %in% c("ntr","alpha","beta")) sl else paste0(c("","new.","old."),sl))),Analyses=Analyses(data))
+        shiny::observeEvent(input[[ns("downloadraw")]], {
+          shiny::showModal(shiny::modalDialog(
+            shiny::selectInput(ns("datamodality"),"Data modality",choices=mods,selected=DefaultSlot(data),selectize = FALSE),
+
+            title="Download data",easyClose=TRUE,footer=htmltools::tagList(
+              shiny::modalButton("Cancel"),
+              shiny::downloadButton(ns("downloadrawdoit"), "OK")
+            )
+          ))
+        })
+        output$downloadrawdoit <- shiny::downloadHandler(
+          filename = function() {
+            paste0(title,"-", Sys.Date(), ".tsv.gz")
+          },
+          content = function(file) {
+            on.exit(shiny::removeModal())
+            ggg=as.character(df[highlighted.genes$filtered.rows,1])
+            tab=GetTable(data,type=input[[ns("datamodality")]],ntr.na = FALSE,gene.info = TRUE,genes = ggg)
+            utils::write.table(tab, gzfile(file),row.names=F,col.names=T,quote=F,sep="\t")
+          }
+        )
+
+        output$clip <- shiny::renderUI({
+          nn=if(.row_names_info(df)<0) df[highlighted.genes$filtered.rows,1] else rownames(df)[highlighted.genes$filtered.rows]
+          rclipboard::rclipButton(ns("clipbtn"), "Copy", paste(nn,collapse="\n"), modal=TRUE,icon=shiny::icon("clipboard"))
+        })
+        shiny::observeEvent(input[[ns("clipbtn")]], {shiny::showNotification(
+          sprintf("Copied %d names",length(highlighted.genes$filtered.rows)),
+          duration = 2,
+          type = "message"
+        )})
+
+
+        shiny::observeEvent(input[[ns("tab_rows_selected")]], ignoreNULL = FALSE, {
+          highlighted.genes$selected.gene = if (is.null(input[[ns("tab_rows_selected")]])) NULL else df[[df.identifier]][input[[ns("tab_rows_selected")]]]
+        })
+        shiny::observeEvent( input[[ns("tab_rows_all")]], ignoreNULL = FALSE, {
+          highlighted.genes$filtered.rows = input[[ns("tab_rows_all")]]
+        })
+
+        output
       }
-    )
 
-    output$clip <- shiny::renderUI({
-      nn=if(.row_names_info(df)<0) df[input$tab_rows_all,1] else rownames(df)[input$tab_rows_all]
-      rclipboard::rclipButton("clipbtn", "Copy", paste(nn,collapse="\n"), modal=TRUE,icon=shiny::icon("clipboard"))
+      ns = shiny::NS(paste0("table",n))
+      elements = create(ns,table[[n]])
+      for (n in names(elements)) {
+        output[[ns(n)]] = elements[[n]]
+      }
+    }
+
+    observeEvent(input$mainnavbar, {
+      if (input$mainnavbar %in% names(table)) {
+        ns = shiny::NS(paste0("table",input$mainnavbar))
+        highlighted.genes$selected.gene <- if (is.null(input[[ns("tab_rows_selected")]])) NULL else df[[df.identifier]][input[[ns("tab_rows_selected")]]]
+        highlighted.genes$filtered.rows = input[[ns("tab_rows_all")]]
+        highlighted.genes$active.table <- input$mainnavbar
+      }
     })
-    shiny::observeEvent(input$clipbtn, {shiny::showNotification(
-      sprintf("Copied %d names",length(input$tab_rows_all)),
-      duration = 2,
-      type = "message"
-    )})
 
 
-    output$plot1=shiny::renderPlot({ if (length(input$tab_rows_selected)==1) plot.gene[[1]](data=data,gene=df[[df.identifier]][input$tab_rows_selected]) })
-    output$plot2=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=2) plot.gene[[2]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-    output$plot3=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=3) plot.gene[[3]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-    output$plot4=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=4) plot.gene[[4]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-    output$plot5=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=5) plot.gene[[5]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-    output$plot6=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=6) plot.gene[[6]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-    output$plot7=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=7) plot.gene[[7]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-    output$plot8=shiny::renderPlot({ if (length(input$tab_rows_selected)==1 && length(plot.gene)>=8) plot.gene[[8]](data=data,gene=df[[df.identifier]][input$tab_rows_selected])  })
-    output$helpText=shiny::renderText({ if (length(input$tab_rows_selected)==0 && !is.null(help)) help  })
+    for (i in 1:(length(plot.gene))) {
+      create = function(i) {
+        env=new.env()
+        env$i=i
+        shiny::renderPlot({ if (!is.null(highlighted.genes$selected.gene)) plot.gene[[i]](data=data,gene=highlighted.genes$selected.gene) },env=env)
+      }
+      output[[paste0("plot",i)]]=create(i)
+    }
+
+    output$helpText=shiny::renderText({ if (is.null(highlighted.genes$selected.gene) && !is.null(help)) help  })
 
     for (n in names(plot.static)) {
       create=function(n) {
@@ -187,7 +233,7 @@ ServeGrandR=function(data,
       output[[paste0(n,"plot")]]=create(n)
     }
 
-    highlighted.genes <- shiny::reactiveValues(genes = highlight)
+
     for (n in names(plot.global)) {
       create=function(n) {
         env=new.env()
@@ -203,7 +249,7 @@ ServeGrandR=function(data,
           w
         }
         shiny::renderPlot({
-          re=plot.global[[n]](data,highlight=highlighted.genes$genes,label=df[[df.identifier]][input$tab_rows_selected])
+          re=plot.global[[n]](data,highlight=highlighted.genes$genes,label=highlighted.genes$selected.gene)
           ddf$ddf=attr(re,"df")
           re
           },width=getwidth,height=getheight,env=env)
@@ -227,7 +273,7 @@ ServeGrandR=function(data,
 
 
     lapply(names(plot.global),function(n) {
-      shiny::observeEvent(input$tab_rows_selected, {
+      shiny::observeEvent(highlighted.genes$selected.gene, {
         session$resetBrush(make.names(paste0(n,"plotsetbrush")))
       })
 
@@ -271,6 +317,39 @@ ServeGrandR=function(data,
     plot.static.ui=do.call(shiny::"navbarMenu",plist)
   }
 
+  plot.gene.ui=NULL
+  if (length(table)==1) {
+    ns=shiny::NS(paste0("table",names(table)[1]))
+    plot.gene.ui=shiny::tabPanel("Gene level",
+                    shiny::fluidPage(
+                      shiny::fluidRow(
+                        rclipboard::rclipboardSetup(),
+                        shiny::uiOutput(ns("clip")),
+                        shiny::downloadButton(ns("download1"),"Table"),
+                        shiny::actionButton(ns("downloadraw"),"Data",icon = shiny::icon("download")),
+                        shiny::actionButton(ns("pdf"),"PDF",icon = shiny::icon("file-pdf")),
+                        shiny::column(12, DT::dataTableOutput(ns('tab')))
+                      )
+                    ))
+   } else {
+     plist=c(lapply(names(table),function(n) {
+       ns=shiny::NS(paste0("table",n))
+       shiny::tabPanel(n,
+                       shiny::fluidPage(
+                         shiny::fluidRow(
+                           rclipboard::rclipboardSetup(),
+                           shiny::uiOutput(ns("clip")),
+                           shiny::downloadButton(ns("download1"),"Table"),
+                           shiny::actionButton(ns("downloadraw"),"Data",icon = shiny::icon("download")),
+                           shiny::actionButton(ns("pdf"),"PDF",icon = shiny::icon("file-pdf")),
+                           shiny::column(12, DT::dataTableOutput(ns('tab')))
+                         )
+                       ))
+     }
+     ),list(title="Gene level"))
+     plot.gene.ui=do.call(shiny::"navbarMenu",plist)
+   }
+
   plot.global.ui=NULL
   if (length(plot.global)>0) {
 
@@ -302,58 +381,20 @@ ServeGrandR=function(data,
                            shiny::tabPanel("Info",shiny::verbatimTextOutput("sessionInfo"))
     )
 
-  ui=list(
-    shiny::tabPanel("Gene level",
-                    shiny::fluidPage(
-                      shiny::fluidRow(
-                        rclipboard::rclipboardSetup(),
-                        shiny::uiOutput("clip"),
-                        shiny::downloadButton("download1","Table"),
-                        shiny::actionButton("downloadraw","Data",icon = shiny::icon("download")),
-                        shiny::actionButton("pdf","PDF",icon = shiny::icon("file-pdf")),
-                        shiny::column(12, DT::dataTableOutput('tab'))
-                      ),
-                      shiny::conditionalPanel(
-                        condition = "helpText",
-                        shiny::fluidRow(shiny::column(10, shiny::htmlOutput("helpText")))
-                      ),
-                      shiny::fluidRow(
-                        shiny::column(sizes[1], shiny::plotOutput("plot1",height = height)),
-                        shiny::conditionalPanel(
-                          condition = "plot2",
-                          shiny::column(sizes[2], shiny::plotOutput("plot2",height = height))
-                        ),
-                        shiny::conditionalPanel(
-                          condition = "plot3",
-                          shiny::column(sizes[3], shiny::plotOutput("plot3",height = height))
-                        ),
-                        shiny::conditionalPanel(
-                          condition = "plot4",
-                          shiny::column(sizes[4], shiny::plotOutput("plot4",height = height))
-                        ),
-                        shiny::conditionalPanel(
-                          condition = "plot5",
-                          shiny::column(sizes[5], shiny::plotOutput("plot5",height = height))
-                        ),
-                        shiny::conditionalPanel(
-                          condition = "plot6",
-                          shiny::column(sizes[6], shiny::plotOutput("plot6",height = height))
-                        ),
-                        shiny::conditionalPanel(
-                          condition = "plot7",
-                          shiny::column(sizes[7], shiny::plotOutput("plot7",height = height))
-                        ),
-                        shiny::conditionalPanel(
-                          condition = "plot8",
-                          shiny::column(sizes[8], shiny::plotOutput("plot8",height = height))
-                        )
-                      )
-                      #do.call("fluidRow",lapply(1:length(plot.funs),function(i) column(sizes[i],plotOutput(paste0("plot.funs",i),height=height))))
-                    )),
 
+  ui=list(
+    plot.gene.ui,
     plot.global.ui,
     plot.static.ui,
     html.ui,
+    shiny::conditionalPanel(
+      condition=sprintf("[%s,'Gene level'].includes(input.mainnavbar)",paste0("'",names(table),"'",collapse=",")),
+      shiny::conditionalPanel(
+        condition = "helpText",
+        shiny::fluidRow(shiny::column(10, shiny::htmlOutput("helpText")))
+      ),
+      do.call(shiny::"fluidRow",lapply(1:length(plot.gene),function(i) shiny::column(sizes[i], shiny::plotOutput(paste0("plot",i),height = height))))
+    ),
 
     more,
 
@@ -386,7 +427,7 @@ ServeGrandR=function(data,
   )
 
   ui=ui[!sapply(ui,is.null)]
-  myui=function(...) shiny::navbarPage(title,...)
+  myui=function(...) shiny::navbarPage(title,id = "mainnavbar",...)
   ui=do.call("myui",ui)
 
   shiny::shinyApp(ui = ui, server = server)
