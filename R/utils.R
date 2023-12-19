@@ -42,6 +42,17 @@ confint.nls.lm=function (object, parm, level = 0.95, ...)
   m2[parm, ]
 }
 
+bquote.pval = function(p, digits = 2) {
+  if (p<2.2E-16) bquote("p"~"<"~2.2 %*% 10^-16) else {
+    s = sprintf("%.2g",p)
+    if (grepl("e",s)) {
+      s = gsub("e-0+","e-",s)
+      v=as.numeric(strsplit(s,"e")[[1]])
+      bquote("p"~"="~ .(v[1]) %*% 10^.(v[2]))
+    } else bquote("p"~"="~ .(s))
+  }
+}
+
 equal = function(a,b) length(a)==length(b) && all(a==b)
 
 #' Defer calling a function

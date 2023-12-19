@@ -396,7 +396,7 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
   }
   rho=round(cor(df$covar,df$lfc,method="spearman"),digits = 2)
   p=cor.test(df$covar,df$lfc,method="spearman")$p.value
-  p=if (p<2.2E-16) p = bquote("<"~2.2 %*% 10^-16) else p = sprintf("= %.2g",p)
+  p=bquote.pval(p)
   df$lfc=ifelse(df$lfc<ylim[1],-Inf,df$lfc)
   df$lfc=ifelse(df$lfc>ylim[2],+Inf,df$lfc)
 
@@ -423,10 +423,10 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
     bin=max(df$covar)/boxplot.bins
     df$cat=floor(pmax(df$covar-1,0)/bin)*bin+bin/2
     pp=kruskal.test(lfc~cat,data=df)$p.value
-    pp=if (pp<2.2E-16) pp = bquote("<"~2.2 %*% 10^-16) else pp = sprintf("= %.2g",pp)
+    pp=bquote.pval(pp)
     re=re+
       geom_boxplot(data=df,mapping=aes(x=cat,color=NULL,group=factor(cat)),color="black",fill=NA,outlier.shape = NA,size=1)
-    lab=bquote(rho == .(rho) * "," ~ p ~ .(p) * ", Kruskall-Wallis" ~ p ~ .(pp))
+    lab=bquote(rho == .(rho) * "," ~ .(p) * ", Kruskall-Wallis" ~ .(pp))
   }
 
   re=re+ggtitle(title,subtitle = if (label.corr) lab)
@@ -448,9 +448,6 @@ Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,yl
     d=max(abs(quantile(df$lfc[is.finite(df$lfc)],c(0.01,0.99))))*1.5
     ylim=c(-d,d)
   }
-  rho=round(cor(df$covar,df$lfc,method="spearman"),digits = 2)
-  p=cor.test(df$covar,df$lfc,method="spearman")$p.value
-  p=if (p<2.2E-16) p = bquote("<"~2.2 %*% 10^-16) else p = sprintf("= %.2g",p)
 
   pointslayer=ggplot2::geom_point(alpha=1,size=size)
   if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
@@ -467,8 +464,15 @@ Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,yl
     xlab("RNA half-life [h]")+ylab("log FC 4sU/no4sU")+
     coord_cartesian(ylim=ylim)
 
-  lab=bquote(rho == .(rho) ~ "," ~ p ~ .(p))
-  re=re+ggtitle(title,subtitle = if (label.corr) lab)
+
+
+  re=re+ggtitle(title,subtitle = if (label.corr) {
+    rho=round(cor(df$covar,df$lfc,method="spearman"),digits = 2)
+    p=cor.test(df$covar,df$lfc,method="spearman")$p.value
+    p=bquote.pval(p)
+    lab=bquote(rho == .(rho) ~ "," ~ .(p))
+    lab
+    })
 
   if (return.corr) list(plot=re,label=lab,df=df) else re
 }

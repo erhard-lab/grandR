@@ -361,7 +361,7 @@ PlotHeatmap=function(data,
 #' fun(data$x,data$y)
 #'
 #' @concept globalplot
-FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g",slope.format=NULL) {
+FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g",slope.format=NULL,rmsd.format=NULL) {
   function(x,y) {
     if (length(x)!=length(y)) stop("Cannot compute correlation, unequal lengths!")
     use=is.finite(x)&is.finite(y)
@@ -377,7 +377,10 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
       pca=prcomp(cbind(x,y))$rotation[,1]
       sprintf(sprintf("s=%s",slope.format),pca[2]/pca[1])
     }
-    paste(c(formatted.n,formatted.coeff,formatted.p,formatted.slope),collapse="\n")
+    formatted.rmsd=if (!is.null(rmsd.format)) {
+      sprintf(sprintf("rmsd=%s",rmsd.format),sqrt(mean((x-y)^2)))
+    }
+    paste(c(formatted.n,formatted.coeff,formatted.p,formatted.slope,formatted.rmsd),collapse="\n")
   }
 }
 

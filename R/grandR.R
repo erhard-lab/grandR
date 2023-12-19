@@ -671,7 +671,7 @@ Coldata=function(data,column=NULL,value=NULL) {
 #' @rdname Coldata
 #' @export
 `Coldata<-` <- function(data, column, value) {
-  if (!is.null(value) && length(value)!=nrow(data$coldata)) {
+  if (!is.null(value) && length(value)!=nrow(data$coldata) && length(value)!=1) {
     if (is.null(names(value)) || !all(names(value) %in% rownames(data$coldata))) stop("If the given value does not have the same length as the grandR object columns, names must match!")
     data$coldata[names(value),column]=value
   } else {
