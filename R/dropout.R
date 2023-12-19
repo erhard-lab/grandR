@@ -436,7 +436,7 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
 
 #' @rdname dropout
 #' @export
-Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,title=w4sU,size=1.5) {
+Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,label.corr=FALSE,return.corr=FALSE,title=w4sU,size=1.5) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
@@ -448,6 +448,9 @@ Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,yl
     d=max(abs(quantile(df$lfc[is.finite(df$lfc)],c(0.01,0.99))))*1.5
     ylim=c(-d,d)
   }
+  rho=round(cor(df$covar,df$lfc,method="spearman"),digits = 2)
+  p=cor.test(df$covar,df$lfc,method="spearman")$p.value
+  p=if (p<2.2E-16) p = bquote("<"~2.2 %*% 10^-16) else p = sprintf("= %.2g",p)
 
   pointslayer=ggplot2::geom_point(alpha=1,size=size)
   if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
@@ -455,13 +458,17 @@ Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,yl
   } else {
     pointslayer = ggrastr::rasterize(pointslayer)
   }
-  ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
+  re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide="none")+
     pointslayer+
     geom_hline(yintercept=0)+
     geom_smooth(method="loess",color='red')+
     xlab("RNA half-life [h]")+ylab("log FC 4sU/no4sU")+
-    coord_cartesian(ylim=ylim)+
-    ggtitle(title)
+    coord_cartesian(ylim=ylim)
+
+  lab=bquote(rho == .(rho) ~ "," ~ p ~ .(p))
+  re=re+ggtitle(title,subtitle = if (label.corr) lab)
+
+  if (return.corr) list(plot=re,label=lab,df=df) else re
 }
