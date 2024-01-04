@@ -6,6 +6,7 @@
 * Fixed bug that caused all global plots to be executed before rendering the main table
 * Html files that are in the same ordner are linked (under menu Reports)
 * Now multiple tables can be provided (as named list)
+* Additiona, static plots can be shown in floating windows
 
 ## Smaller updates
 * fixed subsetting of grandR to only a single column
@@ -13,6 +14,8 @@
 * Updated ReadGRAND3 to most recent Grand3 version (mode output)
 * Improved ComputeColumnStatistics (percentage calculations)
 * Differential gene expression analysis for a subset of the genes (including normalization to only those genes)
+* FormatCorrelation can add RMSDs
+* Statistics for Plot4sUDropout()
 
 # grandR 0.2.3
 
