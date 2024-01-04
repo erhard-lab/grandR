@@ -443,6 +443,7 @@ Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,yl
   time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[if (is.numeric(ntr)) w4sU else ntr,Design$dur.4sU] else 1
   df=Make4sUDropoutTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(hl)) hl=quantile(df$covar[is.finite(df$covar)],hl.quantile)
+  if (sum(df$covar<hl & df$ntr<1 & df$ntr>0)<nrow(df)) warning(sprintf("Removed %d genes!",nrow(df)-sum(df$covar<hl & df$ntr<1 & df$ntr>0)))
   df=df[df$covar<hl & df$ntr<1 & df$ntr>0,]
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc[is.finite(df$lfc)],c(0.01,0.99))))*1.5

@@ -9,6 +9,7 @@
 #' @param height the height for the gene plots in pixel
 #' @param plot.gene a list of gene plots; can be NULL, then the stored gene plots are used (see \link{Plots})
 #' @param plot.global  a list of global plots; can be NULL, then the stored global plots are used (see \link{Plots})
+#' @param plot.window a list of static plots to show in a floating window; see details
 #' @param highlight a vector of gene names that are highlighted in the beginning
 #' @param df.identifier the main identifier (column name) from the table; this is used when calling the gene plot functions;
 #' @param title the title to show in the header of the website
@@ -18,6 +19,9 @@
 #' @details If the table parameter is NULL, either an analysis table named "ServeGrandR" is
 #' used (if it exists), otherwise the columns "Q", "LFC", "Synthesis" and "Half-life" of all analysis tables are used. If it is a list, a menu is created in the navbar
 #'
+#' @details plot.window must be a list of plotting functions that receive the grandR object and return a plot. It can also be a list of list, in which case more than one plotting windows are generated.
+#' Each plot will be rendered with a size of 350x350.
+#'
 #' @details The gene plots must be functions that accept two parameters: the grandR object and a gene identifier. You can either use
 #' functions directly (e.g. \code{plot.gene=list(PlotGeneOldVsNew)}), or use \link{Defer} in cases you need to specify additional parameters,
 #' e.g. \code{plot.gene=list(Defer(PlotGeneOldVsNew,log=FALSE))}. The global plots are functions accepting a single parameter (the grandR object). Here
@@ -25,12 +29,26 @@
 #'
 #' @return a shiny web server
 #' @export
+#'
+#' @example
+#' \dontrun{
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
+#' sars <- Normalize(sars)
+#' sars <- Pairwise(sars,contrasts = GetContrasts(sars,contrast = c("Condition","SARS","Mock")))
+#' sars <- AddGenePlot(sars,"timecourse",Defer(PlotGeneProgressiveTimecourse,steady.state=c(Mock=TRUE,SARS=FALSE)))
+#' sars <- AddGlobalPlot(sars,"Vulcano",VulcanoPlot)
+#' ServeGrandR(sars)
+#'
+#' }
+#'
 #' @concept shiny
 ServeGrandR=function(data,
                      table=NULL,
                      sizes=NA,height=400,
                      plot.gene=NULL,
                      plot.global=NULL,
+                     plot.window=NULL,
                      highlight=NULL,
                      df.identifier="Symbol",
                      title=Title(data),
@@ -69,6 +87,28 @@ ServeGrandR=function(data,
   if (length(sizes)!=length(plot.gene)) stop("sizes need to be length 1 or same length as plots!")
   sizes=c(sizes,rep(1,8))
 
+  if (is.null(plot.window)) {
+    if (!is.null(data$plots$floating)) {
+      n=names(data$plots$floating)
+      nodot = !grepl(".",n,fixed=TRUE)
+      n[nodot]=paste0("Plots.",n[nodot])
+
+      cats = unique(sapply(strsplit(n,".",fixed=TRUE),function(cc) cc[1]))
+      plot.window = lapply(cats,function(cc) {
+        use = substr(n,1,nchar(cc))==cc
+        setNames(data$plots$floating[use],substr(n[use],nchar(cc)+2,nchar(n[use])))
+      })
+      names(plot.window) = cats
+
+    } else plot.window = list()
+  }
+  if (length(plot.window)>0 && !is.list(plot.window[[1]])) plot.window=list(Plots=plot.window)
+  # after this, plot.window is either an empty list, or a list of lists.
+  if (is.null(names(plot.window))) stop("plot.window must have names!")
+
+
+  plot.wins = lapply(names(plot.window),function(n)CreateWindows(paste0("floating-",n),title=n,plots=plot.window[[n]]))
+
 
   #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
 
@@ -82,7 +122,7 @@ ServeGrandR=function(data,
 
     highlighted.genes <- shiny::reactiveValues(genes = highlight,selected.gene=NULL,filtered.rows=NULL,active.table=NULL)
 
-
+    win_ids = lapply(plot.wins,function(pw) pw$server(data))
 
     for (n in names(table)) {
       create = function(ns,df) {
@@ -91,9 +131,20 @@ ServeGrandR=function(data,
         ddf <- NULL
 
         df.rounded = as.data.frame(lapply(df,function(v) if(is.numeric(v)) round(v,5) else v),check.names=FALSE,stringsAsFactors = FALSE)
-
+        plot.window.adding = ""
+        for (i in 1:length(plot.window)) {
+          plot.window.adding = paste(plot.window.adding,sprintf("$('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]'));",ns("tab"),ns(paste0("btn-plot-window-",names(plot.window)[i]))))
+          obs=function(i) {
+            btnid = ns(paste0("btn-plot-window-",names(plot.window)[i]))
+            shiny::observeEvent(input[[btnid]], {
+              shinyjs::js$toggleZ(win_ids[[i]])
+              shinyjs::show(win_ids[[i]])
+            })
+          }
+          obs(i)
+        }
         dttab=DT::datatable(df.rounded,
-                            callback = DT::JS(sprintf("$('div[id=\"%s\"] > div > div#buttons').css('float','left').css('margin-right','50px'); $('div[id=\"%s\"]').css('float','left'); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); ",ns("tab"),ns("clip"),ns("tab"),ns("pdf"),ns("tab"),ns("downloadraw"),ns("tab"),ns("download1"),ns("tab"),ns("clip"))),
+                            callback = DT::JS(sprintf("$('div[id=\"%s\"] > div > div#buttons').css('float','left').css('margin-right','50px'); $('div[id=\"%s\"]').css('float','left'); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); %s",ns("tab"),ns("clip"),ns("tab"),ns("pdf"),ns("tab"),ns("downloadraw"),ns("tab"),ns("download1"),ns("tab"),ns("clip"),plot.window.adding)),
                             selection = 'single',
                             rownames = FALSE,
                             filter = "top",
@@ -193,7 +244,7 @@ ServeGrandR=function(data,
       }
     }
 
-    observeEvent(input$mainnavbar, {
+    shiny::observeEvent(input$mainnavbar, {
       if (input$mainnavbar %in% names(table)) {
         ns = shiny::NS(paste0("table",input$mainnavbar))
         highlighted.genes$selected.gene <- if (is.null(input[[ns("tab_rows_selected")]])) NULL else df[[df.identifier]][input[[ns("tab_rows_selected")]]]
@@ -320,6 +371,7 @@ ServeGrandR=function(data,
   plot.gene.ui=NULL
   if (length(table)==1) {
     ns=shiny::NS(paste0("table",names(table)[1]))
+    plot.window.buttons = lapply(names(plot.window),function(n)shiny::actionButton(ns(paste0("btn-plot-window-",n)),n,icon=shiny::icon("chart-column")))
     plot.gene.ui=shiny::tabPanel("Gene level",
                     shiny::fluidPage(
                       shiny::fluidRow(
@@ -328,12 +380,14 @@ ServeGrandR=function(data,
                         shiny::downloadButton(ns("download1"),"Table"),
                         shiny::actionButton(ns("downloadraw"),"Data",icon = shiny::icon("download")),
                         shiny::actionButton(ns("pdf"),"PDF",icon = shiny::icon("file-pdf")),
+                        plot.window.buttons,
                         shiny::column(12, DT::dataTableOutput(ns('tab')))
                       )
                     ))
    } else {
      plist=c(lapply(names(table),function(n) {
        ns=shiny::NS(paste0("table",n))
+       plot.window.buttons = lapply(names(plot.window),function(n)shiny::actionButton(ns(paste0("btn-plot-window-",n)),n,icon=shiny::icon("chart-column")))
        shiny::tabPanel(n,
                        shiny::fluidPage(
                          shiny::fluidRow(
@@ -342,6 +396,7 @@ ServeGrandR=function(data,
                            shiny::downloadButton(ns("download1"),"Table"),
                            shiny::actionButton(ns("downloadraw"),"Data",icon = shiny::icon("download")),
                            shiny::actionButton(ns("pdf"),"PDF",icon = shiny::icon("file-pdf")),
+                           plot.window.buttons,
                            shiny::column(12, DT::dataTableOutput(ns('tab')))
                          )
                        ))
@@ -382,25 +437,24 @@ ServeGrandR=function(data,
     )
 
 
+  window.ui = NULL
+  if (length(plot.window)>0) {
+    window.ui = c(list(InitWindows()),lapply(plot.wins,function(pw) pw$ui()))
+  }
+
   ui=list(
     plot.gene.ui,
     plot.global.ui,
     plot.static.ui,
     html.ui,
-    shiny::conditionalPanel(
-      condition=sprintf("[%s,'Gene level'].includes(input.mainnavbar)",paste0("'",names(table),"'",collapse=",")),
-      shiny::conditionalPanel(
-        condition = "helpText",
-        shiny::fluidRow(shiny::column(10, shiny::htmlOutput("helpText")))
-      ),
-      do.call(shiny::"fluidRow",lapply(1:length(plot.gene),function(i) shiny::column(sizes[i], shiny::plotOutput(paste0("plot",i),height = height))))
-    ),
+    more
+  )
 
-    more,
 
+  jslist = list(
     htmltools::tags$head(
-      htmltools::tags$style(
-        htmltools::HTML("#shiny-notification-panel {
+    htmltools::tags$style(
+      htmltools::HTML("#shiny-notification-panel {
                               top: 0;
                               bottom: unset;
                               left: 0;
@@ -410,29 +464,142 @@ ServeGrandR=function(data,
                               width: 100%;
                               max-width: 450px;
                             }"
-        )
       )
-    ),
+    )
+  ),
 
-    htmltools::tags$script(htmltools::HTML(sprintf("
+  htmltools::tags$script(htmltools::HTML(sprintf("
           %s
         	var header = $('.navbar> .container-fluid');
           header.append('<div class=\"nav navbar-nav\" style=\"float:right\"><span class=\"navbar-brand\">grandR v%s</span></div>')",
-                                                   html.list.ui,
-                                                   utils::packageVersion("grandR")
-    )))
+                                                 html.list.ui,
+                                                 utils::packageVersion("grandR")
+  )))
+  )
 
-
-
+  footer = list(
+    shiny::conditionalPanel(
+      condition=sprintf("[%s,'Gene level'].includes(input.mainnavbar)",paste0("'",names(table),"'",collapse=",")),
+      shiny::conditionalPanel(
+        condition = "helpText",
+        shiny::fluidRow(shiny::column(10, shiny::htmlOutput("helpText")))
+      ),
+      do.call(shiny::"fluidRow",lapply(1:length(plot.gene),function(i) shiny::column(sizes[i], shiny::plotOutput(paste0("plot",i),height = height))))
+    ),
+    window.ui
   )
 
   ui=ui[!sapply(ui,is.null)]
-  myui=function(...) shiny::navbarPage(title,id = "mainnavbar",...)
+  myui=function(...) shiny::navbarPage(title,id = "mainnavbar",...,footer=footer,header=jslist)
   ui=do.call("myui",ui)
 
   shiny::shinyApp(ui = ui, server = server)
 }
 
+
+
+InitWindows = function() {
+  jscode = "shinyjs.toggleZ = function(params){ $('.plot-window').removeClass('plot-window-topmost'); $('#'+params).addClass('plot-window-topmost');}"
+  list(shinyjs::useShinyjs(),
+       shinyjs::extendShinyjs(text=jscode,functions="toggleZ"),
+       htmltools::tags$head(htmltools::tags$style(htmltools::HTML("
+      .plot-window {
+        position: fixed;
+        background-color: white;
+        border: 1px solid #ddd;
+        box-shadow: 0px 0px 10px #aaa;
+        padding: 2px;
+        display: none;
+        height: auto;
+      }
+      .plot-window-shown {
+        display: block;
+        z-index: 100;
+      }
+      .plot-window-topmost {
+        z-index: 101;
+      }
+      .window-header {
+        padding: 0px;
+        background-color: #f7f7f7;
+        border-bottom: 1px solid #ddd;
+        cursor: move;
+      }
+      .window-title {
+        font-weight: bold;
+      }
+      .btn-close {
+        float: right;
+        cursor: pointer;
+        padding: 0px 6px;
+        font-size: 13px;
+      }
+      .window-body {
+        padding: 1px;
+      }
+    "))))
+}
+
+CreateWindows = function(id,plots,title="Plots",width=350,height=350,nrow=NULL,ncol=NULL,x=50,y=-20,selection=NA) {
+  if (is.na(selection)) selection=length(plots)>4
+  xco = if (x<0) "bottom" else "top"
+  yco = if (y<0) "right" else "left"
+  x=abs(x)
+  y=abs(y)
+  if (is.null(nrow) && is.null(ncol)) {
+    ncol=if(selection==TRUE) 1 else ceiling(sqrt(length(plots)))
+  }
+  if (is.null(ncol)) ncol = if(selection==TRUE) 1 else ceiling(length(plots)/nrow)
+
+  list(ui=function() {
+    ns <- shiny::NS(id)
+
+    selectlist=NULL
+    if (selection==TRUE) {
+      if (is.null(names(plots))) stop("Use a named list of plots for selection mode!")
+      selectlist = htmltools::tags$select(id=ns("plotSelect"),style="width: 120px; margin-left: 10px;")
+      selectlist= htmltools::tagAppendChildren(selectlist,lapply(1:length(plots),function(i) {
+        re = htmltools::tagAppendChildren(htmltools::tags$option(value=names(plots)[i],names(plots)[i]))
+        if (i==1) re=htmltools::tagAppendAttributes(re , selected=NA  )
+        re
+      }))
+      plotctrl = shiny::plotOutput(ns("plot"),height = sprintf("%.0fpx",height))
+    } else {
+      plotctrl = lapply(1:length(plots),function(i) shiny::plotOutput(ns(paste0("plot",i)),height = sprintf("%.0fpx",height)))
+    }
+    htmltools::tagList(
+      shinyjqui::jqui_draggable(
+        htmltools::div(id = ns("plotWindow"), class = "plot-window", style = sprintf("width: %.0fpx; %s: %.0fpx; %s: %.0fpx;",width*ncol,xco,x,yco,y),
+                       htmltools::div(class = "window-header",
+                                      htmltools::span(title, class = "window-title"),
+                                      selectlist,
+                                      shiny::actionButton(ns("closePlotWindow"), label = "x", class = "btn-close")
+                       ),
+                       htmltools::div(class = "window-body",
+                                      htmltools::div(style = sprintf("display: grid; grid-template-columns: repeat(%.0f, 1fr); gap: 1px;",ncol),plotctrl)
+                       )
+        )
+      )
+    )
+  },
+  server=function(data) {
+    shiny::moduleServer(id, function(input, output, session) {
+      ns <- session$ns
+      for (i in 1:length(plots)) {
+        oo=function(i) output[[paste0("plot",i)]] = shiny::renderPlot({ plots[[i]](data) })
+        oo(i)
+      }
+      shiny::observeEvent(input$closePlotWindow, {
+        shinyjs::js$toggleZ(NS(id)("plotWindow"))
+        shinyjs::hide("plotWindow")
+      })
+      shiny::observeEvent(input$plotSelect, {
+        output[["plot"]] = shiny::renderPlot({ plots[[input$plotSelect]]() })
+      })
+    })
+    NS(id)("plotWindow")
+  })
+}
 
 
 

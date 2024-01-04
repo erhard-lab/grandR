@@ -1508,12 +1508,15 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
 #' @param FUN The plotting function to add
 #' @param pattern A regular expression that is matched to plot names
 #' @param gene The gene to plot
+#' @param floating whether or not the plot should be shown as a floating window
 #'
 #' @return Either the plot names or a grandR data with added/removed plots
 #'
 #' @details FUN has to be a function with a single parameter for global plots (i.e., the grandR object) or two parameters for gene plots
 #' (i.e., the grandR object and the gene name). Usually, it is either the name of a plotting function, such as \link{PlotGeneOldVsNew}, or, if it is
 #' necessary to parametrize it, a call to \link{Defer} (which takes care of caching plots without storing an additional copy of the grandR object).
+#'
+#' @details For floating window plots, if names are given in the format <title>.<name>, a plot is created for each <title> with several subplots.
 #'
 #' @describeIn Plots Obtain the plot names
 #' @export
@@ -1536,14 +1539,20 @@ AddGenePlot=function(data,name,FUN) {
   data
 }
 
-#' @describeIn Plots Add a global plot to the the grandR object
+#' @describeIn Plots Add a global plot to the grandR object
 #' @export
-AddGlobalPlot=function(data,name,FUN) {
+AddGlobalPlot=function(data,name,FUN,floating=FALSE) {
   if (!is.function(FUN)) stop("Cannot add; FUN must be a function!")
   if (is.null(data$plots)) data$plots=list()
-  if (is.null(data$plots$global)) data$plots$global=list()
-  if (!is.null(data$plots$global[[name]])) warning(sprintf("Plot %s already present! Overwriting...",name))
-  data$plots$global[[name]]=FUN
+  if (!floating) {
+    if (is.null(data$plots$global)) data$plots$global=list()
+    if (!is.null(data$plots$global[[name]])) warning(sprintf("Plot %s already present! Overwriting...",name))
+    data$plots$global[[name]]=FUN
+  } else {
+    if (is.null(data$plots$floating)) data$plots$floating=list()
+    if (!is.null(data$plots$floating[[name]])) warning(sprintf("Plot %s already present! Overwriting...",name))
+    data$plots$floating[[name]]=FUN
+  }
   data
 }
 
@@ -1562,6 +1571,7 @@ DropPlots=function(data,pattern=NULL) {
   } else {
     if (!is.null(data$plots$gene)) data$plots$gene=data$plots$gene[!grepl(pattern,names(data$plots$gene))]
     if (!is.null(data$plots$global)) data$plots$global=data$plots$global[!grepl(pattern,names(data$plots$global))]
+    if (!is.null(data$plots$floating)) data$plots$floating=data$plots$floating[!grepl(pattern,names(data$plots$floating))]
   }
   data
 }
