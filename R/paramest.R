@@ -195,6 +195,12 @@ n.vector=function(n,c) {
 	re
 }
 
+MixMatrixToBernoulli=function(mixmat) {
+  conversions = sum(rowSums(mixmat)*GetMixMatk(mixmat))
+  sites = sum(colSums(mixmat)*GetMixMatn(mixmat))
+  matrix2MixMatrix(rbind(sites-conversions,conversions),1,c(0,1))
+}
+
 DropoutMixMatrix=function(mixmat,dropout=c(1,0.97,0.95,0.8,0.7,0.55,0.4,0.3,0.25,0.2,0.15,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1)) {
   mixmat[,]=apply(mixmat,2,function(v) rbinom(length(v),size=v,prob=dropout[1:length(v)]))
   mixmat

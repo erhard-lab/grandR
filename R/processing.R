@@ -21,8 +21,8 @@ comp.fpkm=function(cmat,lengths,subset=NULL) {
   re[zerolen,]=NA
   re
 }
-comp.rpm=function(cmat,subset=NULL) {
-  scale=colSums(if(!is.null(subset)) cmat[subset,] else cmat,na.rm=T)/1E6
+comp.rpm=function(cmat,subset=NULL,factor=1E6) {
+  scale=colSums(if(!is.null(subset)) cmat[subset,] else cmat,na.rm=T)/factor
   re=t(t(cmat)/scale)
   re
 }
@@ -244,11 +244,11 @@ NormalizeFPKM=function(data,genes=Genes(data),name="fpkm",slot="count",set.to.de
 }
 #' @rdname Normalize
 #' @export
-NormalizeRPM=function(data,genes=Genes(data),name="rpm",slot="count",set.to.default=TRUE) {
+NormalizeRPM=function(data,genes=Genes(data),name="rpm",slot="count",set.to.default=TRUE,factor=1E6) {
   genes=ToIndex(data,genes)
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.rpm(mat,subset = genes),set.to.default=set.to.default)
+  data=AddSlot(data,name,comp.rpm(mat,subset = genes,factor=factor),set.to.default=set.to.default)
   data
 }
 #' @rdname Normalize
