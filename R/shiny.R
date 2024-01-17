@@ -104,7 +104,7 @@ ServeGrandR=function(data,
   }
   if (length(plot.window)>0 && !is.list(plot.window[[1]])) plot.window=list(Plots=plot.window)
   # after this, plot.window is either an empty list, or a list of lists.
-  if (is.null(names(plot.window))) stop("plot.window must have names!")
+  if (is.null(names(plot.window)) && length(plot.window)>0) stop("plot.window must have names!")
 
 
   plot.wins = lapply(names(plot.window),function(n)CreateWindows(paste0("floating-",n),title=n,plots=plot.window[[n]]))

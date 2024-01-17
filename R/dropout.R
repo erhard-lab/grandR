@@ -342,6 +342,7 @@ Estimate4sUDropoutPercentageForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fu
 #' @param size the point size
 #' @param hl if NULL, compute half-lives from the ntr column; otherwise, must be a vector containing half-lives
 #' @param invert.ranks if TRUE, left to right on the plot is largest NTR to smallest NTR
+#' @param color.by.ntr if true, compute the density colors along the ntr axis instead of globally
 #' @param ... further arguments to be passed to or from other methods.
 #'
 #' @details The deferred versions are useful to be used in conjunction with \link{ServeGrandR} plot.static. Their implementation
@@ -436,7 +437,7 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
 
 #' @rdname dropout
 #' @export
-Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,label.corr=FALSE,return.corr=FALSE,title=w4sU,size=1.5) {
+Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,label.corr=FALSE,return.corr=FALSE,title=w4sU,size=1.5,color.by.ntr=FALSE) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
@@ -456,7 +457,7 @@ Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,yl
   } else {
     pointslayer = ggrastr::rasterize(pointslayer)
   }
-  re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
+  re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = if (color.by.ntr) 'x' else 'n')))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide="none")+
     pointslayer+
