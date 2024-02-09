@@ -1195,14 +1195,12 @@ CalibrateEffectiveLabelingTimeMatchHalflives=function(data,reference.halflives=N
 #' @details if N is set to 0, then no sampling from the posterior is performed, but the transformed MAP estimates are returned
 #'
 #' @return a new grandR object including new analysis tables (one per condition). The columns of the new analysis table are
-#' \itemize{
 #'  \item{"s"}{the posterior mean synthesis rate}
 #'  \item{"HL"}{the posterior mean RNA half-life}
 #'  \item{"s.cred.lower"}{the lower CI boundary of the synthesis rate}
 #'  \item{"s.cred.upper"}{the upper CI boundary of the synthesis rate}
 #'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life}
 #'  \item{"HL.cred.upper"}{the upper CI boundary of the half-life}
-#' }
 #'
 #'
 #' @export
@@ -1589,7 +1587,7 @@ TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
 #' @param gene the gene to be plotted
 #' @param slot the data slot of the observed abundances
 #' @param time the labeling duration column in the column annotation table
-#' @param type how to fit the model (see link{FitKinetics})
+#' @param type how to fit the model (see \link{FitKinetics})
 #' @param exact.tics use axis labels directly corresponding to the available labeling durations?
 #' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
 #' @param return.tables also return the tables used for plotting

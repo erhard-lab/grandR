@@ -88,13 +88,11 @@ DESeq2BIC=function(data,name="BIC",mode="total",normalization=mode,formulas=list
 #' This can be accomplished by setting mode to "new", and normalization to "total"!
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
-#' \itemize{
 #'  \item{"M"}{the base mean}
 #'  \item{"S"}{the difference in deviance between the reduced model and the full model}
 #'  \item{"P"}{the likelihood ratio test P value}
 #'  \item{"Q"}{same as P but Benjamini-Hochberg multiple testing corrected}
 #'  \item{"LFC"}{the log2 fold change for the target model (only with the logFC parameter set to TRUE)}
-#' }
 #'
 #' @export
 #'
@@ -207,13 +205,12 @@ ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,genes
 #' Then each value is divided by the corresponding size factor entry.
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
-#' \itemize{
 #'  \item{"M"}{the base mean}
 #'  \item{"S"}{the log2FoldChange divided by lfcSE}
 #'  \item{"P"}{the Wald test P value}
 #'  \item{"Q"}{same as P but Benjamini-Hochberg multiple testing corrected}
 #'  \item{"LFC"}{the log2 fold change}
-#' }
+#'
 #' @seealso \link{PairwiseDESeq2},\link{GetContrasts}
 #' @export
 #'
@@ -257,9 +254,7 @@ Pairwise=function(data, name.prefix = mode, contrasts, LFC.fun=lfc::PsiLFC, slot
 #' Then each value is divided by the corresponding size factor entry.
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
-#' \itemize{
 #'  \item{"LFC"}{the log2 fold change}
-#' }
 #'
 #' @seealso \link{PairwiseDESeq2},\link{GetContrasts}
 #' @export
@@ -337,13 +332,11 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' Then each value is divided by the corresponding size factor entry.
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
-#' \itemize{
 #'  \item{"M"}{the base mean}
 #'  \item{"S"}{the log2FoldChange divided by lfcSE}
 #'  \item{"P"}{the Wald test P value}
 #'  \item{"Q"}{same as P but Benjamini-Hochberg multiple testing corrected}
 #'  \item{"LFC"}{the log2 fold change (only with the logFC parameter set to TRUE)}
-#' }
 #'
 #' @seealso \link{LFC},\link{GetContrasts}
 #' @export
@@ -520,7 +513,6 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #' @details if N is set to 0, then no sampling from the posterior is performed, but the transformed MAP estimates are returned
 #'
 #' @return a new grandR object including a new analysis table. The columns of the new analysis table are
-#' \itemize{
 #'  \item{"s.A"}{the posterior mean synthesis rate for sample A from the comparison}
 #'  \item{"s.B"}{the posterior mean synthesis rate for sample B from the comparison}
 #'  \item{"HL.A"}{the posterior mean RNA half-life for sample A from the comparison}
@@ -533,7 +525,6 @@ PairwiseDESeq2=function(data, name.prefix=mode, contrasts, separate=FALSE, mode=
 #'  \item{"HL.cred.lower"}{the lower CI boundary of the half-life log2 fold change}
 #'  \item{"HL.cred.upper"}{the upper CI boundary of the half-life log2 fold change}
 #'  \item{"HL.ROPE"}{the signed ROPE probability (negative means downregulation) for the half-life fold change}
-#' }
 #'
 #'
 #' @seealso \link{FitKineticsGeneSnapshot},\link{FitKineticsSnapshot}
