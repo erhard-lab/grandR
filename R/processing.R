@@ -21,8 +21,8 @@ comp.fpkm=function(cmat,lengths,subset=NULL) {
   re[zerolen,]=NA
   re
 }
-comp.rpm=function(cmat,subset=NULL) {
-  scale=colSums(if(!is.null(subset)) cmat[subset,] else cmat,na.rm=T)/1E6
+comp.rpm=function(cmat,subset=NULL,factor=1E6) {
+  scale=colSums(if(!is.null(subset)) cmat[subset,] else cmat,na.rm=T)/factor
   re=t(t(cmat)/scale)
   re
 }
@@ -189,7 +189,8 @@ ComputeAbsolute=function(data,dilution=4E4,volume=10,slot="tpm",name="absolute")
 #' @param size.factors numeric vector; if not NULL, use these size factors instead of computing size factors
 #' @param return.sf return the size factors and not a grandR object
 #' @param tlen the transcript lengths (for FPKM and TPM)
-#'
+#' @param factor the rpm factor (default: 1 (m)illion)
+  #'
 #' @details Normalize will perform DESeq2 normalization, i.e. it will use \link[DESeq2]{estimateSizeFactorsForMatrix}
 #' to estimate size factors, and divide each value by this. If genes are given, size factors will be computed only w.r.t. these genes (but then all genes are normalized).
 #'
@@ -244,11 +245,11 @@ NormalizeFPKM=function(data,genes=Genes(data),name="fpkm",slot="count",set.to.de
 }
 #' @rdname Normalize
 #' @export
-NormalizeRPM=function(data,genes=Genes(data),name="rpm",slot="count",set.to.default=TRUE) {
+NormalizeRPM=function(data,genes=Genes(data),name="rpm",slot="count",set.to.default=TRUE,factor=1E6) {
   genes=ToIndex(data,genes)
   stopifnot(is.grandR(data))
   mat=as.matrix(GetTable(data,type=slot,ntr.na = FALSE,name.by = "Gene"))
-  data=AddSlot(data,name,comp.rpm(mat,subset = genes),set.to.default=set.to.default)
+  data=AddSlot(data,name,comp.rpm(mat,subset = genes,factor=factor),set.to.default=set.to.default)
   data
 }
 #' @rdname Normalize
@@ -439,6 +440,83 @@ ComputeExpressionPercentage=function(data,name,genes=Genes(data),mode.slot=Defau
   data
 }
 
+
+#' Compute statistics for all columns (i.e. samples or cells)
+#'
+#' @param data a grandR object
+#' @param verbose output status messages
+#'
+#' @return a new grandR object containing additional columns in the \link{Coldata} table:
+#' \itemize{
+#'   \item{p.conv.X: the T-to-C mismatch frequency in the given ("X") subread category}
+#'   \item{percent.new: new overall percentage of new RNA}
+#'   \item{total.reads: the total number of reads (or UMIs, if UMIs were sequences)}
+#'   \item{total.genes: the total number of genes detected}
+#'   \item{percentage per type: the percentage (up to 100!) of the counts of each type in the GeneInfo}
+#' }
+#'
+#' @export
+#'
+#' @concept data
+ComputeColumnStatistics=function(data,verbose=TRUE) {
+  if (verbose) cat(sprintf("Obtaining model parameters...\n"))
+  if (data$metadata$`GRAND-SLAM version`==3) {
+    tab=GetTableQC(data,"model.parameters",stop.if.not.exist = FALSE)
+    if (!is.null(tab)) {
+      tab=tab[tab$Label==tab$Label[1] & tab$Estimator==tab$Estimator[1],]
+      for (sub in unique(tab$Subread)) {
+        m=setNames(tab$`Binom p.conv`[tab$Subread==sub],tab$Condition[tab$Subread==sub])
+        Coldata(data,paste("p.conv",sub))=m[colnames(data)]
+      }
+    }
+  } else {
+    tab=GetTableQC(data,"mismatches",stop.if.not.exist=FALSE)
+    if (!is.null(tab)) {
+      strand=GetTableQC(data,"strandness",stop.if.not.exist=FALSE)$V1
+      if (strand=="Antisense") {
+        tab=tab[(tab$Orientation=="First" & tab$Genomic=="A" & tab$Read=="G")|(tab$Orientation=="Second" & tab$Genomic=="T" & tab$Read=="C"),]
+      } else if (strand=="Sense") {
+        tab=tab[(tab$Orientation=="First" & tab$Genomic=="T" & tab$Read=="C")|(tab$Orientation=="Second" & tab$Genomic=="A" & tab$Read=="G"),]
+      } else {
+        tab=tab[(tab$Genomic=="T" & tab$Read=="C")|(tab$Genomic=="A" & tab$Read=="G"),]
+      }
+      tab=tab[tab$Category=="Exonic",]
+      tab=plyr::ddply(tab,c("Condition"),function(s) data.frame(Coverage=sum(s$Coverage),Mismatches=sum(s$Mismatches)))
+      m=setNames(tab$Mismatches/tab$Coverage,tab$Condition)
+      Coldata(data,"raw.conversions")=m[colnames(data)]
+    }
+
+    tab=GetTableQC(data,"rates",stop.if.not.exist=FALSE)
+    if (!is.null(tab)) {
+      m=unlist(tab[tab$Rate=="single_new",-1])
+      Coldata(data,"p.conv.single")=m[colnames(data)]
+      Coldata(data,"p.conv.single")[Coldata(data,"no4sU")]=NA
+      m=unlist(tab[tab$Rate=="double_new",-1])
+      if (any(m!=0)) {
+        Coldata(data,"p.conv.double")=m[colnames(data)]
+        Coldata(data,"p.conv.double")[Coldata(data,"no4sU")]=NA
+      }
+    }
+  }
+
+  if (verbose) cat(sprintf("Compute percentage new...\n"))
+  data=ComputeExpressionPercentage(data,"percent.new",mode.slot="new.count",mode.slot.total="count")
+
+  if (verbose) cat(sprintf("Compute total reads...\n"))
+  Coldata(data,"total.reads") = Matrix::colSums(GetMatrix(data,mode.slot="count"))
+  if (verbose) cat(sprintf("Compute total genes...\n"))
+  Coldata(data,"total.genes") = Matrix::colSums(GetMatrix(data,mode.slot="count")>0)
+
+  if (!is.null(GeneInfo(data)$Type)) {
+    for (t in levels(GeneInfo(data)$Type)) {
+      if (verbose) cat(sprintf("Compute percent for %s...\n",t))
+      Coldata(data,paste0("percent.",t)) = Matrix::colSums(GetMatrix(data,mode.slot="count",genes = GeneInfo(data)$Type==t))/Coldata(data,"total.reads")*100
+    }
+  }
+
+  data
+}
+
 #' Compute pseudo NTRs from two count matrices
 #'
 #' NTRs can be computed from given new and total counts.
@@ -473,3 +551,64 @@ ComputePseudoNtr=function(data,new.slot,total.slot=DefaultSlot(data),detection.r
 
   AddSlot(data,"ntr",ntr,set.to.default=FALSE)
 }
+
+#' Pool reads across columns
+#'
+#' Pool read counts, ntrs, and alpha/beta values across columns defined by a pooling matrix
+#'
+#' @param data grandR object
+#' @param pooling a pooling matrix (see details)
+#'
+#' @details The pooling matrix must have as many rows as there are columns (i.e., samples or cells) in data,
+#' and as many columns as you want to have columns in the resulting object. The matrix should consist of 0 and 1,
+#' where 1 indicates a column of the original object that should go into a column of the new object. In essence,
+#' to obtain the new count matrix, the old count matrix is matrix-multiplied with the pooling matrix.
+#'
+#' @details The new ntr matrix is computed by componentwise division of the new count and total count matrices derived
+#' as just described. alpha and beta are computed using matrix multiplication, i.e. summing up all alpha and beta values
+#' of all the columns belonging to a pool.
+#'
+#' @return a new grandR object
+#' @export
+#'
+#' @concept data
+PoolColumns=function(data,pooling=GetSummarizeMatrix(data,average=FALSE,no4sU=TRUE)) {
+  dd=list()
+  dd$count = GetMatrix(data,mode.slot="count",summarize=pooling,name.by="Gene")
+  newcount = GetMatrix(data,mode.slot="new.count",summarize=pooling,name.by="Gene")
+  if (is.matrix(dd$count)) {
+    dd$ntr=newcount/dd$count
+  } else {
+    sX=Matrix::summary(newcount)
+    sY=Matrix::summary(dd$count)
+    dd=.Call('fastsparsematdiv',sX$i,sX$j,sX$x,sY$i,sY$j,sY$x,1.0)
+    ntr=Matrix::sparseMatrix(i=sX$i, j=sX$j, x=dd,dimnames=dimnames(dd$count))
+  }
+  if (all(c("alpha","beta") %in% Slots(data))) {
+    dd$alpha=GetMatrix(data,mode.slot="alpha",summarize=pooling,name.by="Gene")
+    dd$beta=GetMatrix(data,mode.slot="beta",summarize=pooling,name.by="Gene")
+  }
+
+  cd=data.frame(Name=colnames(pooling))
+  rownames(cd)=colnames(pooling)
+  for (add in setdiff(names(Coldata(data)),"Name")) {
+    col=Coldata(data,add)
+    col=apply(pooling,2,function(cc) {
+      h=unique(col[cc!=0])
+      if (length(h)!=1) h=NA
+      h
+    })
+    if (sum(is.na(col))<length(col)) {
+      cd[[add]]=col
+    }
+  }
+
+  re=grandR(data$prefix,gene.info=data$gene.info,slots=dd,coldata=cd,metadata=data$metadata,analyses=data$analyses)
+  DefaultSlot(re)="count"
+  re
+}
+
+
+
+
+

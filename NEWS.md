@@ -1,3 +1,40 @@
+# grandR 0.2.4
+
+## Shiny improvement
+* If there are global plots, there is now an additional page showing the highlighted genes
+* Defer now allows to specify desired figure width and height
+* Fixed bug that caused all global plots to be executed before rendering the main table
+* Html files that are in the same ordner are linked (under menu Reports)
+* Now multiple tables can be provided (as named list)
+* Additiona, static plots can be shown in floating windows
+
+## Smaller updates
+* fixed subsetting of grandR to only a single column
+* improved handling of factors in coldata during merging
+* Updated ReadGRAND3 to most recent Grand3 version (mode output)
+* Improved ComputeColumnStatistics (percentage calculations)
+* Differential gene expression analysis for a subset of the genes (including normalization to only those genes)
+* FormatCorrelation can add RMSDs
+* Statistics for Plot4sUDropout()
+
+# grandR 0.2.3
+
+## Smaller updates
+* compute.M for LFC
+* size factors to normalize Pairwise, LFC and PairwiseDESeq2
+
+
+# grandR 0.2.2
+
+This is the release of grandR including improvements for the submission of the grand-Correct preprint
+
+## Major updates
+* Enable simulation with non-constant rates
+* 4sU dropout plots and grand-Correct functionality
+
+## Smaller updates
+* Fixed a bug that caused warning messages after loading files.
+
 
 # grandR 0.2.2
 

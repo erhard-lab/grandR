@@ -1,6 +1,5 @@
 
 #' @import stats
-#' @import utils
 #' @import ggplot2
 #' @import patchwork
 NULL
@@ -66,7 +65,7 @@ NULL
 #'   \item{subset}{Create a new grandR object with a subset of the columns (use \code{\link{FilterGenes}} to subset on genes)}
 #'   \item{split}{Split the grandR object into a list of multiple grandR objects (according to the levels of an annotation table column)}
 #'   \item{RenameColumns}{Rename the column names according to a lookup table (map) or a function (invoked on the current names)}
-#'   \item{SwapColumns}{Swap the order of two columns (samples or cells)}
+#'   \item{SwapColumns}{Swap two columns (samples or cells); this is what you do if samples were mislabeled!}
 #'   \item{Metadata}{Obtain global metadata}
 #'   \item{merge}{Merge several grandR objects into one}
 #' }
@@ -217,8 +216,8 @@ subset.grandR=function(x,columns,reorder=TRUE,...) {
     x[ix] <- lapply(x[ix], function(v) factor(v,levels=as.character(unique(v))))
     x
   }
-  data.apply(x,fun=function(m) m[,columns],fun.coldata = function(t){
-    dr(t[columns,])
+  data.apply(x,fun=function(m) m[,columns,drop=FALSE],fun.coldata = function(t){
+    dr(t[columns,,drop=FALSE])
   })
 }
 
@@ -247,6 +246,7 @@ RenameColumns=function(data,map=NULL,fun=NULL) {
 SwapColumns=function(data,s1,s2) {
   i1=if(is.numeric(s1)) s1 else which(rownames(data$coldata)==s1)
   i2=if(is.numeric(s2)) s2 else which(rownames(data$coldata)==s2)
+  if (length(i1)!=1 || length(i2)!=1) stop("Unknown columns!")
   return(data.apply(data,function(t) {
     tmp=t[,i1]
     t[,i1]=t[,i2]
@@ -277,7 +277,9 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
     for (common in intersect(names(re$coldata),names(add$coldata))) {
       if(is.factor(re$coldata[[common]])) {
         r = c(as.character(re$coldata[[common]]),as.character(add$coldata[[common]]))
-        r=factor(r,levels=union(levels(re$coldata[[common]]),levels(add$coldata[[common]])))
+        oll=levels(add$coldata[[common]])
+        if (is.null(oll)) oll = unique(add$coldata[[common]])
+        r=factor(r,levels=union(levels(re$coldata[[common]]),oll))
       } else {
         r = c(re$coldata[[common]],add$coldata[[common]])
       }
@@ -404,7 +406,7 @@ DropSlot=function(data,pattern=NULL) {
 #' @param warn issue a warning if the slot name already exists and is overwritten
 #' @export
 AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
-  if (!is.matrix(matrix)) stop("Must be a matrix!")
+  if (!is.matrix(matrix) & !methods::is(matrix, 'sparseMatrix')) stop("Must be a matrix!")
   if (ncol(matrix)!=ncol(data$data$count)) stop("Number of columns do not match!")
   if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
 
@@ -412,10 +414,10 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
   rownames(matrix)[ind]=Genes(data,genes=ind,use.symbols=FALSE)
   missing=setdiff(rownames(data$data$count),rownames(matrix))
   if (length(missing>0)) {
-    warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(head(missing,5),collapse=",")))
+    warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(utils::head(missing,5),collapse=",")))
     matrix = rbind(matrix,matrix(0,nrow=length(missing),ncol=ncol(matrix),dimnames=list(missing,colnames(matrix))))
   }
-  matrix=matrix[rownames(data$data$count),]
+  matrix=matrix[rownames(data$data$count),,drop = FALSE]
   if (!all(rownames(matrix)==rownames(data$data$count))) stop("Row names do not match!")
 
   if (grepl(".",name,fixed=TRUE)) stop("Name may not contain a dot!")
@@ -563,14 +565,22 @@ GeneInfo=function(data,column=NULL,value=NULL) {
   } else if (is.null(value)) {
     setNames(data$gene.info[[column]],data$gene.info$Symbol)
   } else {
-    data$gene.info[[column]]=value
+    GeneInfo(data,column) <- value
     data
   }
 }
 #' @rdname GeneInfo
 #' @export
 `GeneInfo<-` <- function(data, column, value) {
-  data$gene.info[[column]]=value
+  if (!is.null(value) && length(value)!=nrow(data$gene.info) && length(value)!=1) {
+    nam = ToIndex(data,names(value),remove.missing = FALSE)
+    data$gene.info[,column]=NA
+    data$gene.info[nam[!is.na(nam)],column]=value[names(nam)[!is.na(nam)]]
+    if (sum(is.na(data$gene.info[,column]))>0)  warning(sprintf("Could not find data for some genes (n=%d missing, e.g. %s)!",sum(is.na(data$gene.info[,column])),paste(utils::head(Genes(data)[is.na(data$gene.info[,column])],5),collapse=",")))
+
+  } else {
+    data$gene.info[[column]]=value
+  }
   data
 }
 
@@ -662,14 +672,19 @@ Coldata=function(data,column=NULL,value=NULL) {
   } else if (is.null(value)) {
     setNames(data$coldata[[column]],rownames(data$coldata))
   } else {
-    data$coldata[[column]]=value
+    Coldata(data,column)<-value
     data
   }
 }
 #' @rdname Coldata
 #' @export
 `Coldata<-` <- function(data, column, value) {
-  data$coldata[[column]]=value
+  if (!is.null(value) && length(value)!=nrow(data$coldata) && length(value)!=1) {
+    if (is.null(names(value)) || !all(names(value) %in% rownames(data$coldata))) stop("If the given value does not have the same length as the grandR object columns, names must match!")
+    data$coldata[names(value),column]=value
+  } else {
+    data$coldata[[column]]=value
+  }
   data
 }
 
@@ -739,6 +754,7 @@ get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
 #' @param gene A vector of genes. Can be either numeric indices, gene names, gene symbols or a logical vector
 #' @param regex Treat gene as a regex and return all that match
 #' @param remove.missing if TRUE, do not return missing genes (return NA otherwise)
+#' @param warn if TRUE emit a warning if not all genes are found
 #'
 #' @return Numeric indices corresponding to the given genes
 #'
@@ -753,7 +769,7 @@ get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
 #' @export
 #'
 #' @concept helper
-ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE) {
+ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE,warn=TRUE) {
   if (any(is.na(gene))) {
     warning("There were NA genes, removed!");
     gene=gene[!is.na(gene)]
@@ -771,15 +787,13 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE) {
   col = if (sum(gene %in% data$gene.info$Gene) > sum(gene %in% data$gene.info$Symbol)) "Gene" else "Symbol"
 
   mis=setdiff(gene,data$gene.info[[col]])
-  warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(head(mis,5),collapse=",")))
+  if (warn) warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(utils::head(mis,5),collapse=",")))
   re=setNames(1:nrow(data),data$gene.info[[col]])
   ind=intersect(gene,data$gene.info[[col]])
   if (remove.missing) {
     return(re[ind])
   } else {
-    set.na = setdiff(data$gene.info[[col]], gene)
-    re[set.na] = NA
-    return(re)
+    return(setNames(re[gene],gene))
   }
 }
 
@@ -839,7 +853,7 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE) {
 #'
 #' @concept data
 GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol") {
-
+  if (is.null(genes)) genes=Genes(data)
   genes=ToIndex(data,genes)
 
   mode.slot=check.mode.slot(data,type)
@@ -963,6 +977,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
   columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
   columns=Columns(data,columns)
 
+  if (is.null(genes)) genes=Genes(data)
   genes=ToIndex(data,genes)
 
   tno="t"
@@ -973,6 +988,8 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
   rownames(re)=Genes(data,genes,use.symbols = name.by=="Symbol")
 
   conv=function(v) { mode(v)="integer"; v}
+  round5up = function(x) trunc(x+0.5)
+  round5down = function(x) ceiling(x-0.5)
 
   if (is.matrix(re)) {  # plain old R matrix!
     mf = switch(tolower(substr(tno,1,1)),t=1,n=as.matrix(data$data$ntr[genes,columns,drop=FALSE]),o=1-as.matrix(data$data$ntr[genes,columns,drop=FALSE]),stop(paste0(mode.slot," unknown!")))
@@ -990,7 +1007,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round5up(R[[3]])),dims=dim(re),
                                   dimnames=dimnames(re)))
 
       # all that have zero in ntr matrix will be zero, so this is fine
@@ -1004,7 +1021,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult1m',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round(R[[3]])),dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round5down(R[[3]])),dims=dim(re),
                                   dimnames=dimnames(re)))
 
       #sX <- Matrix::summary(re)
@@ -1023,7 +1040,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       summarize=NULL
     } else {
       if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
-      summarize=summarize[columns,]
+      summarize=summarize[columns,,drop=FALSE]
       summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
     }
 
@@ -1305,6 +1322,7 @@ FindReferences=function(data,reference=NULL, reference.function=NULL,group=NULL,
 #' @param table The analysis table to add
 #' @param by Specify a column that contains gene names or symbols (see details)
 #' @param warn.present Warn if an analysis with the same name is already present (and then overwrite)
+#' @param warn.genes Warn if genes are missing (and then add NA)
 #'
 #' @return Either the analysis names or a grandR data with added/removed slots or the metatable to be used with AddAnalysis
 #'
@@ -1346,7 +1364,7 @@ Analyses=function(data, description=FALSE) {
 
 #' @describeIn Analyses Add an analysis table
 #' @export
-AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE) {
+AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE,warn.genes=TRUE) {
   if (!is.data.frame(table)) stop("Cannot add; analysis table must be a data frame!")
   #if (!equal(Genes(data,rownames(table)),Genes(data))) stop("Analysis table must contain row names corresponding to all genes!")
 
@@ -1356,9 +1374,12 @@ AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE) {
   }
 
   if (!equal(Genes(data,rownames(table)),Genes(data))) {
-      warning("Analysis table and grandR object does not have the same set of genes! Watch out for NA values!")
-    table <- table[Genes(data), ]
-    rownames(table) = Genes(data)
+    if (warn.genes) warning("Analysis table and grandR object do not have the same set of genes! Watch out for NA values!")
+    ntab=table[rep(NA,nrow(data)),,drop=FALSE]
+    rownames(ntab) = Genes(data,use.symbols = FALSE)
+    ind=setNames(1:nrow(ntab),Genes(data,use.symbols = FALSE))
+    ntab[ind[Genes(data,rownames(table),use.symbols = FALSE)],]=table
+    table <- ntab
   }
 
   if (is.null(data$analysis)) data$analysis=list()
@@ -1494,12 +1515,15 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
 #' @param FUN The plotting function to add
 #' @param pattern A regular expression that is matched to plot names
 #' @param gene The gene to plot
+#' @param floating whether or not the plot should be shown as a floating window
 #'
 #' @return Either the plot names or a grandR data with added/removed plots
 #'
 #' @details FUN has to be a function with a single parameter for global plots (i.e., the grandR object) or two parameters for gene plots
 #' (i.e., the grandR object and the gene name). Usually, it is either the name of a plotting function, such as \link{PlotGeneOldVsNew}, or, if it is
 #' necessary to parametrize it, a call to \link{Defer} (which takes care of caching plots without storing an additional copy of the grandR object).
+#'
+#' @details For floating window plots, if names are given in the format <title>.<name>, a plot is created for each <title> with several subplots.
 #'
 #' @describeIn Plots Obtain the plot names
 #' @export
@@ -1522,14 +1546,20 @@ AddGenePlot=function(data,name,FUN) {
   data
 }
 
-#' @describeIn Plots Add a global plot to the the grandR object
+#' @describeIn Plots Add a global plot to the grandR object
 #' @export
-AddGlobalPlot=function(data,name,FUN) {
+AddGlobalPlot=function(data,name,FUN,floating=FALSE) {
   if (!is.function(FUN)) stop("Cannot add; FUN must be a function!")
   if (is.null(data$plots)) data$plots=list()
-  if (is.null(data$plots$global)) data$plots$global=list()
-  if (!is.null(data$plots$global[[name]])) warning(sprintf("Plot %s already present! Overwriting...",name))
-  data$plots$global[[name]]=FUN
+  if (!floating) {
+    if (is.null(data$plots$global)) data$plots$global=list()
+    if (!is.null(data$plots$global[[name]])) warning(sprintf("Plot %s already present! Overwriting...",name))
+    data$plots$global[[name]]=FUN
+  } else {
+    if (is.null(data$plots$floating)) data$plots$floating=list()
+    if (!is.null(data$plots$floating[[name]])) warning(sprintf("Plot %s already present! Overwriting...",name))
+    data$plots$floating[[name]]=FUN
+  }
   data
 }
 
@@ -1548,6 +1578,7 @@ DropPlots=function(data,pattern=NULL) {
   } else {
     if (!is.null(data$plots$gene)) data$plots$gene=data$plots$gene[!grepl(pattern,names(data$plots$gene))]
     if (!is.null(data$plots$global)) data$plots$global=data$plots$global[!grepl(pattern,names(data$plots$global))]
+    if (!is.null(data$plots$floating)) data$plots$floating=data$plots$floating[!grepl(pattern,names(data$plots$floating))]
   }
   data
 }

@@ -70,7 +70,7 @@ check.and.make.unique = function(v,ref=NULL,label="entries",ref.label="reference
   if (any(is.na(v) | v=="")) {
     if (is.null(ref)) stop(sprintf("When %s are empty, %s must be provided!",label,ref.label))
     howmany=if (sum(is.na(v)|v=="")==length(v)) "All" else "Some"
-    fun(sprintf("%s %s are empty (n=%d, e.g. %s), replacing by %s ids!",howmany,label,sum(is.na(v) | v==""),paste(sample(head(ref[is.na(v) | v==""])),collapse=","),ref.label),call. = FALSE,immediate. = TRUE)
+    fun(sprintf("%s %s are empty (n=%d, e.g. %s), replacing by %s ids!",howmany,label,sum(is.na(v) | v==""),paste(sample(utils::head(ref[is.na(v) | v==""])),collapse=","),ref.label),call. = FALSE,immediate. = TRUE)
     v[is.na(v) | v==""]=ref[is.na(v) | v==""]
   }
 
@@ -79,7 +79,7 @@ check.and.make.unique = function(v,ref=NULL,label="entries",ref.label="reference
     if (is.null(ref) || anyDuplicated(ref)) ext = sprintf(" Cannot guarantee maintaining consistency for %s across reading several files, watch out if you merge grandR objects!",label)
     dupp=table(v)
     dupp=names(dupp)[which(dupp>1)]
-    fun(sprintf("Duplicate %s (n=%d, e.g. %s) present, making unique!%s",label,length(dupp),paste(head(sample(dupp)),collapse=","),ext),call. = FALSE,immediate. = TRUE)
+    fun(sprintf("Duplicate %s (n=%d, e.g. %s) present, making unique!%s",label,length(dupp),paste(utils::head(sample(dupp)),collapse=","),ext),call. = FALSE,immediate. = TRUE)
 
     if (!is.null(ref)) {
       df=data.frame(id=1:length(v),v=as.character(v),ref=as.character(ref),stringsAsFactors = FALSE)
@@ -185,10 +185,14 @@ Semantics.time=function(s,name) {
   s=gsub("_",".",s)
 
   h=grepl("[0-9.]+h(p.)?",s)
-  time[h]=as.numeric(gsub("([0-9.]+)h(p.)?","\\1",s[h]))
-
   min=grepl("[0-9.]+min",s)
-  time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))/60
+
+  if (sum(h)>0) {
+    time[h]=as.numeric(gsub("([0-9.]+)h(p.)?","\\1",s[h]))
+    time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))/60
+  } else {
+    time[min]=as.numeric(substr(s[min],1,nchar(s[min])-3))
+  }
 
   nounit=grepl("^[0-9.]+$",s)
   time[nounit]=as.numeric(s[nounit])
@@ -277,7 +281,7 @@ MakeColdata=function(names,design,semantics=DesignSemantics(),rownames=TRUE,keep
   if (any(sapply(spl, length)!=length(design))) stop(paste0("Design parameter is incompatible with input data (e.g., ",paste(coldata$Name[which(sapply(spl, length)!=length(design))[1]]),")"))
 
   str2fac=function(s) if (is.character(s)) factor(s,levels=unique(s)) else s
-  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,str2fac(type.convert(sapply(spl,function(v) v[i]),as.is=TRUE,na.strings=c("DKSALDJLKSADLKSJDLKSJDLJDA")))) # stupid function!
+  for (i in 1:length(design)) if (!is.na(design[i])) coldata=cbind(coldata,str2fac(utils::type.convert(sapply(spl,function(v) v[i]),as.is=TRUE,na.strings=c("DKSALDJLKSADLKSJDLKSJDLJDA")))) # stupid function!
   names(coldata)[-1]=design[!is.na(design)]
   if (rownames) rownames(coldata)=coldata$Name
 
@@ -450,7 +454,7 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
     if (!is.null(url)) {
       file <- tempfile()
       if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
-      download.file(url, file, quiet=!verbose)
+      utils::download.file(url, file, quiet=!verbose)
       prefix=gsub(".tsv(.gz)?$","",url)
       do.callback=function() {
         if (verbose) cat("Deleting temporary file...\n")
@@ -481,11 +485,12 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
 
 
   if (verbose) cat("Reading file...\n")
-  data=read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
+  data=utils::read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
   if (!is.null(filter.table)) data=filter.table(data)
 
   clss=sapply(data,class)
-  firstnumeric=max(which(clss!="numeric"))+1 #min(which(clss=="numeric"))
+  if (is.null(num.samples)) firstnumeric=max(which(clss!="numeric"))+1 #min(which(clss=="numeric"))
+  else firstnumeric = ((ncol(data)-num.samples+1))
   if (!all(clss[firstnumeric:length(clss)]=="numeric") || firstnumeric==1 || firstnumeric>ncol(data)) stop("Columns (except for the first n) must be numeric!")
   anno.names=colnames(data)[1:(firstnumeric-1)]
 
@@ -501,13 +506,21 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   if (!is.null(rename.sample)) colnames(data)[firstnumeric:ncol(data)]=sapply(colnames(data)[firstnumeric:ncol(data)],rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
   coldata=MakeColdata(colnames(data)[firstnumeric:ncol(data)],design)
 
-  data[[1]] = check.and.make.unique(data[[1]],label="names")
-  gene.info = data.frame(Gene=as.character(data[[1]]),Symbol=as.character(data[[1]]),stringsAsFactors=FALSE)
+  if ("Symbol" %in% colnames(data)) {
+    index <- which(colnames(data) == "Symbol")
+  } else if ("Gene" %in% colnames(data)) {
+    index <- which(colnames(data) == "Gene")
+  } else {
+    # If neither "Gene" nor "Symbol" are present, use first column as index
+    index <- 1
+  }
+  data[[index]] = check.and.make.unique(data[[index]],label="names")
+  gene.info = data.frame(Gene=as.character(data[[index]]),Symbol=as.character(data[[index]]),stringsAsFactors=FALSE)
   for (i in 1:(firstnumeric-1)) gene.info[[anno.names[i]]]=data[[i]]
   gene.info$Type=classify.genes(gene.info)
 
   re=list()
-  re$count=tomat(data[,firstnumeric:ncol(data)],data$Gene,names(data)[firstnumeric:ncol(data)])
+  re$count=tomat(data[,firstnumeric:ncol(data)],gene.info$Gene,names(data)[firstnumeric:ncol(data)])
   re$ntr=re$count
   re$ntr[,]=NA
 
@@ -520,6 +533,174 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   re
 }
 
+#' Read featureCounts
+#'
+#' grandR can also be used to analyze standard RNA-seq data, and this function is here to read such data.
+#'
+#' @param file a file containing featureCounts
+#' @param design Either a design vector (see details), or a data.frame providing metadata for all columns (samples/cells),
+#' or a function that is called with the condition name vector and is supposed to return this data.frame.
+#' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{ClassifyGenes}
+#' @param rename.sample function that is applied to each sample name before parsing (or NULL)
+#' @param filter.table function that is applied to the table directly after read it (or NULL)
+#' @param num.samples number of sample columns containing read counts (can be NULL, see details)
+#' @param verbose Print status updates
+#' @param sep The column separator used in the file
+#'
+#' @return a grandR object
+#'
+#' @details The table is assumed to have read counts in the last n columns, which must be named according to sample names.
+#' If num.samples is NULL this n is automatically recognized as the number of columns containing .bam (so make sure to either
+#' specify num.samples, or that the count columns are called after the bam files).
+#'
+#' @details If these columns are named systematically in a particular way, the design vector provides
+#' a powerful and easy way to create the column annotations.
+#'
+#' @details The column names have to contain dots (.) to separate the fields for the column annotation table.
+#' E.g. the name \emph{Mock.4h.A} will be split into the fields \emph{Mock}, \emph{4h} and  \emph{A}.
+#' For such names, a design vector of length 3 has to be given, that describes the meaning of each field.
+#' A reasonable design vector for the example would be \code{c("Treatment","Time","Replicate")}.
+#' Some names are predefined in the list \link{Design}.
+#'
+#' @details The names given in the design vector might even have additional semantics:
+#' E.g. for the name \emph{duration.4sU} the values are interpreted (e.g. 4h is converted into the number 4,
+#' or 30min into 0.5, or no4sU into 0). Semantics can be user-defined by calling \code{\link{MakeColdata}}
+#' and using the return value as the design parameter, or a function that calls MakeColdata.
+#' In most cases it is easier to manipulate the \code{\link{Coldata}} table after loading data instead of using this mechanism;
+#' the build-in semantics simply provide a convenient way to reduce this kind of manipulation in most cases.
+#'
+#' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
+#' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
+#'
+#' @details Sometimes the table contains more than you want to read. In this case, use the filter.table parameter to preprocess it.
+#' This should be a function that receives a data.frame, and returns a data.frame.
+#'
+#' @details If there are no columns named "Geneid", "Gene" or "Symbol", the first column is used!
+#'
+#' @export
+#'
+#' @concept load
+ReadFeatureCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.genes=ClassifyGenes(),rename.sample=NULL,filter.table=NULL, num.samples=NULL,
+                           verbose=FALSE,sep="\t") {
+
+  tomat=function(m,names,cnames){
+    m=as.matrix(m)
+    m[is.na(m)]=0
+    colnames(m)=gsub(" .*","",cnames)
+    rownames(m)=names
+    m
+  }
+
+  checknames=function(a,b){
+    if (nrow(a)!=nrow(b)) stop("Number of rows do not match!")
+    if (ncol(a)!=ncol(b)) stop("Number of columns do not match!")
+    if (!all(colnames(a)==colnames(b))) stop("Column names do not match!")
+    if (!all(rownames(a)==rownames(b))) stop("Row names do not match!")
+
+  }
+  do.callback=function() {}
+
+  prefix=file
+  url=NULL
+
+
+  if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
+    if (RCurl::url.exists(prefix)) {
+      url=prefix
+    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
+      url=paste0(prefix,".tsv")
+    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
+      url=paste0(prefix,".tsv.gz")
+    } else {
+      url=NULL
+    }
+    if (!is.null(url)) {
+      file <- tempfile()
+      if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
+      utils::download.file(url, file, quiet=!verbose)
+      prefix=gsub(".tsv(.gz)?$","",url)
+      do.callback=function() {
+        if (verbose) cat("Deleting temporary file...\n")
+        unlink(file)
+      }
+    }
+  }
+
+  if (is.null(url)) {
+    file=if (file.exists(prefix)) prefix else paste0(prefix,".tsv")
+    if (!file.exists(file) && file.exists(paste0(file,".gz"))) file = paste0(file,".gz")
+    prefix=gsub(".tsv(.gz)?$","",file)
+  }
+
+  if (!file.exists(file)) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
+
+
+  if (verbose) cat("Checking file...\n")
+  con <- file(file,"r")
+  header <- strsplit(readLines(con,n=2),sep)[[2]]
+  close(con)
+
+
+  conds=header[length(header)]
+  if (!is.null(rename.sample)) conds=rename.sample(conds)
+  terms=strsplit(conds,".",fixed=TRUE)[[1]]
+
+  if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
+
+
+  if (verbose) cat("Reading file...\n")
+  data=utils::read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
+  if (!is.null(filter.table)) data=filter.table(data)
+
+
+
+  clss=sapply(data,class)
+  if (is.null(num.samples)) firstsample = which(grepl(".bam", colnames(data)), arr.ind=TRUE)[1]
+  else firstsample = (ncol(data)-num.samples+1)
+  anno.names=colnames(data)[firstsample:ncol(data)]
+
+
+  #if (anyDuplicated(data[[1]])) {
+  #  dupp=table(data[[1]])
+  #  dupp=names(dupp)[which(dupp>1)]
+  #  warning(sprintf("Duplicate names (e.g. %s) present, making unique!",paste(head(dupp),collapse=",")),call. = FALSE,immediate. = TRUE)
+  #  data[[1]]=make.unique(data[[1]])
+  #}
+
+  if (verbose) cat("Processing...\n")
+
+  if (!is.null(rename.sample)) colnames(data)[firstsample:ncol(data)]=sapply(colnames(data)[firstsample:ncol(data)],rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
+  coldata=MakeColdata(colnames(data)[firstsample:ncol(data)],design)
+
+  if ("Symbol" %in% colnames(data)) {
+    index <- which(colnames(data) == "Symbol")
+  }
+  if ("Geneid" %in% colnames(data)) {
+    index <- which(colnames(data) == "Geneid")
+  }else if ("Gene" %in% colnames(data)) {
+    index <- which(colnames(data) == "Gene")
+  } else {
+    # If neither "Gene" nor "Symbol" are present, use first column as index
+    index <- 1
+  }
+  data[[index]] = check.and.make.unique(data[[index]],label="names")
+  gene.info = data.frame(Gene=as.character(data[[index]]),Symbol=as.character(data[[index]]),stringsAsFactors=FALSE)
+  for (i in 1:(firstsample-1)) gene.info[[anno.names[i]]]=data[[i]]
+  gene.info$Type=classify.genes(gene.info)
+
+  re=list()
+  re$count=tomat(data[,firstsample:ncol(data)],data$Gene,names(data)[firstsample:ncol(data)])
+  re$ntr=re$count
+  re$ntr[,]=NA
+
+  coldata$no4sU=TRUE
+  do.callback()
+
+  # insert name no rep and set this as default condition, if there is no condition field!
+  re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(Description="Count data"))
+  DefaultSlot(re)="count"
+  re
+}
 
 GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
   ll=try.file(paste0(data$prefix,".",name),possible.suffixes = c(".tsv.gz",".tsv",""),stop.if.not.exist=stop.if.not.exist)
@@ -642,7 +823,7 @@ ReadGRAND3_sparse=function(prefix,
 
   if (verbose) cat("Reading count matrix...\n")
   count=Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz"))
-  gene.info=read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
+  gene.info=utils::read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
   if (ncol(gene.info)==4) gene.info$Length=1
   gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
 
@@ -696,8 +877,10 @@ ReadGRAND3_sparse=function(prefix,
     rownames(beta)=gene.info$Gene
     re$beta=beta
   }
-  gene.info$Mode=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
-  gene.info$Mode=factor(gene.info$Mode,levels=unique(gene.info$Mode))
+  if (is.null(gene.info$Mode)) {
+    gene.info$Mode=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
+    gene.info$Mode=factor(gene.info$Mode,levels=unique(gene.info$Mode))
+  }
 
   gene.info$Type=classify.genes(gene.info)
 
@@ -770,9 +953,9 @@ ReadNewTotal=function(genes, cells, new.matrix, total.matrix, detection.rate=1,v
 
   callbacks=list(genes$callback,cells$callback,new.matrix$callback,total.matrix$callback)
 
-  cols=read.csv(cells$file,check.names = FALSE,stringsAsFactors = FALSE)
+  cols=utils::read.csv(cells$file,check.names = FALSE,stringsAsFactors = FALSE)
   rownames(cols)=cols[,1]
-  gene.info=setNames(read.csv(genes$file,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
+  gene.info=setNames(utils::read.csv(genes$file,check.names = FALSE,stringsAsFactors = FALSE),c("Gene","Biotype","Symbol"))
 
   if (verbose) cat("Reading total count matrix...\n")
   count=Matrix::readMM(total.matrix$file)
@@ -839,7 +1022,7 @@ try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/da
       file <- tempfile(pattern = fn1,fileext = ext)
 
       if (verbose) cat(sprintf("Downloading file (url: %s, destination: %s) ...\n",url,file))
-      download.file(url, file, quiet=!verbose)
+      utils::download.file(url, file, quiet=!verbose)
       do.callback=function() {
         if (verbose) cat("Deleting temporary file...\n")
         unlink(file)
@@ -887,7 +1070,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   #   if (!is.null(url)) {
   #     file <- tempfile()
   #     if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
-  #     download.file(url, file, quiet=!verbose)
+  #     utils::download.file(url, file, quiet=!verbose)
   #     prefix=gsub(".tsv(.gz)?$","",url)
   #     do.callback=function() {
   #       if (verbose) cat("Deleting temporary file...\n")

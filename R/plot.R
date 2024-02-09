@@ -191,12 +191,19 @@ make.continuous.colors=function(values,colors=NULL,breaks=NULL) {
     if (is.null(colors)) colors="YlOrRd"
   }
 
-  if (length(colors)==1) checkPackages(c("RColorBrewer","viridisLite"))
-
-  if (length(colors)==1 && colors %in% rownames(RColorBrewer::brewer.pal.info)) {
-    colors = RColorBrewer::brewer.pal(length(breaks),colors)
-  } else if (length(colors)==1) {
-    colors = viridisLite::viridis(length(breaks),option = colors)
+  if (length(colors)==1)  {
+    checkPackages(c("RColorBrewer","viridisLite"))
+    rev = FALSE
+    if (substr(colors,1,3)=='rev') {
+      rev = TRUE
+      colors = substr(colors,4,nchar(colors))
+    }
+    if (colors %in% rownames(RColorBrewer::brewer.pal.info)) {
+      colors = RColorBrewer::brewer.pal(length(breaks),colors)
+    } else  {
+      colors = viridisLite::viridis(length(breaks),option = colors)
+    }
+    if (rev) colors=rev(colors)
   }
   list(breaks = breaks,colors=colors)
 }
@@ -341,8 +348,12 @@ PlotHeatmap=function(data,
 #' @param n.format format string for the number of data points (see \link{sprintf}); can be NULL (don't output the number of data points)
 #' @param coeff.format format string for the correlation coefficient (see \link{sprintf}); can be NULL (don't output the correlation coefficient)
 #' @param p.format  format string for the P value (see \link{sprintf}); can be NULL (don't output the P value)
+#' @param slope.format format string for the slope (see \link{sprintf}); can be NULL (don't output the slope)
+#' @param rmsd.format format string for the root mean square deviation (see \link{sprintf}); can be NULL (don't output the rmsd)
 #'
 #' @details Use this for the \code{correlation} parameter of \link{PlotScatter}
+#'
+#' @details The slope is computed via a principal component analysis and *not* by linear regression
 #'
 #' @return a function
 #' @export
@@ -361,7 +372,7 @@ PlotHeatmap=function(data,
 #' fun(data$x,data$y)
 #'
 #' @concept globalplot
-FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g") {
+FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g",slope.format=NULL,rmsd.format=NULL) {
   function(x,y) {
     if (length(x)!=length(y)) stop("Cannot compute correlation, unequal lengths!")
     use=is.finite(x)&is.finite(y)
@@ -373,7 +384,14 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
     formatted.n=if (!is.null(n.format)) sprintf(sprintf("n=%s",n.format),length(x))
     formatted.p=if (!is.null(p.format)) sprintf(sprintf("p%s%s",if (cc$p.value<2.2e-16) "<" else "=",p.format),if (cc$p.value<2.2e-16) 2.2e-16 else cc$p.value)
     formatted.coeff=if (!is.null(coeff.format)) sprintf(sprintf("%s=%s",p.name,coeff.format),cc$estimate)
-    paste(c(formatted.n,formatted.coeff,formatted.p),collapse="\n")
+    formatted.slope=if (!is.null(slope.format)) {
+      pca=prcomp(cbind(x,y))$rotation[,1]
+      sprintf(sprintf("s=%s",slope.format),pca[2]/pca[1])
+    }
+    formatted.rmsd=if (!is.null(rmsd.format)) {
+      sprintf(sprintf("rmsd=%s",rmsd.format),sqrt(mean((x-y)^2)))
+    }
+    paste(c(formatted.n,formatted.coeff,formatted.p,formatted.slope,formatted.rmsd),collapse="\n")
   }
 }
 
@@ -391,15 +409,20 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param xlab the label for x (can be NULL, then the x parameter is used)
 #' @param ylab the label for y (can be NULL, then the y parameter is used)
 #' @param log if TRUE, use log scales for x and y axis
-#' @param log.x  if TRUE, use log scale for the x axis
-#' @param log.y  if TRUE, use log scale for the y axis
+#' @param log.x if TRUE, use log scale for the x axis
+#' @param log.y if TRUE, use log scale for the y axis
+#' @param axis if FALSE, don't show x and y axes
+#' @param axis.x if FALSE, don't show the x axis
+#' @param axis.y if FALSE, don't show the y axis
 #' @param remove.outlier configure how outliers are selected (is the coef parameter to \link[grDevices]{boxplot.stats}); can be FALSE, in which case no points are considered outliers (see details)
+#' @param show.outlier if TRUE, show outlier as gray points at the border of the plotting plane
 #' @param lim define the both x and y axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param xlim define the x axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param ylim define the y axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param size the point size to use
 #' @param cross add horizontal and vertical lines through the origin?
 #' @param diag if TRUE, add main diagonal; if numeric vector, add these diagonals
+#' @param filter restrict to these rows; is evaluated for the data frame, and should result in a logical vector
 #' @param genes restrict to these genes; can be either numeric indices, gene names, gene symbols or a logical vector
 #' @param highlight highlight these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
 #' @param label label these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
@@ -407,6 +430,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param facet an expression (evaluated in the same environment as x and y); for each unique value a panel (facet) is created; can be NULL
 #' @param color either NULL (use point density colors), or a name of the \link{GeneInfo} table (use scale_color_xxx to define colors), or a color for all points
 #' @param colorpalette either NULL (use default colors), or a palette name from color brewer or viridis
+#' @param color.label the label for the color legend
 #' @param density.margin for density colors, one of 'n','x' or 'y'; should the density be computed along both axes ('n'), or along 'x' or 'y' axis only
 #' @param density.n how many bins to use for density calculation (see \link[MASS]{kde2d})
 #' @param rasterize use ggrastr to rasterize points? (can be NULL, see details)
@@ -449,25 +473,36 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 PlotScatter=function(data,
                      x=NULL, y=NULL, analysis=NULL,xcol=NULL,ycol=NULL, xlab=NULL, ylab=NULL,
                      log=FALSE, log.x=log, log.y=log,
-                     remove.outlier=1.5, lim=NULL,xlim=lim, ylim=lim,
+                     axis=TRUE, axis.x=axis, axis.y=axis,
+                     remove.outlier=1.5, show.outlier=TRUE,lim=NULL,xlim=lim, ylim=lim,
                      size=0.3,
                      cross=NULL,diag=NULL,
+                     filter=NULL,
                      genes=NULL,highlight=NULL, label=NULL, label.repel=1,
                      facet=NULL,
-                     color=NULL, colorpalette=NULL,
+                     color=NULL, colorpalette=NULL, color.label=NULL,
                      density.margin = 'n', density.n = 100,
                      rasterize=NULL,
                      correlation=NULL,correlation.x=-Inf,correlation.y=Inf,correlation.hjust=0.5,correlation.vjust=0.5,
                      layers.below=NULL) {
   if (is.grandR(data)) {
-    if (!is.null(analysis) || IsSparse(data)) {
+    if (!is.null(analysis)) {
       df=cbind(GetAnalysisTable(data,analyses = analysis,regex=FALSE,prefix.by.analysis = FALSE,gene.info = FALSE),GeneInfo(data))
+    }else if (IsSparse(data)) {
+      df=GetAnalysisTable(data)
     }else{
       df=cbind(GetAnalysisTable(data,gene.info = FALSE),GetTable(data,type=DefaultSlot(data)),GeneInfo(data))
     }
-    if (!is.null(genes)) df=df[ToIndex(data,genes),]
+  if (!is.null(genes)) df=df[ToIndex(data,genes),]
   } else {
     df=as.data.frame(data)
+  }
+
+
+  filter=substitute(filter)
+  if (!is.null(filter)) {
+    filter = eval(filter,df,parent.frame())
+    df=df[filter,]
   }
 
   facet=substitute(facet)
@@ -557,11 +592,16 @@ PlotScatter=function(data,
     }
     if (is.null(xlim)) xlim=range(df$A[is.finite(df$A)])
     if (is.null(ylim)) ylim=range(df$B[is.finite(df$B)])
+
     clip=function(v,ch,lim,minus) ifelse(!is.finite(v),v,ifelse(ch<lim[1],minus,ifelse(ch>lim[2],Inf,v)))
     df$A.trans=clip(df$A.trans,df$A,xlim,-Inf)
     df$B.trans=clip(df$B.trans,df$B,ylim,-Inf)
     df$A=clip(df$A,df$A,xlim,if (log.x) 0 else -Inf)
     df$B=clip(df$B,df$B,ylim,if (log.y) 0 else -Inf)
+    if (!show.outlier) {
+      use = is.finite(df$A) & is.finite(df$B)
+      df=df[use,]
+    }
   }
   else {
     xlim=range(df$A[!is.infinite(df$A)])
@@ -593,18 +633,12 @@ PlotScatter=function(data,
     if (is.character(df$color)) {
       colorscale=scale_color_identity(guide="none")
     } else if (is.factor(df$color)) {
-      colorscale=scale_color_discrete(deparse(color))
+      colorscale=if (!is.null(colorpalette)) scale_color_manual(color.label,values = colorpalette, guide=guide_legend(override.aes = list(size = 2))) else scale_color_discrete(color.label, guide=guide_legend(override.aes = list(size = 2)))
     } else {
       col=make.continuous.colors(values = df$color,colors=colorpalette)
       df$color=pmin(pmax(df$color,min(col$breaks)),max(col$breaks))
-      colorscale = scale_color_gradientn(deparse(color),colors=col$colors[c(1,3,5)],breaks=scales::breaks_pretty(n=5)(df$color),limits=col$breaks[c(1,5)])
+      colorscale = scale_color_gradientn(color.label,colors=col$colors[c(1,3,5)],breaks=scales::breaks_pretty(n=5)(df$color),limits=col$breaks[c(1,5)])
     }
-  }
-
-  point.fun=function(...) geom_point(...)
-  if ((is.null(rasterize) && nrow(df)>1000) || rlang::is_true(rasterize)) {
-    checkPackages("ggrastr")
-    point.fun=function(...) ggrastr::geom_point_rast(...)
   }
 
   g=ggplot(df,aes(A,B,color=color))+cowplot::theme_cowplot()
@@ -615,12 +649,17 @@ PlotScatter=function(data,
   }
 
   if (!is.null(layers.below)) for (e in layers.below) g=g+e
-  g=g+
-    point.fun(size=size)+
-    xlab(xlab)+ylab(ylab)
+
+  if ((is.null(rasterize) && nrow(df)>1000) || rlang::is_true(rasterize)) {
+    checkPackages("ggrastr")
+    g=g+ggrastr::rasterize(geom_point(size=size))
+  } else {
+    g=g+geom_point(size=size)
+  }
+
+  g=g+xlab(xlab)+ylab(ylab)
 
   if (!is.null(df$facet)) g=g+facet_wrap(~facet)
-
   if (!is.null(colorscale)) g=g+colorscale
 
   if (!is.null(highlight)) {
@@ -664,6 +703,22 @@ PlotScatter=function(data,
   if (set.coord) g=g+coord_cartesian(ylim=ylim,xlim=xlim)
   if (log.x) g=g+scale_x_log10()
   if (log.y) g=g+scale_y_log10()
+
+  if (!axis.x) {
+    g=g+theme(
+      axis.line.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+      axis.ticks.x = ggplot2::element_blank()
+    )
+  }
+
+  if (!axis.y) {
+    g=g+theme(
+      axis.line.y = ggplot2::element_blank(),
+      axis.text.y = ggplot2::element_blank(),
+      axis.ticks.y = ggplot2::element_blank()
+    )
+  }
 
   attr(g, 'df') <- adaptInf(df,xlim,ylim)
   g
@@ -800,6 +855,7 @@ MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("M|LFC|Q"),gene.info = FALSE)
   if (is.numeric(analysis)) analysis=Analyses(data)[analysis]
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",gsub(".*.M","M",names(df))))
+  if (is.null(df$Q)) df$Q=1
   aes=utils::modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
   g=ggplot(df,mapping=aes)+
     cowplot::theme_cowplot()+

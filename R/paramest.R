@@ -195,6 +195,12 @@ n.vector=function(n,c) {
 	re
 }
 
+MixMatrixToBernoulli=function(mixmat) {
+  conversions = sum(rowSums(mixmat)*GetMixMatk(mixmat))
+  sites = sum(colSums(mixmat)*GetMixMatn(mixmat))
+  matrix2MixMatrix(rbind(sites-conversions,conversions),1,c(0,1))
+}
+
 DropoutMixMatrix=function(mixmat,dropout=c(1,0.97,0.95,0.8,0.7,0.55,0.4,0.3,0.25,0.2,0.15,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1)) {
   mixmat[,]=apply(mixmat,2,function(v) rbinom(length(v),size=v,prob=dropout[1:length(v)]))
   mixmat
@@ -377,6 +383,19 @@ fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE)
   optfun=function(p) logLik_MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
   start=optfun(par$ntr)
   opt=optimize(optfun,maximum=TRUE,lower=0,upper=1)
+
+  ll_0 <- optfun(0)
+  ll_1 <- optfun(1)
+
+  if (ll_0 > opt$objective) {
+    opt$maximum <- 0
+    opt$objective <- ll_0
+  }
+  else if (ll_1 > opt$objective) {
+    opt$maximum <- 1
+    opt$objective <- ll_1
+  }
+
   if (!beta.approx) {
     return(if (conversion.reads) c(ntr=opt$maximum,conversion.reads=sum(mixmat)-sum(mixmat[0,])) else opt$maximum)
   }

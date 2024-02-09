@@ -41,8 +41,8 @@ Findno4sUPairs=function(data, paired.replicates=FALSE,discard.no4sU=TRUE) {
 Make4sUDropoutTable=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],transform=rank,ntr=w4sU,LFC.fun=lfc::PsiLFC,slot="count",rm.all.zero=TRUE,correction=1,...) {
   w=rowMeans(GetTable(data,type=slot,columns=w4sU))
   col=no4sU
-  n=if (is.numeric(no4sU)) no4sU[data$gene.info$Gene] else rowMeans(GetTable(data,type=slot,columns=col))
-  ntr=apply(GetTable(data,"ntr",columns=ntr),1,mean,rm.na=TRUE)
+  n=if (is.numeric(no4sU)) no4sU else rowMeans(GetTable(data,type=slot,columns=col))
+  ntr=if (is.numeric(ntr)) ntr else apply(GetTable(data,"ntr",columns=ntr),1,mean,rm.na=TRUE)
   use=!is.na(w+n+ntr)
   w=w[use]
   n=n[use]
@@ -228,7 +228,6 @@ Correct4sUDropoutHLSpline=function(data,pairs=Findno4sUPairs(data),spline.df=15)
   data
 }
 
-
 #' Estimate 4sU dropout percentages
 #'
 #' For several potential reasons, a sample specific percentage of reads from labelled RNA might be lost.
@@ -342,6 +341,7 @@ Estimate4sUDropoutPercentageForSample = function(data,w4sU,no4sU,ntr=w4sU,LFC.fu
 #' @param size the point size
 #' @param hl if NULL, compute half-lives from the ntr column; otherwise, must be a vector containing half-lives
 #' @param invert.ranks if TRUE, left to right on the plot is largest NTR to smallest NTR
+#' @param color.by.ntr if true, compute the density colors along the ntr axis instead of globally
 #' @param ... further arguments to be passed to or from other methods.
 #'
 #' @details The deferred versions are useful to be used in conjunction with \link{ServeGrandR} plot.static. Their implementation
@@ -396,20 +396,22 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
   }
   rho=round(cor(df$covar,df$lfc,method="spearman"),digits = 2)
   p=cor.test(df$covar,df$lfc,method="spearman")$p.value
-  p=if (p<2.2E-16) p = bquote("<"~2.2 %*% 10^-16) else p = sprintf("= %.2g",p)
+  p=bquote.pval(p)
   df$lfc=ifelse(df$lfc<ylim[1],-Inf,df$lfc)
   df$lfc=ifelse(df$lfc>ylim[2],+Inf,df$lfc)
 
-  pfun=if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
+  pointslayer=ggplot2::geom_point(alpha=1,size=size)
+  if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
     singleMessage("Install the ggrastr package to get rasterized dropout plots!")
-    ggplot2::geom_point
-  } else ggrastr::geom_point_rast
+  } else {
+    pointslayer = ggrastr::rasterize(pointslayer)
+  }
 
 
   re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = 'x')))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide='none')+
-    pfun(alpha=1,size=size)+
+    pointslayer+
     geom_hline(yintercept=0)+
     #geom_smooth(method="loess",formula=y~x)+
     xlab("NTR rank")+ylab("log FC 4sU/no4sU")+
@@ -419,46 +421,59 @@ Plot4sUDropoutRank=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4s
 
   if (!is.na(boxplot.bins) && boxplot.bins>1) {
     bin=max(df$covar)/boxplot.bins
-    df$cat=floor((df$covar-1)/bin)*bin+bin/2
+    df$cat=floor(pmax(df$covar-1,0)/bin)*bin+bin/2
     pp=kruskal.test(lfc~cat,data=df)$p.value
-    pp=if (pp<2.2E-16) pp = bquote("<"~2.2 %*% 10^-16) else pp = sprintf("= %.2g",pp)
+    pp=bquote.pval(pp)
     re=re+
       geom_boxplot(data=df,mapping=aes(x=cat,color=NULL,group=factor(cat)),color="black",fill=NA,outlier.shape = NA,size=1)
-    lab=bquote(rho == .(rho) * "," ~ p ~ .(p) * ", Kruskall-Wallis" ~ p ~ .(pp))
+    lab=bquote(rho == .(rho) * "," ~ .(p) * ", Kruskall-Wallis" ~ .(pp))
   }
 
   re=re+ggtitle(title,subtitle = if (label.corr) lab)
 
-  if (return.corr) list(plot=re,label=lab) else re
+  if (return.corr) list(plot=re,label=lab,df=df) else re
 }
 
 #' @rdname dropout
 #' @export
-Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,title=w4sU,size=1.5) {
+Plot4sUDropout=function(data,w4sU,no4sU=Findno4sUPairs(data)[[w4sU]],ntr=w4sU,ylim=NULL,LFC.fun=lfc::PsiLFC,slot="count",hl.quantile=0.8,hl=NULL,correction=1,label.corr=FALSE,return.corr=FALSE,title=w4sU,size=1.5,color.by.ntr=FALSE) {
   # R CMD check guard for non-standard evaluation
   covar <- lfc <- NULL
 
-  time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[ntr,Design$dur.4sU] else 1
+  time=if(Design$dur.4sU %in% names(data$coldata)) data$coldata[if (is.numeric(ntr)) w4sU else ntr,Design$dur.4sU] else 1
   df=Make4sUDropoutTable(data=data,w4sU=w4sU,no4sU=no4sU,transform=function(x) comp.hl(x,time=time),ntr=ntr,LFC.fun=LFC.fun,slot=slot,correction=correction)
   if (is.null(hl)) hl=quantile(df$covar[is.finite(df$covar)],hl.quantile)
+  if (sum(df$covar<hl & df$ntr<1 & df$ntr>0)<nrow(df)) warning(sprintf("Removed %d genes!",nrow(df)-sum(df$covar<hl & df$ntr<1 & df$ntr>0)))
   df=df[df$covar<hl & df$ntr<1 & df$ntr>0,]
   if (is.null(ylim)) {
     d=max(abs(quantile(df$lfc[is.finite(df$lfc)],c(0.01,0.99))))*1.5
     ylim=c(-d,d)
   }
 
-  pfun=if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
+  pointslayer=ggplot2::geom_point(alpha=1,size=size)
+  if (!checkPackages("ggrastr",error = FALSE,warn = FALSE)) {
     singleMessage("Install the ggrastr package to get rasterized dropout plots!")
-    ggplot2::geom_point
-  } else ggrastr::geom_point_rast
-
-  ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100)))+
+  } else {
+    pointslayer = ggrastr::rasterize(pointslayer)
+  }
+  re=ggplot(df,aes(covar,lfc,color=density2d(covar, lfc, n = 100,margin = if (color.by.ntr) 'x' else 'n')))+
     cowplot::theme_cowplot()+
     scale_color_viridis_c(name = "Density",guide="none")+
-    pfun(alpha=1,size=size)+
+    pointslayer+
     geom_hline(yintercept=0)+
     geom_smooth(method="loess",color='red')+
     xlab("RNA half-life [h]")+ylab("log FC 4sU/no4sU")+
-    coord_cartesian(ylim=ylim)+
-    ggtitle(title)
+    coord_cartesian(ylim=ylim)
+
+
+
+  re=re+ggtitle(title,subtitle = if (label.corr) {
+    rho=round(cor(df$covar,df$lfc,method="spearman"),digits = 2)
+    p=cor.test(df$covar,df$lfc,method="spearman")$p.value
+    p=bquote.pval(p)
+    lab=bquote(rho == .(rho) ~ "," ~ .(p))
+    lab
+    })
+
+  if (return.corr) list(plot=re,label=lab,df=df) else re
 }

@@ -6,7 +6,7 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
     if (requireNamespace("data.table",quietly = TRUE) && !grepl("\\.gz$",file)) {
       as.data.frame(data.table::fread(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,data.table = FALSE,...))
     } else {
-      read.delim(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,...)
+      utils::read.delim(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,...)
     }
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
@@ -15,7 +15,7 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
     ext=substr(fn,nchar(fn1)+1,nchar(fn))
     file <- tempfile(pattern = fn1,fileext = ext)
     if (verbose) cat(sprintf("Downloading file to %s...\n",file))
-    download.file(t, file, quiet=!verbose)
+    utils::download.file(t, file, quiet=!verbose)
     if (verbose) cat("Reading file...\n")
     t=readit(file,...)
     if (verbose) cat("Deleting temporary file...\n")
@@ -42,6 +42,17 @@ confint.nls.lm=function (object, parm, level = 0.95, ...)
   m2[parm, ]
 }
 
+bquote.pval = function(p, digits = 2) {
+  if (p<2.2E-16) bquote("p"~"<"~2.2 %*% 10^-16) else {
+    s = sprintf("%.2g",p)
+    if (grepl("e",s)) {
+      s = gsub("e-0+","e-",s)
+      v=as.numeric(strsplit(s,"e")[[1]])
+      bquote("p"~"="~ .(v[1]) %*% 10^.(v[2]))
+    } else bquote("p"~"="~ .(s))
+  }
+}
+
 equal = function(a,b) length(a)==length(b) && all(a==b)
 
 #' Defer calling a function
@@ -55,6 +66,7 @@ equal = function(a,b) length(a)==length(b) && all(a==b)
 #' @param ... additional parameters to be used when the deferred function is called
 #' @param add list containing additional elements to be added \code{+} to the result of the deferred function
 #' @param cache use caching mechanism
+#' @param width.height a vector containing the desired width and height (not checked!)
 #'
 #' @return a function that can be called
 #' @export
@@ -83,10 +95,10 @@ equal = function(a,b) length(a)==length(b) && all(a==b)
 #' f1(4) # these are equal, as the result of rnorm is cached
 #'
 #' @concept helper
-Defer=function(FUN,...,add=NULL, cache=TRUE) {
+Defer=function(FUN,...,add=NULL, cache=TRUE,width.height=NULL) {
   param=list(...)
   value=NULL
-  function(data,...) {
+  re=function(data,...) {
     pp=list(...)
     if (length(pp)>0) {
       re=do.call(FUN,c(list(data),utils::modifyList(param,pp)))
@@ -100,6 +112,11 @@ Defer=function(FUN,...,add=NULL, cache=TRUE) {
     }
     value
   }
+  if (!is.null(width.height)) {
+    attr(re,"width")=width.height[1]
+    attr(re,"height")=width.height[2]
+  }
+  re
 }
 
 

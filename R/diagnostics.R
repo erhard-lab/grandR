@@ -226,10 +226,10 @@ PlotConversionFreq=function(data,category,sample=NULL,max.columns=120) {
 
   if (is.null(category)) stop("No category defined; see GetDiagnosticParameters(data)$category for choices!")
   tab=GetTableQC(data,"conversion.freq")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   subr=GetTableQC(data,"subread")
   subr$Semantic=factor(as.character(subr$Semantic),levels=subr$Semantic)
   tab=merge(tab,subr,by="Subread")
-
 
   tab=tab[tab$Category==category,]
 	ncond=nrow(tab)/nrow(unique(data.frame(tab$Genomic,tab$Read,tab$Semantic)))
@@ -289,6 +289,7 @@ PlotModelNtr=function(data,label="4sU",estimator="Separate",model="Binom") {
   Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
 
   tab=tab[tab$Label==label & tab$Estimator==estimator,]
 
@@ -350,6 +351,7 @@ PlotModelConv=function(data,label="4sU",estimator="Separate",model="Binom") {
   Type <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   cond=unique(tab$Condition)
   ncond=length(cond)
 
@@ -426,6 +428,7 @@ PlotModelErr=function(data,label="4sU",estimator="Separate",model="Binom") {
   Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   cond=unique(tab$Condition)
   ncond=length(cond)
 
@@ -473,6 +476,7 @@ PlotModelShape=function(data,label="4sU",estimator="Separate") {
   `TB-Binom shape` <- Subread <- `Lower TB-Binom shape` <- `Upper TB-Binom shape` <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   cond=unique(tab$Condition)
   ncond=length(cond)
 
@@ -512,6 +516,7 @@ PlotModelLabelTimeCourse=function(data,label="4sU",estimator="Separate") {
   Time <- `Labeling efficiency` <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   e=GetTableQC(data,"experimentalDesign")
   cond=unique(tab$Condition)
   ncond=length(cond)
@@ -563,6 +568,7 @@ PlotModelCompareErrPrior=function(data,label="4sU",estimator="Separate",model="B
   `Lower prior p.err` <- `Upper prior p.err` <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   cond=unique(tab$Condition)
   ncond=length(cond)
 
@@ -602,6 +608,7 @@ PlotModelCompareNtr=function(data,label="4sU",estimator="Separate") {
   `Binom ntr` <- `TB-Binom ntr` <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   cond=unique(tab$Condition)
   ncond=length(cond)
   tab=tab[tab$Label==label & tab$Estimator==estimator,]
@@ -635,6 +642,7 @@ PlotModelCompareErr=function(data,label="4sU",estimator="Separate") {
   `Binom p.err` <- `TB-Binom p.err` <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   cond=unique(tab$Condition)
   ncond=length(cond)
   tab=tab[tab$Label==label & tab$Estimator==estimator,]
@@ -669,6 +677,7 @@ PlotModelCompareConv=function(data,label="4sU",estimator="Separate") {
   `Binom p.conv` <- `TB-Binom p.err` <- `TB-Binom p.mconv` <- `TB-Binom shape` <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   cond=unique(tab$Condition)
   ncond=length(cond)
   tab=tab[tab$Label==label & tab$Estimator==estimator,]
@@ -701,6 +710,7 @@ PlotModelCompareLL=function(data,label="4sU",estimator="Separate") {
   `Binom log likelihood` <- `TB-Binom log likelihood` <- Subread <- NULL
 
   tab=GetTableQC(data,"model.parameters")
+  tab$Condition=factor(tab$Condition,levels=unique(tab$Condition))
   cond=unique(tab$Condition)
   ncond=length(cond)
   tab=tab[tab$Label==label & tab$Estimator==estimator,]

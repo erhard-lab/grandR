@@ -1220,6 +1220,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
   }
 
   if (is.null(conditions)) conditions=levels(Condition(data))
+  original.dispersion = dispersion
 
   for (n in conditions) {
     if (verbose) cat(sprintf("Computing snapshot kinetics for %s...\n",n))
@@ -1228,7 +1229,7 @@ FitKineticsSnapshot=function(data,name.prefix="Kinetics",reference.columns=NULL,
     if (is.null(reference.columns)) ss=A
     if (is.matrix(reference.columns)) ss=apply(reference.columns[,Columns(data,A),drop=FALSE]==1,1,any)
     if (length(Columns(data,ss))==0) stop("No reference columns found; check your reference.columns parameter!")
-    dispersion = if (sum(ss)==1) rep(0.1,nrow(data)) else if (!is.null(dispersion)) rep(dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss))
+    dispersion = if (sum(ss)==1) rep(0.1,nrow(data)) else if (!is.null(original.dispersion)) rep(original.dispersion,length.out=nrow(data)) else estimate.dispersion(GetTable(data,type="count",columns = ss))
     if (verbose) {
       if (any(ss & A)) {
         cat(sprintf("Sampling from steady state for %s...\n",paste(colnames(data)[A],collapse = ",")))
@@ -1758,6 +1759,7 @@ SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=NULL,min.time=-1,max.time=
 #' @param old show old RNA?
 #' @param new show new RNA?
 #' @param total show total RNA?
+#' @param line.size which line size to use
 #'
 #' @return a ggplot object
 #'
@@ -1767,7 +1769,7 @@ SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=NULL,min.time=-1,max.time=
 #' @examples
 #' PlotSimulation(SimulateKinetics(hl=2))
 #' @concept kinetics
-PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
+PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE, line.size = 1) {
   # R CMD check guard for non-standard evaluation
   Time <- Value <- Type <- NULL
 
@@ -1778,7 +1780,7 @@ PlotSimulation=function(sim.df,ntr=TRUE,old=TRUE,new=TRUE,total=TRUE) {
     sim.df$Type=droplevels(sim.df$Type)
     ggplot(sim.df,aes(Time,Value,color=Type))+
       cowplot::theme_cowplot()+
-      geom_line(size=1)+
+      geom_line(size=line.size)+
         scale_color_manual(NULL,values=c(Old="#54668d",New="#953f36",Total="#373737",NTR="#e4c534")[levels(sim.df$Type)])+
         facet_wrap(~ifelse(Type=="NTR","NTR","Timecourse"),scales="free_y",ncol=1)+
         ylab(NULL)+
