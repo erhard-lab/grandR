@@ -348,8 +348,12 @@ PlotHeatmap=function(data,
 #' @param n.format format string for the number of data points (see \link{sprintf}); can be NULL (don't output the number of data points)
 #' @param coeff.format format string for the correlation coefficient (see \link{sprintf}); can be NULL (don't output the correlation coefficient)
 #' @param p.format  format string for the P value (see \link{sprintf}); can be NULL (don't output the P value)
+#' @param slope.format format string for the slope (see \link{sprintf}); can be NULL (don't output the slope)
+#' @param rmsd.format format string for the root mean square deviation (see \link{sprintf}); can be NULL (don't output the rmsd)
 #'
 #' @details Use this for the \code{correlation} parameter of \link{PlotScatter}
+#'
+#' @details The slope is computed via a principal component analysis and *not* by linear regression
 #'
 #' @return a function
 #' @export
@@ -405,11 +409,11 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param xlab the label for x (can be NULL, then the x parameter is used)
 #' @param ylab the label for y (can be NULL, then the y parameter is used)
 #' @param log if TRUE, use log scales for x and y axis
-#' @param log.x  if TRUE, use log scale for the x axis
-#' @param log.y  if TRUE, use log scale for the y axis
-#' @param axis if FALSE, remove x and y axes
-#' @param axis.x  if FALSE, remove the x axis
-#' @param axis.y  if FALSE, remove the y axis
+#' @param log.x if TRUE, use log scale for the x axis
+#' @param log.y if TRUE, use log scale for the y axis
+#' @param axis if FALSE, don't show x and y axes
+#' @param axis.x if FALSE, don't show the x axis
+#' @param axis.y if FALSE, don't show the y axis
 #' @param remove.outlier configure how outliers are selected (is the coef parameter to \link[grDevices]{boxplot.stats}); can be FALSE, in which case no points are considered outliers (see details)
 #' @param show.outlier if TRUE, show outlier as gray points at the border of the plotting plane
 #' @param lim define the both x and y axis limits (vector of length 2 defining the lower and upper bound, respectively)

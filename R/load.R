@@ -617,7 +617,7 @@ ReadFeatureCounts=function(file, design=c(Design$Condition,Design$Replicate),cla
     if (!is.null(url)) {
       file <- tempfile()
       if (verbose) cat(sprintf("Downloading file (destination: %s) ...\n",file))
-      download.file(url, file, quiet=!verbose)
+      utils::download.file(url, file, quiet=!verbose)
       prefix=gsub(".tsv(.gz)?$","",url)
       do.callback=function() {
         if (verbose) cat("Deleting temporary file...\n")
@@ -649,7 +649,7 @@ ReadFeatureCounts=function(file, design=c(Design$Condition,Design$Replicate),cla
 
 
   if (verbose) cat("Reading file...\n")
-  data=read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
+  data=utils::read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
   if (!is.null(filter.table)) data=filter.table(data)
 
 
@@ -685,7 +685,7 @@ ReadFeatureCounts=function(file, design=c(Design$Condition,Design$Replicate),cla
   }
   data[[index]] = check.and.make.unique(data[[index]],label="names")
   gene.info = data.frame(Gene=as.character(data[[index]]),Symbol=as.character(data[[index]]),stringsAsFactors=FALSE)
-  for (i in 1:(firstnumeric-1)) gene.info[[anno.names[i]]]=data[[i]]
+  for (i in 1:(firstsample-1)) gene.info[[anno.names[i]]]=data[[i]]
   gene.info$Type=classify.genes(gene.info)
 
   re=list()

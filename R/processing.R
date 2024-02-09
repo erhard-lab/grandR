@@ -189,7 +189,8 @@ ComputeAbsolute=function(data,dilution=4E4,volume=10,slot="tpm",name="absolute")
 #' @param size.factors numeric vector; if not NULL, use these size factors instead of computing size factors
 #' @param return.sf return the size factors and not a grandR object
 #' @param tlen the transcript lengths (for FPKM and TPM)
-#'
+#' @param factor the rpm factor (default: 1 (m)illion)
+  #'
 #' @details Normalize will perform DESeq2 normalization, i.e. it will use \link[DESeq2]{estimateSizeFactorsForMatrix}
 #' to estimate size factors, and divide each value by this. If genes are given, size factors will be computed only w.r.t. these genes (but then all genes are normalized).
 #'
@@ -507,9 +508,9 @@ ComputeColumnStatistics=function(data,verbose=TRUE) {
   Coldata(data,"total.genes") = Matrix::colSums(GetMatrix(data,mode.slot="count")>0)
 
   if (!is.null(GeneInfo(data)$Type)) {
-    for (t in levels(GeneInfo(d)$Type)) {
+    for (t in levels(GeneInfo(data)$Type)) {
       if (verbose) cat(sprintf("Compute percent for %s...\n",t))
-      Coldata(data,paste0("percent.",t)) = Matrix::colSums(GetMatrix(data,mode.slot="count",genes = GeneInfo(d)$Type==t))/Coldata(data,"total.reads")*100
+      Coldata(data,paste0("percent.",t)) = Matrix::colSums(GetMatrix(data,mode.slot="count",genes = GeneInfo(data)$Type==t))/Coldata(data,"total.reads")*100
     }
   }
 

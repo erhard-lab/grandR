@@ -228,7 +228,6 @@ Correct4sUDropoutHLSpline=function(data,pairs=Findno4sUPairs(data),spline.df=15)
   data
 }
 
-
 #' Estimate 4sU dropout percentages
 #'
 #' For several potential reasons, a sample specific percentage of reads from labelled RNA might be lost.

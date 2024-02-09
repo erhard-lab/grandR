@@ -30,13 +30,14 @@
 #' @return a shiny web server
 #' @export
 #'
-#' @example
+#' @examples
 #' \dontrun{
 #' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
 #'                   design=c("Condition",Design$dur.4sU,Design$Replicate))
 #' sars <- Normalize(sars)
 #' sars <- Pairwise(sars,contrasts = GetContrasts(sars,contrast = c("Condition","SARS","Mock")))
-#' sars <- AddGenePlot(sars,"timecourse",Defer(PlotGeneProgressiveTimecourse,steady.state=c(Mock=TRUE,SARS=FALSE)))
+#' sars <- AddGenePlot(sars,"timecourse",
+#'                     Defer(PlotGeneProgressiveTimecourse,steady.state=c(Mock=TRUE,SARS=FALSE)))
 #' sars <- AddGlobalPlot(sars,"Vulcano",VulcanoPlot)
 #' ServeGrandR(sars)
 #'
@@ -125,7 +126,7 @@ ServeGrandR=function(data,
     win_ids = lapply(plot.wins,function(pw) pw$server(data))
 
     for (n in names(table)) {
-      create = function(ns,df) {
+      create.tab = function(ns,df) {
         # R CMD check guard for non-standard evaluation
         output=list()
         ddf <- NULL
@@ -187,9 +188,9 @@ ServeGrandR=function(data,
           },
           content = function(file) {
             on.exit(shiny::removeModal())
-            pdf(file,width=input[[ns("pdfwidth")]],height=input[[ns("pdfheight")]])
+            grDevices::pdf(file,width=input[[ns("pdfwidth")]],height=input[[ns("pdfheight")]])
             for (i in 1:length(plot.gene)) print(plot.gene[[i]](data=data,gene=highlighted.genes$selected.gene))
-            dev.off()
+            grDevices::dev.off()
           }
         )
 
@@ -238,7 +239,7 @@ ServeGrandR=function(data,
       }
 
       ns = shiny::NS(paste0("table",n))
-      elements = create(ns,table[[n]])
+      elements = create.tab(ns,table[[n]])
       for (n in names(elements)) {
         output[[ns(n)]] = elements[[n]]
       }
@@ -255,18 +256,18 @@ ServeGrandR=function(data,
 
 
     for (i in 1:(length(plot.gene))) {
-      create = function(i) {
+      create.plotgene = function(i) {
         env=new.env()
         env$i=i
         shiny::renderPlot({ if (!is.null(highlighted.genes$selected.gene)) plot.gene[[i]](data=data,gene=highlighted.genes$selected.gene) },env=env)
       }
-      output[[paste0("plot",i)]]=create(i)
+      output[[paste0("plot",i)]]=create.plotgene(i)
     }
 
     output$helpText=shiny::renderText({ if (is.null(highlighted.genes$selected.gene) && !is.null(help)) help  })
 
     for (n in names(plot.static)) {
-      create=function(n) {
+      create.plotstatic=function(n) {
         env=new.env()
         env$n=n
         getwidth=function() {
@@ -281,12 +282,12 @@ ServeGrandR=function(data,
         }
         shiny::renderPlot({plot.static[[n]][[input[[paste0(n,"list")]]]](data)},width=getwidth,height=getheight,env=env)
       }
-      output[[paste0(n,"plot")]]=create(n)
+      output[[paste0(n,"plot")]]=create.plotstatic(n)
     }
 
 
     for (n in names(plot.global)) {
-      create=function(n) {
+      create.plotglobal=function(n) {
         env=new.env()
         env$n=n
         getwidth=function() {
@@ -305,7 +306,7 @@ ServeGrandR=function(data,
           re
           },width=getwidth,height=getheight,env=env)
       }
-      output[[make.names(paste0(n,"plotset"))]]=create(n)
+      output[[make.names(paste0(n,"plotset"))]]=create.plotglobal(n)
       e=new.env()
       e$n=n
       ddf <- shiny::reactiveValues(ddf=NULL)
@@ -590,14 +591,14 @@ CreateWindows = function(id,plots,title="Plots",width=350,height=350,nrow=NULL,n
         oo(i)
       }
       shiny::observeEvent(input$closePlotWindow, {
-        shinyjs::js$toggleZ(NS(id)("plotWindow"))
+        shinyjs::js$toggleZ(shiny::NS(id)("plotWindow"))
         shinyjs::hide("plotWindow")
       })
       shiny::observeEvent(input$plotSelect, {
         output[["plot"]] = shiny::renderPlot({ plots[[input$plotSelect]]() })
       })
     })
-    NS(id)("plotWindow")
+    shiny::NS(id)("plotWindow")
   })
 }
 

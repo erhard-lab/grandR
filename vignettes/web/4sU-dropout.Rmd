@@ -41,7 +41,7 @@ Plot4sUDropoutRank(r,"120min.A",ylim=c(-0.5,0.5),title=NULL,size=0.6,label.corr 
 
 Additionally, with the Scatter plot, we can compare both replicates and confirm that the dropout effects are consistent among both replicates.
 
-```{r}
+```{r fig.height=5, fig.width=5}
 co=GetContrasts(r,contrast=c("duration.4sU.original","no4sU"),group="Replicate",no4sU=TRUE)
 r=LFC(r,contrasts=co)
 PlotScatter(r,`total.120min vs no4sU.A.LFC`,`total.120min vs no4sU.B.LFC`,lim=c(-1,1),correlation=FormatCorrelation(method="spearman"),xlab=bquote(log[2]~"FC 2h vs 0h (Rep. A)"),ylab=bquote(log[2]~"FC 2h vs 0h (Rep. B)"))
@@ -66,35 +66,22 @@ ggplot(stat.r,aes(duration.4sU*60,`4sU dropout`,group=Replicate))+
 ```
 
 
-Now that we've checked our data for 4sU dropout, we can use grandR to correct for this. 
-
-Looking at the same plots for the corrected data set, we do not observe dropout effects anymore, successfully removing 4sU induced quantification bias in our data.
+Now that we've checked our data for 4sU dropout, we can use grandR to correct for this:
 
 ```{r}
-
 rc=Correct4sUDropoutHLFactor(r)
+```
 
+Looking at the dropout plot for the corrected data set, we do not observe dropout effects anymore:
+
+```{r}
 Plot4sUDropoutRank(rc,"120min.A",ylim=c(-0.5,0.5),title=NULL,size=0.6,label.corr = FALSE,invert.ranks=TRUE)
+```
 
+Maybe more importantly, we need to check whether 4sU induced effects are removed. For that we again compare the replicates and observe, that the correlation is gone now (indicating that any factor that still plays a role is less relevant than the differences between replicates):
+
+```{r fig.height=5, fig.width=5}
 rc=LFC(rc,contrasts=co)
 PlotScatter(rc,`total.120min vs no4sU.A.LFC`,`total.120min vs no4sU.B.LFC`,lim=c(-1,1),correlation=FormatCorrelation(method="spearman"),xlab=bquote(log[2]~"FC 2h vs 0h (Rep. A)"),ylab=bquote(log[2]~"FC 2h vs 0h (Rep. B)"))+scale_x_continuous(breaks=c(-1,0,1))+scale_y_continuous(breaks=c(-1,0,1))
 
-stat.rc=ComputeSummaryStatistics(rc,coldata=TRUE)
-stat.rc$Corrected="Corrected"
-stat.r$Corrected="Not corrected"
-stat=rbind(stat.r,stat.rc)
-stat$Corrected=factor(stat$Corrected,levels=c("Not corrected","Corrected"))
-
-colors=setNames(RColorBrewer::brewer.pal(6,"Paired")[c(2,6)],c("Corrected","Not corrected"))
-
-ggplot(stat,aes(duration.4sU*60,`4sU dropout`,color=Corrected,group=Replicate))+
-  coord_cartesian(ylim=c(0,0.4))+
-  geom_point(position=position_dodge(width=8))+
-  cowplot::theme_cowplot()+
-  xlab("4sU labeling [min]")+
-  ylab("4sU dropout")+
-  scale_x_continuous(breaks=c(0,15,30,60,90,120))+
-  scale_y_continuous(labels = scales::label_percent(1),breaks=c(0,0.2,0.4))+
-  scale_color_manual(NULL,values=colors)+
-  RotatateAxisLabels()
 ```

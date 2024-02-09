@@ -1,3 +1,7 @@
+# Comments for submission of grandR 0.2.5
+## R CMD check results
+There were no ERRORs or WARNINGs or NOTEs. 
+
 # Comments for submission of grandR 0.2.2
 ## R CMD check results
 There were no ERRORs or WARNINGs or NOTEs. 

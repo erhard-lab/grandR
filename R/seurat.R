@@ -202,7 +202,9 @@ CreatePseudobulkTable <- function(data,name.column="Name",pseudobulk.column="Con
 #' @return a table with two columns "Cell" and "Pseudobulk"
 #'
 CreateConvolutionTable<- function(data,n.neighbors=20) {
-  data <- FindNeighbors(data, dims = 1:10, k.param = n.neighbors)
+  checkPackages(c("Seurat"))
+
+  data <- Seurat::FindNeighbors(data, dims = 1:10, k.param = n.neighbors)
   knn <- data@graphs$RNA_nn
   knn <- data.frame(knn)
   tab <- matrix(nrow=0, ncol=2)

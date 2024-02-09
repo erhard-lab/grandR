@@ -406,7 +406,7 @@ DropSlot=function(data,pattern=NULL) {
 #' @param warn issue a warning if the slot name already exists and is overwritten
 #' @export
 AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
-  if (!is.matrix(matrix) & !is(matrix, 'sparseMatrix')) stop("Must be a matrix!")
+  if (!is.matrix(matrix) & !methods::is(matrix, 'sparseMatrix')) stop("Must be a matrix!")
   if (ncol(matrix)!=ncol(data$data$count)) stop("Number of columns do not match!")
   if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
 
@@ -565,14 +565,22 @@ GeneInfo=function(data,column=NULL,value=NULL) {
   } else if (is.null(value)) {
     setNames(data$gene.info[[column]],data$gene.info$Symbol)
   } else {
-    data$gene.info[[column]]=value
+    GeneInfo(data,column) <- value
     data
   }
 }
 #' @rdname GeneInfo
 #' @export
 `GeneInfo<-` <- function(data, column, value) {
-  data$gene.info[[column]]=value
+  if (!is.null(value) && length(value)!=nrow(data$gene.info) && length(value)!=1) {
+    nam = ToIndex(data,names(value),remove.missing = FALSE)
+    data$gene.info[,column]=NA
+    data$gene.info[nam[!is.na(nam)],column]=value[names(nam)[!is.na(nam)]]
+    if (sum(is.na(data$gene.info[,column]))>0)  warning(sprintf("Could not find data for some genes (n=%d missing, e.g. %s)!",sum(is.na(data$gene.info[,column])),paste(utils::head(Genes(data)[is.na(data$gene.info[,column])],5),collapse=",")))
+
+  } else {
+    data$gene.info[[column]]=value
+  }
   data
 }
 
@@ -746,6 +754,7 @@ get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
 #' @param gene A vector of genes. Can be either numeric indices, gene names, gene symbols or a logical vector
 #' @param regex Treat gene as a regex and return all that match
 #' @param remove.missing if TRUE, do not return missing genes (return NA otherwise)
+#' @param warn if TRUE emit a warning if not all genes are found
 #'
 #' @return Numeric indices corresponding to the given genes
 #'
@@ -760,7 +769,7 @@ get.mode.slot=function(data,mode.slot,allow.ntr=TRUE) {
 #' @export
 #'
 #' @concept helper
-ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE) {
+ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE,warn=TRUE) {
   if (any(is.na(gene))) {
     warning("There were NA genes, removed!");
     gene=gene[!is.na(gene)]
@@ -778,15 +787,13 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE) {
   col = if (sum(gene %in% data$gene.info$Gene) > sum(gene %in% data$gene.info$Symbol)) "Gene" else "Symbol"
 
   mis=setdiff(gene,data$gene.info[[col]])
-  warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(utils::head(mis,5),collapse=",")))
+  if (warn) warning(sprintf("Could not find given genes (n=%d missing, e.g. %s)!",length(mis),paste(utils::head(mis,5),collapse=",")))
   re=setNames(1:nrow(data),data$gene.info[[col]])
   ind=intersect(gene,data$gene.info[[col]])
   if (remove.missing) {
     return(re[ind])
   } else {
-    set.na = setdiff(data$gene.info[[col]], gene)
-    re[set.na] = NA
-    return(re)
+    return(setNames(re[gene],gene))
   }
 }
 
@@ -1371,7 +1378,7 @@ AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE,warn.genes=TRU
     ntab=table[rep(NA,nrow(data)),,drop=FALSE]
     rownames(ntab) = Genes(data,use.symbols = FALSE)
     ind=setNames(1:nrow(ntab),Genes(data,use.symbols = FALSE))
-    ntab[ind[Genes(d,rownames(table),use.symbols = FALSE)],]=table
+    ntab[ind[Genes(data,rownames(table),use.symbols = FALSE)],]=table
     table <- ntab
   }
 

@@ -14,8 +14,9 @@ Description: Nucleotide conversion sequencing experiments have been
   kinetic modeling, differential gene expression analysis and visualization of such data.
 Author: Florian Erhard [aut, cre] (<https://orcid.org/0000-0002-3574-6983>),
   Teresa Rummel [ctb],
-  Lygeri Sakellaridi [ctb]
-Maintainer: Florian Erhard <Florian.Erhard@uni-wuerzburg.de>
+  Lygeri Sakellaridi [ctb],
+  Kevin Berg [ctb]
+Maintainer: Florian Erhard <Florian.Erhard@informatik.uni-regensburg.de>
 License: Apache License (>= 2)
 Encoding: UTF-8
 URL: https://github.com/erhard-lab/grandR
@@ -70,5 +71,5 @@ Suggests: knitr,
     ggrastr,
     viridisLite,
     deSolve
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.1
 VignetteBuilder: knitr
