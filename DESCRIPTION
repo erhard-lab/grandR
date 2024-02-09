@@ -2,9 +2,10 @@ Package: grandR
 Version: 0.2.5
 Title: Comprehensive Analysis of Nucleotide Conversion Sequencing Data
 Authors@R: c(
-    person("Florian", "Erhard", email = "Florian.Erhard@uni-wuerzburg.de", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-3574-6983")),
+    person("Florian", "Erhard", email = "Florian.Erhard@informatik.uni-regensburg.de", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-3574-6983")),
     person("Teresa", "Rummel", email = "Teresa.Rummel@uni-wuerzburg.de", role = "ctb"),
-    person("Lygeri", "Sakellaridi", email = "Lygeri.Sakellaridi@uni-wuerzburg.de", role = "ctb")
+    person("Lygeri", "Sakellaridi", email = "Lygeri.Sakellaridi@uni-wuerzburg.de", role = "ctb"),
+    person("Kevin", "Berg", email = "Kevin.Berg@uni-wuerzburg.de", role = "ctb")
     )
 Description: Nucleotide conversion sequencing experiments have been
   developed to add a temporal dimension to RNA-seq and single-cell RNA-seq. Such 

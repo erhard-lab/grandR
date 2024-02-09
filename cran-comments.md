@@ -1,6 +1,17 @@
 # Comments for submission of grandR 0.2.5
 ## R CMD check results
-There were no ERRORs or WARNINGs or NOTEs. 
+There were no ERRORs or WARNINGs. 
+
+There was 1 NOTE:
+* checking CRAN incoming feasibility ... NOTE                                                                             
+Maintainer: ‘Florian Erhard <Florian.Erhard@informatik.uni-regensburg.de>’                                                
+                                                                                                                          
+New maintainer:                                                                                                           
+  Florian Erhard <Florian.Erhard@informatik.uni-regensburg.de>                                                            
+Old maintainer(s):                                                                                                        
+  Florian Erhard <Florian.Erhard@uni-wuerzburg.de>                                                                        
+  
+> I double-checked my new email address
 
 
 # Comments for submission of grandR 0.2.2
