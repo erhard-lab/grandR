@@ -139,7 +139,7 @@ contrasts <- cbind(
                columns=Experimental.time==0,name.format="dTag effect") 
   # set up the contrast matrix for compare dTag vs wt without dTAG13 treatment
 )
-banp <- LFC(banp,name.prefix = "QC",contrasts=contrasts)
+banp <- LFC(banp,name.prefix = "QC",contrasts=contrasts, compute.M = FALSE)
 banp
 ```
 
@@ -149,7 +149,7 @@ As you see, now we have two analyses added to our grandR object. We can use `Plo
 PlotScatter(banp,xlim=c(-2,2),ylim=c(-2,2))
 ```
 
-This works since there are only two analysis values overall that are stored in the object:
+This works since there are only two analysis values overall that are stored in the object (this is also why we used the *compute.M = FALSE* parameter above; by default, *LFC()* also computes the mean (M) expression value in log10 space to enable generating MA plots):
 ```{r}
 Analyses(banp,description = TRUE)
 ```

@@ -185,6 +185,7 @@ as.Seurat.legacy.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NU
 #'
 #' @return a table with two columns "Cell" and "Pseudobulk"
 #'
+#' @concept data
 CreatePseudobulkTable <- function(data,name.column="Name",pseudobulk.column="Condition") {
   table = data[[]][,c(pseudobulk.column, name.column)]
   rownames(table) = seq(nrow(table))
@@ -201,6 +202,7 @@ CreatePseudobulkTable <- function(data,name.column="Name",pseudobulk.column="Con
 #'
 #' @return a table with two columns "Cell" and "Pseudobulk"
 #'
+#' @concept data
 CreateConvolutionTable<- function(data,n.neighbors=20) {
   checkPackages(c("Seurat"))
 

@@ -515,8 +515,6 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
 
     stopifnot(time %in% names(Coldata(data)))
 
-    lvl = median(GetData(data,mode.slot=slot,genes=gene,ntr.na = FALSE)$Value)
-
     newdf=GetData(data,mode.slot=if (chase) "ntr" else paste0("new.",slot),genes=gene,ntr.na = FALSE)
     newdf$use=1:nrow(newdf) %in% (1:nrow(newdf))[use.new]
     newdf$time=newdf[[time]]
@@ -584,6 +582,11 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
             residuals=data.frame(Name=c(as.character(odf$Name),as.character(ndf$Name)),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=resi,Relative=resi/modval)
         }
         total=sum(ndf$Value)+sum(odf$Value)
+
+        lvl = GetData(data,mode.slot=slot,genes=gene,ntr.na = FALSE)
+        lvl = median(lvl$Value[lvl$Name %in% ndf$Name[ndf$use]])
+        if (chase) total=lvl
+
         syn = if (chase) lvl*unname(par['d']) else unname(par['s']) # in chase designs, at time 0 new RNA might not be at steady state level!
 
         list(data=df,
@@ -1591,6 +1594,7 @@ TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
 #' @param exact.tics use axis labels directly corresponding to the available labeling durations?
 #' @param show.CI show confidence intervals; one of TRUE/FALSE (default: FALSE)
 #' @param return.tables also return the tables used for plotting
+#' @param rescale for type=ntr or type=chase, rescale all samples to the same total value?
 #' @param ... given to the fitting procedures
 #'
 #' @details For each \code{\link{Condition}} there will be one panel containing the values and the corresponding model fit.
@@ -1602,7 +1606,7 @@ TransformSnapshot=function(ntr,total,t,t0=NULL,f0=NULL,full.return=FALSE) {
 #' @export
 #' @concept geneplot
 PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Design$dur.4sU, type=c("nlls","ntr","lm"),
-                                       exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE,...) {
+                                       exact.tics=TRUE,show.CI=FALSE,return.tables=FALSE, rescale = TRUE,...) {
   # R CMD check guard for non-standard evaluation
   Value <- Type <- lower <- upper <- NULL
 
@@ -1638,7 +1642,7 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
     }
     df$time=df[[time]]
 
-    if (tolower(type[1])=="ntr") {
+    if (rescale & (tolower(type[1])=="ntr" || tolower(type[1])=="chase")) {
         #fac=unlist(lapply(as.character(df$Condition),function(n) fit[[n]]$f0))/df$Value[df$Type=="Total"]
         fac=unlist(lapply(1:nrow(df),function(i) {
             fit=if(is.null(Condition(data))) fit[[gene]] else fit[[as.character(df$Condition)[i]]]
@@ -1652,9 +1656,13 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
         }
     }
 
-    if (tolower(type[1])=="chase") df=df[!df$no4sU,]
-
     df$Condition=if ("Condition" %in% names(df)) df$Condition else gene
+
+    if (tolower(type[1])=="chase") {
+      df=df[!df$no4sU,]
+    }
+
+
     tt=seq(0,max(df$time),length.out=100)
     df.median=plyr::ddply(df,c("Condition","Type",time,"time"),function(s) data.frame(Value=median(s$Value)))
 
