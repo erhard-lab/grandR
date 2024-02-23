@@ -536,6 +536,7 @@ PlotScatter=function(data,
     A=df[[1]]
     x=1
   } else if (is.null(x)) {
+    if (!xcol %in% colnames(df)) stop(sprintf("%s is not a column!",xcol))
     A=df[[xcol]]
     x=xcol
   } else if (is.null(xcol)) {
@@ -553,6 +554,7 @@ PlotScatter=function(data,
     B=df[[2]]
     y=2
   } else if (is.null(y)) {
+    if (!ycol %in% colnames(df)) stop(sprintf("%s is not a column!",ycol))
     B=df[[ycol]]
     y=ycol
   } else if (is.null(ycol)) {

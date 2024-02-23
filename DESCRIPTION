@@ -1,5 +1,5 @@
 Package: grandR
-Version: 0.2.5
+Version: 0.2.6
 Title: Comprehensive Analysis of Nucleotide Conversion Sequencing Data
 Authors@R: c(
     person("Florian", "Erhard", email = "Florian.Erhard@informatik.uni-regensburg.de", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-3574-6983")),

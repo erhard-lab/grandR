@@ -1,4 +1,10 @@
-# grandR 0.2.4
+# grandR 0.2.6
+
+## Shiny improvement
+* Plotting function can now either implement the arguments highlight and label or not
+* Bug fixes with spaces in names of plots
+
+# grandR 0.2.5
 
 ## Shiny improvement
 * If there are global plots, there is now an additional page showing the highlighted genes

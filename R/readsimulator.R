@@ -18,6 +18,7 @@
 #' @param p.old the probability for a conversion in reads originating from old RNA
 #' @param p.new the probability for a conversion in reads originating from new RNA
 #' @param p.new.fit the probability for a conversion in reads originating from new RNA that is used for fitting (to simulate bias in the estimation of p.new)
+#' @param enforce.parallelized should parallelization be used (NA: use state of IsParallel())
 #' @param seed seed value for the random number generator (set to make it deterministic!)
 #'
 #' @return a matrix containing, per column, the simulated counts, the simulated NTRs,
@@ -56,6 +57,7 @@ SimulateReadsForSample=function(num.reads=2E7,
                                 p.old=1E-4,
                                 p.new=0.04,
                                 p.new.fit=p.new,
+                                enforce.parallelized = NA,
                                 seed=NULL) {
 
   if(!is.null(seed)) set.seed(seed)
@@ -68,6 +70,7 @@ SimulateReadsForSample=function(num.reads=2E7,
 
   shape1=u.content*(u.content*(1-u.content)/u.content.sd^2-1)
   shape2=(1-u.content)/u.content * shape1
+
 
   sim.ntr=t(psapply(1:nrow(mat),function(i)  {
     reads=unname(mat[i,3])
@@ -89,7 +92,7 @@ SimulateReadsForSample=function(num.reads=2E7,
     mixmat=CreateMixMatrix(n.vector = u.histo,par=para)
     para=model.par(ntr=ntr,p.err=p.old,p.conv=p.new.fit)
     fit.ntr(mixmat,para,plot=FALSE,beta.approx=beta.approx,conversion.reads=conversion.reads)
-  },seed=seed))
+  },seed=seed,enforce = enforce.parallelized))
   if (!beta.approx & !conversion.reads) {sim.ntr=t(sim.ntr); colnames(sim.ntr)="ntr"}
 
   cbind(count=mat[,3],sim.ntr,true_freq=mat[,1],true_ntr=mat[,2])

@@ -481,18 +481,23 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   if (!is.null(rename.sample)) conds=rename.sample(conds)
   terms=strsplit(conds,".",fixed=TRUE)[[1]]
 
-  if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(terms,collapse=".")))
-
+  if (is.data.frame(design)) {
+  } else if (is.function(design)) {
+  } else {
+    if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(conds,collapse=", ")))
+  }
 
   if (verbose) cat("Reading file...\n")
   data=utils::read.table(file,sep=sep,stringsAsFactors=FALSE,check.names=FALSE,header=TRUE)
   if (!is.null(filter.table)) data=filter.table(data)
 
   clss=sapply(data,class)
+  clss = gsub("integer","numeric",clss)
   if (is.null(num.samples)) firstnumeric=max(which(clss!="numeric"))+1 #min(which(clss=="numeric"))
   else firstnumeric = ((ncol(data)-num.samples+1))
   if (!all(clss[firstnumeric:length(clss)]=="numeric") || firstnumeric==1 || firstnumeric>ncol(data)) stop("Columns (except for the first n) must be numeric!")
   anno.names=colnames(data)[1:(firstnumeric-1)]
+  if (verbose) cat(sprintf("Recognized %d columns as gene data (%s).\n",firstnumeric-1,paste(anno.names,collaps)))
 
 
   #if (anyDuplicated(data[[1]])) {
@@ -504,7 +509,21 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   if (verbose) cat("Processing...\n")
 
   if (!is.null(rename.sample)) colnames(data)[firstnumeric:ncol(data)]=sapply(colnames(data)[firstnumeric:ncol(data)],rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
-  coldata=MakeColdata(colnames(data)[firstnumeric:ncol(data)],design)
+
+  conds = colnames(data)[firstnumeric:ncol(data)]
+  if (is.data.frame(design)) {
+    design=as.data.frame(design) # in case it's a tibble or similar
+    if (length(conds)!=nrow(design)) stop(paste0("Design parameter (table) is incompatible with input data: ",paste(conds,collapse=", ")))
+    if (is.null(design$Name) || !all(design$Name==conds)) stop(paste0("Design parameter (table) must contain a Name column corresponding to the sample names!"))
+    coldata=design
+    rownames(coldata)=coldata$Name
+  } else if (is.function(design)) {
+    coldata=design(conds)
+    if (length(conds)!=nrow(coldata)) stop(paste0("Design parameter (function) is incompatible with input data: ",paste(conds,collapse=", ")))
+  } else {
+    if (length(terms)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(conds,collapse=", ")))
+    coldata=MakeColdata(conds,design)
+  }
 
   if ("Symbol" %in% colnames(data)) {
     index <- which(colnames(data) == "Symbol")

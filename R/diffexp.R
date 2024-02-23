@@ -706,6 +706,7 @@ hierarchical.beta.posterior=function(a,b,
    var.prior.min.sd=sd(a/(a+b))#sqrt(min(bvar(a,b)))
    if (is.na(var.prior.min.sd) || var.prior.min.sd==0) var.prior.min.sd=sqrt(min(bvar(a,b)))
   max.size=mean(mu*(1-mu))/var.prior.min.sd^2
+  #max.size=sum(a+b)
   f=function(x,o=max.size,s=max.size/100) log(1/(1+exp((x-o)/s))/s/log1p(exp(o/s)))
   if (plot.prior) {
     x=seq(0,max.size*1.3,length.out=1000)

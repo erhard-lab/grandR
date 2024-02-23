@@ -119,6 +119,17 @@ Defer=function(FUN,...,add=NULL, cache=TRUE,width.height=NULL) {
   re
 }
 
+try.call.ignore.unused=function(FUN,...) {
+    tryCatch({
+      FUN(...)
+    }, error = function(e) {
+      l=list(...)
+      keep = !sapply(names(l),function(n) n!="" && grepl(paste0(n," = "),e$message))
+      l=l[keep]
+      do.call(FUN,l)
+    })
+}
+
 
 #' Convert a structure into a vector
 #'
@@ -216,6 +227,7 @@ GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fix
 #'
 #' @param ... forwarded to lapply or parallel::mclapply
 #' @param seed Seed for the random number generator
+#' @param enforce if TRUE, do it parallelized no matter what IsParallel() says, if FALSE do it non-parallelized no matter what IsParallel() says
 #'
 #' @details If the code uses random number specify the seed to make it deterministic
 #'
@@ -223,11 +235,14 @@ GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fix
 #' @export
 #'
 #' @concept helper
-psapply=function(...,seed=NULL) {simplify2array(plapply(...,seed=seed))}
+psapply=function(...,seed=NULL, enforce = NA) {simplify2array(plapply(...,seed=seed,enforce=enforce))}
 #' @rdname psapply
 #' @export
-plapply=function(...,seed=NULL) {
-  if (!IsParallel()) return(opt$lapply(...))
+plapply=function(...,seed=NULL, enforce = NA) {
+
+  parallel = if (is.na(enforce)) IsParallel() else enforce
+
+  if (!parallel) return(lapply(...))
 
   if (!is.null(seed)) {
     rng=RNGkind()[1]
@@ -235,7 +250,7 @@ plapply=function(...,seed=NULL) {
     set.seed(seed)
   }
 
-  re=opt$lapply(...)
+  re=if (parallel) parallel::mclapply(...,mc.cores=opt$nworkers) else lapply(...)
 
   if (!is.null(seed)) {
    RNGkind(rng)
@@ -246,8 +261,8 @@ plapply=function(...,seed=NULL) {
 
 
 opt <- new.env()
-opt$lapply=function(...) lapply(...)
-opt$sapply=function(...) simplify2array(opt$lapply(...))
+#opt$lapply=function(...) lapply(...)
+#opt$sapply=function(...) simplify2array(opt$lapply(...))
 opt$nworkers=0
 opt$singlemsg=list()
 
@@ -278,10 +293,10 @@ SetParallel=function(cores=max(1,parallel::detectCores()-2)) {
       warning("Parallelism is not supported under windows. Will use a single thread!")
       opt$nworkers=0
     } else {
-      opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)
+      #opt$lapply<-function(...) parallel::mclapply(...,mc.cores=cores)
     }
   } else {
-    opt$lapply<-function(...) lapply(...)
+    #opt$lapply<-function(...) lapply(...)
   }
 }
 

@@ -268,7 +268,7 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
     add=list[[i]]
     if (!is.null(names(list))) add$coldata[[column.name]]=names(list)[i]
     if (any(colnames(add) %in% colnames(re))) stop("Sample names must be unique!")
-    if (any(rownames(add)!=rownames(re))) stop("Data sets must have the same genes!")
+    if (!setequal(rownames(add),rownames(re))) warning("Data sets do not have the same genes, watch out for zeros!")
     #if (any(colnames(add$coldata)!=colnames(re$coldata))) stop("Data sets have distinct coldata columns!")
     if (!all(names(add$data) %in% names(re$data))) stop("Data sets must have the same data tables!")
 
@@ -299,23 +299,75 @@ merge.grandR=function(...,list=NULL,column.name=Design$Origin) {
     rownames(cd)=c(rownames(re$coldata),rownames(add$coldata))
     re$coldata=cd
 
-    for (n in names(re$data)) re$data[[n]]=cbind(re$data[[n]],add$data[[n]])
+    if (!setequal(names(re$data),names(add$data))) warning("Slots are not the same, only use common slots!")
 
-    # add potential additional gene annotations
-    gi=GeneInfo(add)
-    for (n in names(gi)) {
-      if (!n %in% names(GeneInfo(re))) {
-        GeneInfo(re,column = n)=gi[[n]]
-      } else if (!all(GeneInfo(re)[[n]]==gi[[n]])) {
-        GeneInfo(re,column = paste0(n,".",names(list)[i]))=gi[[n]]
-        if (is.null(names(list)[i])) stop("Found columns by the same name in the gene info tables with distinct content; please specify names when calling merge!")
+    # Genes have to be made equal!
+    if (length(rownames(add))!=length(rownames(re)) || !all(rownames(add)==rownames(re))) {
+      genes <- union(Genes(re,use.symbol=FALSE),Genes(add,use.symbol=FALSE))
+
+      new.gene.info = data.frame(Gene=genes)
+      rownames(new.gene.info)=genes
+      rownames(re$gene.info)=Genes(re,use.symbol=FALSE)
+      rownames(add$gene.info)=Genes(add,use.symbol=FALSE)
+
+      for (l1 in intersect(names(re$data),names(add$data))) {
+        mat = re$data[[l1]]
+        mat2 = add$data[[l1]]
+        m <- matrix(0, nrow = length(genes), ncol = ncol(mat)+ncol(mat2))
+        colnames(m) <- c(colnames(mat),colnames(mat2))
+        rownames(m) <- genes
+        m[rownames(mat), 1:ncol(mat)] <- mat
+        m[rownames(mat2), (ncol(mat)+1):ncol(m)] <- mat2
+
+        re$data[[l1]]=m
       }
-    }
+      for (n in setdiff(names(add$gene.info),"Gene")) {
+        new.gene.info[[n]] = NA
+        new.gene.info[rownames(add$gene.info),n] = if (is.factor(add$gene.info[[n]])) as.character(add$gene.info[[n]]) else add$gene.info[[n]]
+      }
+      for (n in setdiff(names(re$gene.info),"Gene")) {
+        if (!n %in% names(new.gene.info)) new.gene.info[[n]] = NA
+        new.gene.info[rownames(re$gene.info),n] = if (is.factor(re$gene.info[[n]])) as.character(re$gene.info[[n]]) else re$gene.info[[n]]
+      }
+      # make to factor again!
+      for (n in setdiff(union(names(re$gene.info),names(add$gene.info)),"Gene")) {
+        if ((!n %in% names(add$gene.info) || is.factor(add$gene.info[[n]])) && (!n %in% names(re$gene.info) || is.factor(re$gene.info[[n]]))) {
+          levels = union(levels(re$gene.info[[n]]), levels(add$gene.info[[n]]))
+          new.gene.info[[n]] = factor(new.gene.info[[n]],levels)
+        }
+      }
+      rownames(new.gene.info)=NULL
+      re$gene.info = new.gene.info
 
-    # add analyses
-    for (ana in Analyses(add))
-    re=AddAnalysis(re,name=ana,add$analysis[[ana]])
+      # analyses
+      analyses = re$analysis
+      re = DropAnalysis(re)
+      for (ana in names(analyses))
+        re=AddAnalysis(re,name=ana,analyses[[ana]],warn.genes = FALSE)
+      for (ana in Analyses(add))
+        re=AddAnalysis(re,name=ana,add$analysis[[ana]],warn.genes = FALSE)
+
+
+    } else {
+      # add potential additional gene annotations
+      gi=GeneInfo(add)
+      for (n in names(gi)) {
+        if (!n %in% names(GeneInfo(re))) {
+          GeneInfo(re,column = n)=gi[[n]]
+        } else if (!all(GeneInfo(re)[[n]]==gi[[n]])) {
+          GeneInfo(re,column = paste0(n,".",names(list)[i]))=gi[[n]]
+          if (is.null(names(list)[i])) stop("Found columns by the same name in the gene info tables with distinct content; please specify names when calling merge!")
+        }
+      }
+      for (n in intersect(names(re$data),names(add$data))) re$data[[n]]=cbind(re$data[[n]],add$data[[n]])
+      # add analyses
+      for (ana in Analyses(add))
+        re=AddAnalysis(re,name=ana,add$analysis[[ana]])
+    }
   }
+
+  re$gene.info$Symbol = check.and.make.unique(re$gene.info$Symbol,label="symbols")
+
   re
 }
 
@@ -473,7 +525,7 @@ Condition <- function(data,value=NULL) {
   } else if (length(value)==1 && value=="") {
     stop("Empty string is not allowed as condition!")
   } else if (all(value %in% names(data$coldata))) {
-    data$coldata$Condition <- interaction(data$coldata[value],drop=TRUE)
+    data$coldata$Condition <- interaction(data$coldata[value],drop=TRUE,sep = " ")
   } else {
     data$coldata$Condition <- as.factor(value)
   }
@@ -580,6 +632,9 @@ GeneInfo=function(data,column=NULL,value=NULL) {
 
   } else {
     data$gene.info[[column]]=value
+    if (column=="Gene") {
+      for (n in names(data$data)) rownames(data$data[[n]])=value
+    }
   }
   data
 }
@@ -1041,7 +1096,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
     } else {
       if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
       summarize=summarize[columns,,drop=FALSE]
-      summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
+      summarize=summarize[,colSums(summarize!=0)>0,drop=FALSE]
     }
 
     re=apply(summarize,2,function(cc) {
