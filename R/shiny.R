@@ -125,9 +125,9 @@ ServeGrandR=function(data,
 
   #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
 
-  htmls = list.files(pattern="html$")
-  names(htmls) = gsub(".html","",htmls)
-  shiny::addResourcePath("htmls", getwd())
+  reports = list.files(pattern="html$|pdf$")
+  names(reports) = gsub(".html|.pdf","",reports)
+  shiny::addResourcePath("reports", getwd())
 
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
   server=function(input, output,session) {
@@ -361,10 +361,10 @@ ServeGrandR=function(data,
 
   html.ui=NULL
   html.list.ui = ""
-  if (length(htmls)>0) {
+  if (length(reports)>0) {
     html.ui=shiny::navbarMenu(title = "Reports")
-    appends = sapply(names(htmls),function(name) {
-      sprintf("$('.dropdown-toggle[data-value=\"Reports\"] + .dropdown-menu').append('<li><a target=\"_blank\" href=\"%s\">%s</a></li>');",paste0("htmls/",htmls[name]),name)
+    appends = sapply(names(reports),function(name) {
+      sprintf("$('.dropdown-toggle[data-value=\"Reports\"] + .dropdown-menu').append('<li><a target=\"_blank\" href=\"%s\">%s</a></li>');",paste0("reports/",reports[name]),name)
     })
     html.list.ui = paste(appends,collapse="\n")
   }
