@@ -302,6 +302,7 @@ ServeGrandR=function(data,
       create.plotglobal=function(n) {
         env=new.env()
         env$n=n
+        env$ddf <- shiny::reactiveValues(ddf=NULL)
         getwidth=function() {
           w=attr(plot.global[[n]],"width")
           if (is.null(w)) w=7*100
@@ -312,6 +313,11 @@ ServeGrandR=function(data,
           if (is.null(w)) w=7*100
           w
         }
+        shiny::observe({
+          brushgenes=if (is.null(ddf$ddf)) NULL else rownames(shiny::brushedPoints(ddf$ddf, input[[my.make.names(paste0(n,"plotsetbrush"))]]))
+          shiny::updateTextAreaInput(session, my.make.names(paste0(n,"plotsetgenes")), value = paste(brushgenes,collapse="\n"), label=sprintf("Selected genes (n=%d)",length(brushgenes)))
+        },env=env)
+
         shiny::renderPlot({
           re=try.call.ignore.unused(plot.global[[n]],data,highlight=highlighted.genes$genes,label=highlighted.genes$selected.gene)
           ddf$ddf=attr(re,"df")
@@ -319,13 +325,7 @@ ServeGrandR=function(data,
           },width=getwidth,height=getheight,env=env)
       }
       output[[my.make.names(paste0(n,"plotset"))]]=create.plotglobal(n)
-      e=new.env()
-      e$n=n
-      ddf <- shiny::reactiveValues(ddf=NULL)
-      shiny::observe({
-        brushgenes=if (is.null(ddf$ddf)) NULL else rownames(shiny::brushedPoints(ddf$ddf, input[[my.make.names(paste0(n,"plotsetbrush"))]]))
-        shiny::updateTextAreaInput(session, my.make.names(paste0(n,"plotsetgenes")), value = paste(brushgenes,collapse="\n"), label=sprintf("Selected genes (n=%d)",length(brushgenes)))
-      },env=e)
+
     }
     shiny::observe({
       shiny::updateTextAreaInput(session, "highlightedgenes", value = paste0(highlighted.genes$genes,collapse="\n"), label=sprintf("Highlighted genes (n=%d)",length(highlighted.genes$genes)))

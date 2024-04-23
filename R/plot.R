@@ -404,6 +404,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param x an expression to compute the x value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param y an expression to compute the y value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param analysis the name of an analysis table (can be NULL; see details)
+#' @param mode.slot the mode.slot (only relevant if data is a dense grandR object and analysis=NULL)
 #' @param xcol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param ycol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
 #' @param xlab the label for x (can be NULL, then the x parameter is used)
@@ -471,7 +472,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #'
 #' @concept globalplot
 PlotScatter=function(data,
-                     x=NULL, y=NULL, analysis=NULL,xcol=NULL,ycol=NULL, xlab=NULL, ylab=NULL,
+                     x=NULL, y=NULL, analysis=NULL,mode.slot=NULL,xcol=NULL,ycol=NULL, xlab=NULL, ylab=NULL,
                      log=FALSE, log.x=log, log.y=log,
                      axis=TRUE, axis.x=axis, axis.y=axis,
                      remove.outlier=1.5, show.outlier=TRUE,lim=NULL,xlim=lim, ylim=lim,
@@ -491,7 +492,8 @@ PlotScatter=function(data,
     }else if (IsSparse(data)) {
       df=GetAnalysisTable(data)
     }else{
-      df=cbind(GetAnalysisTable(data,gene.info = FALSE),GetTable(data,type=DefaultSlot(data)),GeneInfo(data))
+      if (is.null(mode.slot)) mode.slot = DefaultSlot(data)
+      df=cbind(GetAnalysisTable(data,gene.info = FALSE),GetTable(data,type=mode.slot),GeneInfo(data))
     }
   if (!is.null(genes)) df=df[ToIndex(data,genes),]
   } else {
