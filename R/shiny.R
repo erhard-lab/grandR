@@ -126,7 +126,9 @@ ServeGrandR=function(data,
   #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
 
   reports = list.files(pattern="html$|pdf$",recursive=TRUE)
+  reports = reports[!grepl("^grandR",reports)]
   names(reports) = gsub(".html|.pdf","",reports)
+  names(reports) = gsub("/index","",names(reports))
   shiny::addResourcePath("reports", getwd())
 
   if (!is.null(help) && is.list(help)) help=sprintf("<span style='padding-top:25px;'><span class='help-block well'>Table columns:%s</span></span>", paste(sapply(help,function(s) sprintf("<li><span>%s</span></li>",s)),collapse="\n"))
