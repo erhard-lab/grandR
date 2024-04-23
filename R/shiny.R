@@ -125,7 +125,7 @@ ServeGrandR=function(data,
 
   #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
 
-  reports = list.files(pattern="html$|pdf$")
+  reports = list.files(pattern="html$|pdf$",recursive=TRUE)
   names(reports) = gsub(".html|.pdf","",reports)
   shiny::addResourcePath("reports", getwd())
 
