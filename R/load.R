@@ -834,8 +834,9 @@ ReadGRAND3_sparse=function(prefix,
                            verbose=FALSE) {
 
   cols=readLines(paste0(prefix, ".targets/barcodes.tsv.gz"))
+  if (!is.null(rename.sample)) cols=sapply(cols,rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
+
   conds=strsplit(cols,".",fixed=TRUE)[[1]]
-  if (!is.null(rename.sample)) conds=sapply(conds,rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
 
   if (length(conds)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(conds,collapse=".")))
 
