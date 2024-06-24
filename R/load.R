@@ -885,18 +885,22 @@ ReadGRAND3_sparse=function(prefix,
   rownames(ntr)=gene.info$Gene
   re$ntr=ntr
   
-  if (verbose) cat("Reading LLRs...\n")
-  llr <- Matrix::readMM(paste0(prefix,".targets/4sU.llr.mtx.gz"))
-  colnames(llr)=cols
-  rownames(llr)=gene.info$Gene
-  re$llr=llr
+  if (estimator=="TbBinomShape") {
+    
+    if (verbose) cat("Reading LLRs...\n")
+    llr <- Matrix::readMM(paste0(prefix,".targets/4sU.llr.mtx.gz"))
+    colnames(llr)=cols
+    rownames(llr)=gene.info$Gene
+    re$llr=llr
+    
+    if (verbose) cat("Reading Shapes...\n")
+    shape <- Matrix::readMM(paste0(prefix,".targets/4sU.shape.mtx.gz"))
+    colnames(shape)=cols
+    rownames(shape)=gene.info$Gene
+    re$shape=shape
+    
+  }
   
-  if (verbose) cat("Reading Shapes...\n")
-  shape <- Matrix::readMM(paste0(prefix,".targets/4sU.shape.mtx.gz"))
-  colnames(shape)=cols
-  rownames(shape)=gene.info$Gene
-  re$shape=shape
-
   if (read.posterior && file.exists(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
     if (verbose) cat("Reading posterior beta parameters...\n")
     alpha=Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator))
