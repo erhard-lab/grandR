@@ -395,7 +395,7 @@ FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.c
     t=GetMatrix(data,mode.slot=mode.slot,summarize = summi)
     use=Matrix::rowSums(t>=minval,na.rm=TRUE)>=mincol
     #use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincol)
-    if (!is.null(keep)) use = use | rownames(t) %in% rownames(t[keep,])
+    if (!is.null(keep)) use = use | (1:length(use)) %in% ToIndex(d,keep)
   }
   use=ToIndex(data,use)
 
