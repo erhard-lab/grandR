@@ -7,6 +7,7 @@
 #' @param table the table to display (can be NULL or a named list; see details)
 #' @param sizes the widths for the gene plots to show (12 is full screen with); must be a vector as long as there are gene plots
 #' @param height the height for the gene plots in pixel
+#' @param floating.size either a vector (width,height) for all plots in floating windows or a named list of such vectors for each floating window
 #' @param plot.gene a list of gene plots; can be NULL, then the stored gene plots are used (see \link{Plots})
 #' @param plot.global  a list of global plots; can be NULL, then the stored global plots are used (see \link{Plots})
 #' @param plot.window a list of static plots to show in a floating window; see details
@@ -47,6 +48,7 @@
 ServeGrandR=function(data,
                      table=NULL,
                      sizes=NA,height=400,
+                     floating.size=c(350,350),
                      plot.gene=NULL,
                      plot.global=NULL,
                      plot.window=NULL,
@@ -119,8 +121,10 @@ ServeGrandR=function(data,
   # after this, plot.window is either an empty list, or a list of lists.
   if (is.null(names(plot.window)) && length(plot.window)>0) stop("plot.window must have names!")
 
+  if (!is.list(floating.size)) floating.size = setNames(lapply(1:length(plot.window),function(i) floating.size),names(plot.window))
+  if (!identical(names(floating.size),names(plot.window)) || !all(sapply(floating.size,function(v) is.numeric(v) && length(v)==2))) stop("Floating size must either be a 2 vector or a named list of 2 vectors having the same length and names ans the floating windows!")
 
-  plot.wins = lapply(names(plot.window),function(n)CreateWindows(paste0("floating-",n),title=n,plots=plot.window[[n]]))
+  plot.wins = lapply(names(plot.window),function(n)CreateWindows(paste0("floating-",n),title=n,plots=plot.window[[n]],width=floating.size[[n]][1],height=floating.size[[n]][2]))
 
 
   #    plot.static=lapply(plot.static, function(p) if (is.function(p)) p(data) else p)
@@ -348,8 +352,18 @@ ServeGrandR=function(data,
         session$resetBrush(my.make.names(paste0(n,"plotsetbrush")))
       })
 
-      shiny::observeEvent(input[[my.make.names(paste0(n,"addhighlight"))]], {
-        highlighted.genes$genes <- c(highlighted.genes$genes,strsplit(input[[my.make.names(paste0(n,"plotsetgenes"))]],"\n")[[1]])
+      shiny::observeEvent(input[[my.make.names(paste0(n,"unionhighlight"))]], {
+        highlighted.genes$genes <- union(highlighted.genes$genes,strsplit(input[[my.make.names(paste0(n,"plotsetgenes"))]],"\n")[[1]])
+        session$resetBrush(my.make.names(paste0(n,"plotsetbrush")))
+      })
+
+      shiny::observeEvent(input[[my.make.names(paste0(n,"intersecthighlight"))]], {
+        highlighted.genes$genes <- intersect(highlighted.genes$genes,strsplit(input[[my.make.names(paste0(n,"plotsetgenes"))]],"\n")[[1]])
+        session$resetBrush(my.make.names(paste0(n,"plotsetbrush")))
+      })
+
+      shiny::observeEvent(input[[my.make.names(paste0(n,"subhighlight"))]], {
+        highlighted.genes$genes <- setdiff(highlighted.genes$genes,strsplit(input[[my.make.names(paste0(n,"plotsetgenes"))]],"\n")[[1]])
         session$resetBrush(my.make.names(paste0(n,"plotsetbrush")))
       })
     })
@@ -428,8 +442,11 @@ ServeGrandR=function(data,
                                                                     shiny::column(8,shiny::plotOutput(my.make.names(paste0(n,"plotset")),brush = shiny::brushOpts(id = my.make.names(paste0(n,"plotsetbrush"))))),
                                                                     shiny::column(4,
                                                                                   shiny::textAreaInput(my.make.names(paste0(n,"plotsetgenes")), label="Selected genes",height = 300,cols=40),
-                                                                                  shiny::actionButton(my.make.names(paste0(n,"sethighlight")), label="Set highlight"),
-                                                                                  shiny::actionButton(my.make.names(paste0(n,"addhighlight")), label="Add highlight")
+                                                                                  shiny::actionButton(my.make.names(paste0(n,"sethighlight")), label="Set as"),
+                                                                                  shiny::actionButton(my.make.names(paste0(n,"unionhighlight")), label="Union with"),
+                                                                                  shiny::actionButton(my.make.names(paste0(n,"intersecthighlight")), label="Intersect with"),
+                                                                                  shiny::actionButton(my.make.names(paste0(n,"subhighlight")), label="Subtract from"),
+                                                                                  shiny::h5("... highlighted genes")
                                                                     )
                                                                   )
     )),list(title="Global level"))

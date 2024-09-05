@@ -937,7 +937,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
           summarize=NULL
         } else {
           if (is.logical(summarize) && length(summarize)==1 && summarize) summarize=GetSummarizeMatrix(data)
-          summarize=summarize[cols,]
+          summarize=summarize[cols,,drop=FALSE]
           summarize=summarize[,colSums(summarize!=0)>1,drop=FALSE]
         }
       }
