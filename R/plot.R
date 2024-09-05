@@ -23,7 +23,9 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
   }
 
   if (is.null(facet)) {
+        r=rep(NA,length(x))
         use=is.finite(x+y)
+        if (sum(use)==0) return(r)
         if (min(x[use])==max(x[use])) {
           x[use]=0:1
         }
@@ -38,7 +40,6 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
         if (margin=='x') d$z=d$z/apply(d$z,1,max)
         else if (margin=='y') d$z=t(t(d$z)/apply(d$z,2,max))
         else d$z=d$z/max(d$z)
-        r=rep(NA,length(x))
         r[use]=d$z[cbind(findInterval(x[use], d$x),findInterval(y[use], d$y))]
 	r=r/max(r,na.rm=T)
         return(r)
@@ -350,6 +351,7 @@ PlotHeatmap=function(data,
 #' @param p.format  format string for the P value (see \link{sprintf}); can be NULL (don't output the P value)
 #' @param slope.format format string for the slope (see \link{sprintf}); can be NULL (don't output the slope)
 #' @param rmsd.format format string for the root mean square deviation (see \link{sprintf}); can be NULL (don't output the rmsd)
+#' @param min.obs minimum number of observations (no output outerwise)
 #'
 #' @details Use this for the \code{correlation} parameter of \link{PlotScatter}
 #'
@@ -372,13 +374,14 @@ PlotHeatmap=function(data,
 #' fun(data$x,data$y)
 #'
 #' @concept globalplot
-FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g",slope.format=NULL,rmsd.format=NULL) {
+FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.format="%.2g",slope.format=NULL,rmsd.format=NULL,min.obs=5) {
   function(x,y) {
     if (length(x)!=length(y)) stop("Cannot compute correlation, unequal lengths!")
     use=is.finite(x)&is.finite(y)
     if (sum(use)<length(x)) warning(sprintf("Removed %d/%d non finite values while computing correlation!",sum(!use),length(x)))
     x=x[use]
     y=y[use]
+    if (length(x)<min.obs) return(NULL)
     cc=cor.test(x,y,method=method)
     p.name=switch(method,pearson="R",spearman="\U03C1",kendall="\U03C4")
     formatted.n=if (!is.null(n.format)) sprintf(sprintf("n=%s",n.format),length(x))

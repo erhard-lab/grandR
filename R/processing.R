@@ -440,6 +440,31 @@ ComputeExpressionPercentage=function(data,name,genes=Genes(data),mode.slot=Defau
   data
 }
 
+#' Total expression computation
+#'
+#' Compute the total expression for a particular set of genes.
+#'
+#' @param data the grandR object
+#' @param name the new name by which this is added to the Coldata
+#' @param genes define the set of genes to compute the percentage for
+#' @param mode.slot which mode.slot to take the values for computing the percentage from
+#'
+#' @seealso \code{\link{Coldata}}
+#'
+#' @details Genes can be referred to by their names, symbols, row numbers in the gene table, or a logical vector referring to the gene table rows.
+#'
+#' @details To refer to data slots, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total)
+#' followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to filter by \emph{new counts}.
+#'
+#' @return a new grandR object having the expression percentage in its Coldata table
+#' @export
+#'
+#' @concept data
+ComputeTotalExpression=function(data,name,genes=Genes(data),mode.slot=DefaultSlot(data)) {
+  Coldata(data,name)=Matrix::colSums(GetMatrix(data,mode.slot=mode.slot,genes = genes))
+  data
+}
+
 
 #' Compute statistics for all columns (i.e. samples or cells)
 #'
