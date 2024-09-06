@@ -60,6 +60,7 @@ ServeGrandR=function(data,
 
   checkPackages(c("shiny","rclipboard","DT","htmltools"))
 
+  highlight=Genes(data,highlight)
   map=list()
   my.make.names = function(a) {
     o=a

@@ -1712,6 +1712,7 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
 #' @param d the degradation rate (see details)
 #' @param hl the RNA half-life
 #' @param f0 the abundance at time t=0
+#' @param dropout the 4sU dropout factor
 #' @param min.time the start time to simulate
 #' @param max.time the end time to simulate
 #' @param N how many time points from min.time to max.time to simuate
@@ -1730,7 +1731,7 @@ PlotGeneProgressiveTimecourse=function(data,gene,slot=DefaultSlot(data),time=Des
 #' head(SimulateKinetics(hl=2))   # simulate steady state kinetics for an RNA with half-life 2h
 #'
 #' @concept kinetics
-SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=NULL,min.time=-1,max.time=10,N = 1000,name=NULL,out=c("Old","New","Total","NTR")) {
+SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=NULL,dropout = 0,min.time=-1,max.time=10,N = 1000,name=NULL,out=c("Old","New","Total","NTR")) {
     times=seq(min.time,max.time,length.out=N)
     if (is.numeric(s)) s = ComputeNonConstantParam(start=s)
     if (is.numeric(d)) d = ComputeNonConstantParam(start=d)
@@ -1743,6 +1744,7 @@ SimulateKinetics=function(s=100*d,d=log(2)/hl,hl=2,f0=NULL,min.time=-1,max.time=
     #new=c(rep(0,sum(times<0)),f.nonconst.linear(t = times[times>=0],f0 = 0,so = s$offset,sf=s$factor,se=s$exponent,do = d$offset,df=d$factor,de=d$exponent))
     old=c(rep(f0,sum(times<0)),f.nonconst(t = times[times>=0],f0 = f0,s=0,d=d))
     new=c(rep(0,sum(times<0)),f.nonconst(t = times[times>=0],f0 = 0,s=s,d=d))
+    new = new-dropout*new
 
     re=data.frame(
         Time=times,

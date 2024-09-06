@@ -215,7 +215,7 @@ estimate.dispersion=function(ss) {
   dds=DESeq2::estimateDispersions(dds,quiet=TRUE)
   disp=DESeq2::dispersions(dds)
   disp[is.na(disp)]=0.1 # ss=0 0 0 ...
-  disp
+  setNames(disp,rownames(ss))
 }
 
 GetField=function(name,field,sep=".") sapply(strsplit(as.character(name),sep,fixed=TRUE),function(v) v[field])
