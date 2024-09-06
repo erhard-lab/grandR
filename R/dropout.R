@@ -203,7 +203,7 @@ Correct4sUDropoutHLSpline=function(data,pairs=Findno4sUPairs(data),spline.df=15)
 
   set.seed(42)
   for (i in 1:length(pairs)) {
-    df=Make4sUDropoutTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,ties='random')
+    df=Make4sUDropoutTable(data=data,w4sU=names(pairs)[i],no4sU=pairs[[i]],transform=rank,ties='random',rm.all.zero=FALSE)
 
     X <- model.matrix(lfc ~ splines::bs(covar, df=spline.df),data=df)
     fit <- quantreg::rq(lfc ~ splines::bs(covar, df=spline.df), data=df)

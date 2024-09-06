@@ -819,6 +819,7 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
   Q <- NULL
 
   df=GetAnalysisTable(data,analyses=analysis,regex=FALSE,columns=c("LFC|Q"),gene.info = FALSE)
+  if (is.numeric(analysis)) analysis=Analyses(data)[analysis]
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",names(df)))
   g=PlotScatter(df,x=LFC,y=-log10(Q),remove.outlier = FALSE,...)+
     xlab(bquote(log[2]~FC))+
@@ -846,22 +847,15 @@ VulcanoPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
 #'
 #' @param data the grandR object that contains the data to be plotted
 #' @param analysis the analysis to plot (default: first analysis)
-#' @param aest parameter to set visual attributes of the plot
 #' @param p.cutoff p-value cutoff (default: 0.05)
 #' @param lfc.cutoff log fold change cutoff (default: 1)
-#' @param label.numbers if TRUE, label the number of genes
-#' @param highlight highlight these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
-#' @param label label these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
-#' @param label.repel force to repel labels from points and each other (increase if labels overlap)
+#' @param annotate.numbers if TRUE, label the number of genes
+#' @param ... further parameters passed to \link{PlotScatter}
 #' @return a ggplot object
 #' @export
 #' @concept globalplot
-MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
-                lfc.cutoff=1,
-                label.numbers=TRUE,
-                highlight=NULL,
-                label=NULL,
-                label.repel=1) {
+MAPlot=function(data,analysis=Analyses(data)[1],p.cutoff=0.05,lfc.cutoff=1,
+                     annotate.numbers=TRUE,...) {
   # R CMD check guard for non-standard evaluation
   M <- Q <- NULL
 
@@ -869,37 +863,18 @@ MAPlot=function(data,analysis=Analyses(data)[1],aest=aes(),p.cutoff=0.05,
   if (is.numeric(analysis)) analysis=Analyses(data)[analysis]
   names(df)=gsub(".*.Q","Q",gsub(".*.LFC","LFC",gsub(".*.M","M",names(df))))
   if (is.null(df$Q)) df$Q=1
-  aes=utils::modifyList(aes(M+1,LFC,color=ifelse(Q<p.cutoff,"Sig.","NS")),aest)
-  g=ggplot(df,mapping=aes)+
-    cowplot::theme_cowplot()+
-    geom_point(size=1)+
-    scale_x_log10()+
-    scale_color_manual(values=c(Sig.="black",NS="grey50"),guide='none')+
-    ylab(bquote(log[2]~FC))+
+  df$Q[is.na(df$Q)]=1
+  g=PlotScatter(df,x=M+1,y=LFC,color=ifelse(Q<p.cutoff,'black','gray50'),log.x=TRUE,remove.outlier = FALSE,...)+
     xlab("Total expression")+
-    geom_hline(yintercept=c(-lfc.cutoff,lfc.cutoff),linetype=2)+
+    ylab(bquote(log[2]~FC))+
+    geom_hline(yintercept=if (lfc.cutoff==0) 0 else c(-lfc.cutoff,lfc.cutoff),linetype=2)+
     ggtitle(analysis)
 
-  if (!is.null(highlight)) {
-    if (is.list(highlight)){
-      for (col in names(highlight)) {
-        g=g+geom_point(data=df[ToIndex(data,highlight[[col]]),],color=col,size=1.5)
-      }
-    } else {
-      g=g+geom_point(data=df[ToIndex(data,highlight),],color='red',size=1.5)
-    }
-  }
-  if (!is.null(label)) {
-    if (label=="auto") label=abs(df$LFC)>lfc.cutoff & df$Q<p.cutoff & !is.na(df$LFC) & !is.na(df$Q)
-    df2=df
-    df2$label=""
-    df2[label,"label"]=rownames(df2)[label]
-    g=g+ggrepel::geom_label_repel(data=df2,mapping=aes(label=label),show.legend = FALSE,max.overlaps = Inf,min.segment.length = 0,force=label.repel)
-  }
-  if (label.numbers) {
+  if (annotate.numbers) {
     n=c(sum(df$LFC>lfc.cutoff & df$Q<p.cutoff,na.rm = TRUE),sum(df$LFC< -lfc.cutoff & df$Q<p.cutoff,na.rm = TRUE))
     g=g+annotate("label",x=c(Inf,Inf),y=c(Inf,-Inf),label=paste0("n=",n),hjust=c(1.1,1.1),vjust=c(1.1,-0.1))
   }
+
   g
 }
 
