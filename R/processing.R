@@ -125,7 +125,7 @@ ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name="HL", columns
       pmin(comp.hl(p = ntrs[,i],time = time[i]),max.HL),
       pmin(comp.hl(p = lower[,i],time = time[i]),max.HL)
     )))
-    colnames(hls)=paste0(rep(c("CI.lower.","Half-life","CI.upper."),ncol(hls)),rep(columns,each=3))
+    colnames(hls)=paste0(rep(c("Half-life.lower.","Half-life.MAP.","Half-life.upper."),ncol(ntrs)),rep(columns,each=3))
   }
   else {
     hls = sapply(columns,function(i) comp.hl(p = ntrs[,i],time = time[i]))
