@@ -141,7 +141,7 @@ ServeGrandR=function(data,
     if (length(highlight)==1 && highlight %in% names(table[[1]])) {
       hg = table[[1]][[highlight]]
       hg = if (is.character(hg)) hg!="" else as.logical(hg)
-      table[[1]][[highlight]] = hg
+      table[[1]][[highlight]] = factor(ifelse(hg,'x',''),levels=c('x',''))
       highlightgenes=Genes(data,hg)
     } else {
       highlightgenes=Genes(data,highlight)
@@ -159,10 +159,8 @@ ServeGrandR=function(data,
 
         df.rounded = as.data.frame(lapply(df,function(v) if(is.numeric(v)) round(v,5) else v),check.names=FALSE,stringsAsFactors = FALSE)
         plot.window.adding = ""
-        plot.window.removing = ""
         for (i in 1:length(plot.window)) {
           plot.window.adding = paste(plot.window.adding,sprintf("$('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]'));",ns("tab"),ns(paste0("btn-plot-window-",names(plot.window)[i]))))
-          plot.window.removing = paste(plot.window.removing,sprintf("$('body').append($('[id=\"%s\"]'));",ns(paste0("btn-plot-window-",names(plot.window)[i]))))
           obs=function(i) {
             btnid = ns(paste0("btn-plot-window-",names(plot.window)[i]))
             shiny::observeEvent(input[[btnid]], {
@@ -172,10 +170,9 @@ ServeGrandR=function(data,
           }
           obs(i)
         }
-        rdf = reactiveValues(df=df.rounded)
+        rdf = shiny::reactiveValues(df=df.rounded)
         output$tab <- DT::renderDataTable({
-          shinyjs::runjs(sprintf("$('body').append($('[id=\"%s\"]')); $('body').append($('[id=\"%s\"]')); $('body').append($('[id=\"%s\"]')); $('body').append($('[id=\"%s\"]')); $('body').append($('[id=\"%s\"]')); %s",ns("pdf"),ns("downloadraw"),ns("download1"),ns("highlightbutton"),ns("clip"),plot.window.removing))
-          dttab=DT::datatable(rdf$df,
+          dttab=DT::datatable(shiny::isolate(rdf$df),
                         callback = DT::JS(sprintf("$('div[id=\"%s\"] > div > div#buttons').css('float','left').css('margin-right','50px'); $('div[id=\"%s\"]').css('float','left'); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); $('div[id=\"%s\"] > div > div#buttons').append($('[id=\"%s\"]')); %s",ns("tab"),ns("clip"),ns("tab"),ns("pdf"),ns("tab"),ns("downloadraw"),ns("tab"),ns("download1"),ns("tab"),ns("highlightbutton"),ns("tab"),ns("clip"),plot.window.adding)),
                         selection = 'single',
                         rownames = FALSE,
@@ -192,8 +189,17 @@ ServeGrandR=function(data,
           if (any(grepl("\\.P$",names(df)))) dttab=DT::formatSignif(dttab,names(df)[grepl("\\.P$",names(df))], 2)
           if (any(grepl("\\.Half-life$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Half-life$",names(df))], 2)
           if (any(grepl("\\.Synthesis$",names(df)))) dttab=DT::formatRound(dttab,names(df)[grepl("\\.Synthesis$",names(df))], 2)
+          if (length(highlight)==1 && highlight %in% names(df)) {
+            dttab = DT::formatStyle(dttab,highlight,target = 'row',
+                                    backgroundColor = DT::styleEqual(c('x', ''), c('#ffcccb', 'white')))
+            dttab = DT::formatStyle(dttab,highlight,target='cell',
+                                    fontWeight = 'bold',
+                                    textAlign = 'center')
+          }
           dttab
         })
+        shiny::observe({DT::replaceData(DT::dataTableProxy(ns('tab')), rdf$df,rownames = FALSE)})
+
         output$download1 <- shiny::downloadHandler(
           filename = function() {
             paste0(title,"-", Sys.Date(), ".tsv")
@@ -304,7 +310,7 @@ ServeGrandR=function(data,
 
         if (length(highlight)==1 && highlight %in% names(df)) {
           shiny::observe({
-            rdf$df[[highlight]] = rdf$df[[df.identifier]] %in% highlighted.genes$genes
+            rdf$df[[highlight]] = factor(ifelse(rdf$df[[df.identifier]] %in% highlighted.genes$genes,'x',''),levels=c('x',''))
           })
         }
         output
