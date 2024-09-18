@@ -55,12 +55,13 @@ GetDiagnosticParameters=function(data) {
 #' @param sample a sample name
 #' @param orientation restrict to either Sense or Antisense; can be NULL
 #' @param category restrict to a specific category (see \link{GetDiagnosticParameters}); can be NULL
+#' @param max.pos remove everything behind this position
 #'
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
 #' @concept diagnostics
-PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NULL)  {
+PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NULL,max.pos=2500)  {
   # R CMD check guard for non-standard evaluation
   x <- `Mismatch frequency` <- SenseCat <- Corrected <- NULL
 
@@ -70,6 +71,8 @@ PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NUL
 
   if (!is.null(orientation)) tab=tab[tab$Sense %in% setNames(c(0,1),c("Antisense","Sense"))[orientation],]
   if (!is.null(category)) tab=tab[tab$Category %in% category,]
+
+  tab=tab[tab$Position<=max.pos,]
 
 	tab$`Mismatch frequency`=tab[,sample]
 	max1=max(c(0,tab$Position[tab$`First read`==1]))
@@ -140,12 +143,13 @@ PlotMismatchPositionForSample=function(data,sample,orientation=NULL,category=NUL
 #' @param read the nucleotide as it occurs in the read
 #' @param orientation restrict to either Sense or Antisense; can be NULL
 #' @param category restrict to a specific category (see \link{GetDiagnosticParameters}); can be NULL
+#' @param max.pos remove everything behind this position
 #'
 #' @return a list with a ggplot object, a description, and the desired size for the plot
 #' @export
 #'
 #' @concept diagnostics
-PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category=NULL) {
+PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category=NULL,max.pos=2500) {
   # R CMD check guard for non-standard evaluation
   Sample <- x <- `Mismatch frequency` <- Corrected <- NULL
 
@@ -156,6 +160,7 @@ PlotMismatchPositionForType=function(data,genomic,read,orientation=NULL,category
   if (!is.null(orientation)) tab=tab[tab$Sense %in% setNames(c(0,1),c("Antisense","Sense"))[orientation],]
   if (!is.null(category)) tab=tab[tab$Category %in% category,]
 
+  tab=tab[tab$Position<=max.pos,]
 
   tab=tab[tab$Genomic==genomic & tab$Read==read,]
 	max1=max(c(0,tab$Position[tab$`First read`==1]))

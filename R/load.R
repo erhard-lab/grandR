@@ -722,6 +722,9 @@ ReadFeatureCounts=function(file, design=c(Design$Condition,Design$Replicate),cla
 }
 
 GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
+
+  if (!is.null(data$metadata$qc[[name]])) return(data$metadata$qc[[name]])
+
   ll=try.file(paste0(data$prefix,".",name),possible.suffixes = c(".tsv.gz",".tsv",""),stop.if.not.exist=stop.if.not.exist)
   if (is.null(ll)) {
     warning(paste0("Cannot find QC table ",name))
@@ -730,6 +733,13 @@ GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
   header = !name %in% c("clip","strandness")
   re=read.tsv(ll$file,header=header)
   ll$callback()
+
+  # buffer it in the grandR object
+  qc=data$metadata$qc
+  if (is.null(qc)) qc = list()
+  qc[[name]]=re
+  data$metadata$qc <<- qc
+
   return(re)
 
 #  fn=paste0(data$prefix,".",name,".tsv.gz")
@@ -884,23 +894,23 @@ ReadGRAND3_sparse=function(prefix,
   colnames(ntr)=cols
   rownames(ntr)=gene.info$Gene
   re$ntr=ntr
-  
+
   if (estimator=="TbBinomShape") {
-    
+
     if (verbose) cat("Reading LLRs...\n")
     llr <- Matrix::readMM(paste0(prefix,".targets/4sU.llr.mtx.gz"))
     colnames(llr)=cols
     rownames(llr)=gene.info$Gene
     re$llr=llr
-    
+
     if (verbose) cat("Reading Shapes...\n")
     shape <- Matrix::readMM(paste0(prefix,".targets/4sU.shape.mtx.gz"))
     colnames(shape)=cols
     rownames(shape)=gene.info$Gene
     re$shape=shape
-    
+
   }
-  
+
   if (read.posterior && file.exists(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
     if (verbose) cat("Reading posterior beta parameters...\n")
     alpha=Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator))
@@ -1167,6 +1177,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   if (!is.null(rename.sample)) colnames(data)=sapply(colnames(data),rename.sample)
 
   data$Gene = check.and.make.unique(data$Gene,label="gene names")
+  data$Symbol[data$Symbol=="null"] = data$Gene[data$Symbol=="null"]
   data$Symbol = check.and.make.unique(data$Symbol,ref=data$Gene,label="gene symbols",ref.label = "gene names")
 
   #if (anyDuplicated(data$Gene)) {

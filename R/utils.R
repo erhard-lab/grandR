@@ -28,6 +28,61 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
   t
 }
 
+smartrbind=function(a,b) {
+  # rbind data frames paying attention to columns and factor levels
+  cd=NULL
+  for (common in intersect(names(a),names(b))) {
+    if(is.factor(a[[common]])) {
+      r = c(as.character(a[[common]]),as.character(b[[common]]))
+      oll=levels(b[[common]])
+      if (is.null(oll)) oll = unique(b[[common]])
+      r=factor(r,levels=union(levels(a[[common]]),oll))
+    } else {
+      r = c(a[[common]],b[[common]])
+    }
+    df=setNames(data.frame(r),common)
+    cd=if (is.null(cd)) df else cbind(cd,df)
+  }
+  for (re.only in setdiff(names(a),names(b))) {
+    r=c(a[[re.only]],rep(NA,nrow(b)))
+    df=setNames(data.frame(r),re.only)
+    cd=if (is.null(cd)) df else cbind(cd,df)
+  }
+  for (add.only in setdiff(names(b),names(a))) {
+    r=c(rep(NA,nrow(a)),b[[add.only]])
+    df=setNames(data.frame(r),add.only)
+    cd=if (is.null(cd)) df else cbind(cd,df)
+  }
+  rownames(cd)=make.unique(c(rownames(a),rownames(b)))
+  cd
+}
+
+#' Summarize a data matrix
+#'
+#' Helper function to work in conjunction with \link{GetMatrix} or similar to obtain a summarized matrix.
+#'
+#' @param mat the matrix to summarize
+#' @param summarize.mat the matrix defining how to summarize (see details)
+#'
+#' @details
+#' The summarize.mat can be obtained via \link{GetSummarizeMatrix}. If there are missing (NA) values in the matrix, they are imputed from the rest (average)
+#'
+#' @return the summarized matrix
+#' @export
+#'
+#' @concept data
+Summarize=function(mat,summarize.mat) {
+  summarize.mat=summarize.mat[,colSums(summarize.mat!=0)>0,drop=FALSE]
+
+  apply(summarize.mat,2,function(cc) {
+    h=mat[,cc!=0,drop=FALSE]
+    cc=cc[cc!=0]
+    apply(h,1,function(v) { if (all(is.na(v))) NA else {v[is.na(v)] = mean(v,na.rm = TRUE); sum(v*cc)}})
+  })
+}
+
+
+
 confint.nls.lm=function (object, parm, level = 0.95, ...)
 {
   cc <- coef(object)
