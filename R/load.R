@@ -497,7 +497,7 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   else firstnumeric = ((ncol(data)-num.samples+1))
   if (!all(clss[firstnumeric:length(clss)]=="numeric") || firstnumeric==1 || firstnumeric>ncol(data)) stop("Columns (except for the first n) must be numeric!")
   anno.names=colnames(data)[1:(firstnumeric-1)]
-  if (verbose) cat(sprintf("Recognized %d columns as gene data (%s).\n",firstnumeric-1,paste(anno.names,collaps)))
+  if (verbose) cat(sprintf("Recognized %d columns as gene data (%s).\n",firstnumeric-1,paste(anno.names,collapse = ", ")))
 
 
   #if (anyDuplicated(data[[1]])) {
@@ -1244,8 +1244,8 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     re$ntr=correctmat(re$ntr)
     re$alpha=correctmat(re$alpha)
     re$beta=correctmat(re$beta)
-    re$shape=correctmat(re$shape)
-    re$llr=correctmat(re$llr)
+    if (!is.null(re$shape)) re$shape=correctmat(re$shape)
+    if (!is.null(re$llr)) re$llr=correctmat(re$llr)
   }
 
   checknames=function(n,a){

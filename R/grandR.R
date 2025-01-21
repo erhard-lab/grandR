@@ -346,12 +346,12 @@ merge_columns=function(re,add,addname) {
 
   # Genes have to be made equal!
   if (length(rownames(add))!=length(rownames(re)) || !all(rownames(add)==rownames(re))) {
-    genes <- union(Genes(re,use.symbol=FALSE),Genes(add,use.symbol=FALSE))
+    genes <- union(Genes(re,use.symbols=FALSE),Genes(add,use.symbols=FALSE))
 
     new.gene.info = data.frame(Gene=genes)
     rownames(new.gene.info)=genes
-    rownames(re$gene.info)=Genes(re,use.symbol=FALSE)
-    rownames(add$gene.info)=Genes(add,use.symbol=FALSE)
+    rownames(re$gene.info)=Genes(re,use.symbols=FALSE)
+    rownames(add$gene.info)=Genes(add,use.symbols=FALSE)
 
     for (l1 in intersect(names(re$data),names(add$data))) {
       mat = re$data[[l1]]
@@ -905,6 +905,7 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE,warn=TRUE) {
 #' @param summarize Should replicates by summarized? see details
 #' @param prefix Prepend each column in the output table (except for the gene.info columns) by the given prefix
 #' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
+#' @param reorder.columns if TRUE, the columns in the output table are ordered according to column (otherwise according to their order in the grandR object)
 #'
 #' @return A data frame containing the desired values
 #'
@@ -946,7 +947,7 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE,warn=TRUE) {
 #' @export
 #'
 #' @concept data
-GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol") {
+GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol",reorder.columns=FALSE) {
   if (is.null(genes)) genes=Genes(data)
   genes=ToIndex(data,genes)
 
@@ -969,7 +970,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 
       columns=substitute(columns)
       cols=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
-      cols=Columns(data,cols)
+      cols=Columns(data,cols,reorder = reorder.columns)
 
       if (!is.null(summarize)) {
         if (is.logical(summarize) && length(summarize)==1 && !summarize) {

@@ -83,7 +83,7 @@ Summarize=function(mat,summarize.mat) {
 
 
 
-confint.nls.lm=function (object, parm, level = 0.95, ...)
+confint_nls=function (object, parm, level = 0.95, ...)
 {
   cc <- coef(object)
   if (missing(parm))

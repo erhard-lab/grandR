@@ -302,7 +302,7 @@ PlotHeatmap=function(data,
   if (any(mode.slot)) {
     columns=substitute(columns)
     columns=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
-    columns=Columns(data,columns)
+    columns=Columns(data,columns,reorder=TRUE)
 
     if (length(type)==1) {
       xlab=substitute(xlab)
@@ -310,7 +310,7 @@ PlotHeatmap=function(data,
     }
   }
 
-  mat=as.matrix(GetTable(data,type=type,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE))
+  mat=as.matrix(GetTable(data,type=type,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE,reorder.columns=TRUE))
   if (is.character(transform)) transform=Transform(transform)
   mat=transform(mat)
 
