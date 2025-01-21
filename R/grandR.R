@@ -346,12 +346,12 @@ merge_columns=function(re,add,addname) {
 
   # Genes have to be made equal!
   if (length(rownames(add))!=length(rownames(re)) || !all(rownames(add)==rownames(re))) {
-    genes <- union(Genes(re,use.symbol=FALSE),Genes(add,use.symbol=FALSE))
+    genes <- union(Genes(re,use.symbols=FALSE),Genes(add,use.symbols=FALSE))
 
     new.gene.info = data.frame(Gene=genes)
     rownames(new.gene.info)=genes
-    rownames(re$gene.info)=Genes(re,use.symbol=FALSE)
-    rownames(add$gene.info)=Genes(add,use.symbol=FALSE)
+    rownames(re$gene.info)=Genes(re,use.symbols=FALSE)
+    rownames(add$gene.info)=Genes(add,use.symbols=FALSE)
 
     for (l1 in intersect(names(re$data),names(add$data))) {
       mat = re$data[[l1]]

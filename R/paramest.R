@@ -322,6 +322,7 @@ GetMixMatn=function(mixmat) as.integer(colnames(mixmat))
 
 
 
+#' @export
 `[.MixMatrix`=function(x,k=0:dim(x)[1],n=1:dim(x)[2]) {
 	if (is.logical(k)) k=GetMixMatk(x)[k]
 	if (is.logical(n)) n=GetMixMatk(x)[n]
@@ -336,9 +337,13 @@ GetMixMatn=function(mixmat) as.integer(colnames(mixmat))
 	}
 	structure(unclass(x)[k,n,drop=FALSE], class = "MixMatrix")
 }
+#' @export
 "+.MixMatrix"=function(m1, m2) computeMixMatrix(m1,m2,match.fun(FUN="+"))
+#' @export
 "-.MixMatrix"=function(m1, m2) computeMixMatrix(m1,m2,match.fun(FUN="-"))
+#' @export
 "*.MixMatrix"=function(m1, m2) computeMixMatrix(m1,m2,match.fun(FUN="*"))
+#' @export
 "/.MixMatrix"=function(m1, m2) computeMixMatrix(m1,m2,match.fun(FUN="/"))
 
 
@@ -729,6 +734,10 @@ PlotShapeAdjust=function(...) {
 #PlotShapeAdjust(model.par(ntr=0.1,shape=1.1),model.par(ntr=0.3,shape=1.1),model.par(ntr=0.3,shape=1.5))
 
 PlotMixMat=function(mixmat,cutoff.fraction=0.01,mode=c("fill","stack","dodge")) {
+  # R CMD check guard for non-standard evaluation
+  n <- count <- k <- NULL
+
+
   cs = colSums(mixmat)
   cutoff = GetMixMatn(mixmat)[max(which(cs>cutoff.fraction*max(cs)))]
 

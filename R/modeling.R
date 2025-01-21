@@ -554,7 +554,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
                        control=minpack.lm::nls.lm.control(maxiter = maxiter))
 
         if (model.p$niter==maxiter) return(list(data=NA,residuals=if (compute.residuals) data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=NA,Relative=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA,total=NA,type="equi"))
-        conf.p=try(confint.nls.lm(model.p,level=CI.size),silent = TRUE)
+        conf.p=try(confint_nls(model.p,level=CI.size),silent = TRUE)
         if (!is.matrix(conf.p)) conf.p=matrix(c(NA,NA,NA,NA),nrow=2)
         par=setNames(model.p$par,c("s","d"))
         rmse=sqrt(model.p$deviance/(nrow(ndf)+nrow(odf)))
@@ -619,7 +619,7 @@ FitKineticsGeneLeastSquares=function(data,gene,slot=DefaultSlot(data),time=Desig
         if (model.m$niter==maxiter) return(list(data=NA,residuals=if (compute.residuals) data.frame(Name=c(as.character(odf$Name[odf$use]),as.character(ndf$Name[ndf$use])),Type=c(rep("old",nrow(ndf)),rep("new",nrow(odf))),Absolute=NA,Relative=NA) else NA,Synthesis=NA,Degradation=NA,`Half-life`=NA,conf.lower=c(NA,NA),conf.upper=c(NA,NA),f0=NA,logLik=NA,rmse=NA, rmse.new=NA, rmse.old=NA, total=NA,type="non.equi"))
         par=setNames(model.m$par,c("s","d"))
         f0=par[3]
-        conf.m=try(confint.nls.lm(model.m,level=CI.size),silent = TRUE)
+        conf.m=try(confint_nls(model.m,level=CI.size),silent = TRUE)
         if (!is.matrix(conf.m)) conf.m=matrix(c(NA,NA,NA,NA),nrow=2)
         rmse=sqrt(model.m$deviance/(nrow(ndf)+nrow(odf)))
         fvec=res.fun.nonequi.f0fixed(par,f0,odf,ndf)

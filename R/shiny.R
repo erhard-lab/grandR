@@ -259,12 +259,12 @@ ServeGrandR=function(data,
 
         shiny::observeEvent(input[[ns("highlightbutton")]], {
           shiny::showModal(shiny::modalDialog(
-            tags$p(sprintf("Filtered genes (n=%d)",length(highlighted.genes$filtered.rows)), style = "font-weight: bold;"),
+            htmltools::tags$p(sprintf("Filtered genes (n=%d)",length(highlighted.genes$filtered.rows)), style = "font-weight: bold;"),
             shiny::actionButton(ns("sethighlightdia"),label="Set as"),
             shiny::actionButton(ns("unionhighlightdia"),label="Union with"),
             shiny::actionButton(ns("intersecthighlightdia"),label="Intersect wit"),
             shiny::actionButton(ns("subhighlightdia"),label="Subtract from"),
-            shiny::tags$div(style = "height: 20px;"),
+            htmltools::tags$div(style = "height: 20px;"),
             shiny::textAreaInput(ns("highlightedgenesdia"), label=sprintf("... highlighted genes (n=%d)",length(highlighted.genes$genes)),height = 150,cols=40, value = paste0(highlighted.genes$genes,collapse="\n")),
 
             title="Highlighted genes from table genes",easyClose=TRUE,footer=htmltools::tagList(
@@ -516,7 +516,7 @@ ServeGrandR=function(data,
                                                                                   shiny::actionButton(my.make.names(paste0(n,"unionhighlight")), label="Union with"),
                                                                                   shiny::actionButton(my.make.names(paste0(n,"intersecthighlight")), label="Intersect with"),
                                                                                   shiny::actionButton(my.make.names(paste0(n,"subhighlight")), label="Subtract from"),
-                                                                                  shiny::tags$div(style = "height: 20px;"),
+                                                                                  htmltools::tags$div(style = "height: 20px;"),
                                                                                   shiny::textAreaInput(my.make.names(paste0(n,"plotsetgeneshighlight")), label="... highlighted genes",height = 200,cols=40),
 
                                                                     )
