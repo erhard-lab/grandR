@@ -905,6 +905,7 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE,warn=TRUE) {
 #' @param summarize Should replicates by summarized? see details
 #' @param prefix Prepend each column in the output table (except for the gene.info columns) by the given prefix
 #' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
+#' @param reorder.columns if TRUE, the columns in the output table are ordered according to column (otherwise according to their order in the grandR object)
 #'
 #' @return A data frame containing the desired values
 #'
@@ -946,7 +947,7 @@ ToIndex=function(data,gene,regex=FALSE,remove.missing=TRUE,warn=TRUE) {
 #' @export
 #'
 #' @concept data
-GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol") {
+GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr.na=TRUE,gene.info=FALSE,summarize=NULL,prefix=NULL,name.by="Symbol",reorder.columns=FALSE) {
   if (is.null(genes)) genes=Genes(data)
   genes=ToIndex(data,genes)
 
@@ -969,7 +970,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 
       columns=substitute(columns)
       cols=if (is.null(columns)) colnames(data) else eval(columns,Coldata(data),parent.frame())
-      cols=Columns(data,cols)
+      cols=Columns(data,cols,reorder = reorder.columns)
 
       if (!is.null(summarize)) {
         if (is.logical(summarize) && length(summarize)==1 && !summarize) {
