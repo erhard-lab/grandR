@@ -581,8 +581,8 @@ PlotScatter=function(data,
 
   if (is.null(xlab)) { if (is.character(x)) xlab=x else if (is.numeric(x)) xlab=names(df)[x] else xlab=deparse(x)}
   if (is.null(ylab)) { if (is.character(y)) ylab=y else if (is.numeric(y)) ylab=names(df)[y] else ylab=deparse(y)}
-  if (is.na(xlab) || xlab=="") xlab=NULL
-  if (is.na(ylab) || ylab=="") ylab=NULL
+  if (is.na(xlab[1]) || xlab=="") xlab=NULL
+  if (is.na(ylab[1]) || ylab=="") ylab=NULL
 
   df$A=A
   df$B=B

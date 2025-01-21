@@ -395,7 +395,7 @@ FilterGenes=function(data,mode.slot='count',minval=100,mincol=ncol(data)/2,min.c
     t=GetMatrix(data,mode.slot=mode.slot,summarize = summi)
     use=Matrix::rowSums(t>=minval,na.rm=TRUE)>=mincol
     #use=apply(t,1,function(v) sum(v>=minval,na.rm=TRUE)>=mincol)
-    if (!is.null(keep)) use = use | (1:length(use)) %in% ToIndex(d,keep)
+    if (!is.null(keep)) use = use | (1:length(use)) %in% ToIndex(data,keep)
   }
   use=ToIndex(data,use)
 
@@ -456,7 +456,7 @@ ComputeExpressionPercentage=function(data,name,genes=Genes(data),mode.slot=Defau
 #' @details To refer to data slots, the mode.slot syntax can be used: Each name is either a data slot, or one of (new,old,total)
 #' followed by a dot followed by a slot. For new or old, the data slot value is multiplied by ntr or 1-ntr. This can be used e.g. to filter by \emph{new counts}.
 #'
-#' @return a new grandR object having the expression percentage in its Coldata table
+#' @return a new grandR object having the total expression in its Coldata table
 #' @export
 #'
 #' @concept data

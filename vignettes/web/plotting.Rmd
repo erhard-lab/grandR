@@ -38,21 +38,21 @@ Refer to the [Loading data and working with grandR objects](loading-data.html) v
 
 The most basic plots are to just showing the raw data (from the default slot, by default shown in log scale; both can be changed via parameters):
 
-```{r fig.width=6, warning=FALSE}
+```{r fig.width=6, warning=FALSE, fig.alt = "Basic scatter plots"}
 PlotGeneTotalVsNtr(banp,"Tubgcp5")
 PlotGeneOldVsNew(banp,"Tubgcp5")
 ```
 
 By default replicates (if present in the `Coldata` table) will be shown as the point shapes, and conditions as colors. Here we do not have a Condition, so let's add this (and show only the new vs. old plot, as this works the same way for the total vs NTR):
 
-```{r fig.width=6, warning=FALSE}
+```{r fig.width=6, warning=FALSE, fig.alt = "Colored old vs new scatter plot"}
 Condition(banp) <- c("Genotype","Experimental.time.original","has.4sU") 
 PlotGeneOldVsNew(banp,"Tubgcp5")
 ```
 
 Since the plotting function return standard ggplot object,it is easily possible to add titles or to change the aesthetic mappings (i.e. the usage of shape for replicates and colors for conditions) via the aest parameter and the way they are displayed via ggplot's scales:
 
-```{r fig.width=6, warning=FALSE}
+```{r fig.width=6, warning=FALSE, fig.alt = "Colored old vs new scatter plot"}
 PlotGeneOldVsNew(banp,"Tubgcp5",aest = aes(color=Genotype,shape=factor(duration.4sU)))+
   scale_color_brewer(palette="Dark2")+
   ggtitle("Tubgcp5")
@@ -60,7 +60,7 @@ PlotGeneOldVsNew(banp,"Tubgcp5",aest = aes(color=Genotype,shape=factor(duration.
 
 Both plotting functions also offer to plot credible intervals. These must be precomputed using `ComputeNtrCI`. Note here that `PlotGeneOldVsNew` returns a plain ggplot2 object, so we can easily further customize it (here: restrict the y axis, which would otherwise be extended way down due to the large CI of one of the points).
 
-```{r fig.width=6, warning=FALSE}
+```{r fig.width=6, warning=FALSE, fig.alt = "Colored old vs new scatter plot with credible intervals"}
 banp <- ComputeNtrCI(banp) # creates data slots "lower" and "upper"
 PlotGeneOldVsNew(banp,"Tubgcp5",show.CI = TRUE)+
   coord_cartesian(ylim=c(30,3000))
@@ -68,7 +68,7 @@ PlotGeneOldVsNew(banp,"Tubgcp5",show.CI = TRUE)+
 
 These visualizations are sometimes hard to interpret. In such situations, it makes sense to only plot either old, new or total RNA on the y axis, and group samples on the x axis. By default, `PlotGeneGroupsPoints` will group the points according to the Condition (which can be changed via the `group` parameter). To demonstrate, we plot new RNA from the norm slot (by using the mode.slot syntax `new.norm` for the mode.slot parameter), show credible intervals, and specify custom colors:
 
-```{r fig.width=6, warning=FALSE}
+```{r fig.width=6, warning=FALSE, fig.alt = "Grouped point plot"}
 PlotGeneGroupsPoints(banp,"Tubgcp5",mode.slot="new.norm",show.CI = TRUE,aest=aes(color=Genotype))+
   coord_cartesian(ylim=c(30,3000))+
   scale_color_manual(values=c(wt='gray50',dTag='red'))
@@ -76,7 +76,7 @@ PlotGeneGroupsPoints(banp,"Tubgcp5",mode.slot="new.norm",show.CI = TRUE,aest=aes
 
 The last of the basic visualizations shows old (gray) and new (red) RNA as bars (and here we change the way the samples are labeled on the x axis):
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Grouped bar plot"}
 PlotGeneGroupsBars(banp,"Tubgcp5",xlab=paste(Condition,Replicate,sep="."))
 ```
 
@@ -87,19 +87,19 @@ Condition(banp) <- NULL
 ```
 
 For `PlotGeneSnapshotTimecourse` we need to define the time parameter corresponding to the experimental time, which is here the time since depleting BANP:
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Snapshot timecourse plot"}
 PlotGeneSnapshotTimecourse(banp,"Tubgcp5",time="Experimental.time")
 ```
 
 We can also change this to not plot in log scale, plot new RNA and show credible intervals:
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Snapshot timecourse plot"}
 PlotGeneSnapshotTimecourse(banp,"Tubgcp5",time="Experimental.time",log=FALSE,
                            mode.slot="new.norm",show.CI = TRUE)
 ```
 
 If you have multiple conditions, it will automatically show them as colors (here we don't have conditions, so we just treat the replicates as separate conditions; we also show the NTR instead of new RNA):
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Snapshot timecourse plot"}
 Condition(banp) <- "Replicate"
 PlotGeneSnapshotTimecourse(banp,"Tubgcp5",time="Experimental.time",
                            mode.slot="ntr",show.CI = TRUE)
@@ -118,13 +118,13 @@ sars <- ComputeNtrCI(sars) # creates data slots "lower" and "upper"
 
 Now we can use it to plot time courses. The function will use the `Condition` field and generate a panel (ggplot facet) for each condition. Just like above, here we will also plot credible intervals of the NTR quantification. In addition to data points, the plotting function will also show the model fit. For that to work, here it is important to specify the steady state parameters. For more on this, see the [kinetic modeling](kinetic-modeling.html) vignette.
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Progressive labeling plot"}
 PlotGeneProgressiveTimecourse(sars,"SRSF6",show.CI = TRUE,steady.state=c(Mock=TRUE,SARS=FALSE))
 ```
 
 We can also fit the kinetic model using the Bayesian method (which inherently assumes steady state, and actually is not appropriate for the "SARS" condition). Note that the visualization changes to indicate that this method does not use the quantification of RNA abundances at all.
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Progressive labeling plot"}
 PlotGeneProgressiveTimecourse(sars,"SRSF6",type="ntr",show.CI = TRUE)
 ```
 
@@ -138,7 +138,7 @@ grandR implements two convenience functions to create (i) scatter plots and (ii)
 
 Scatter plots are frequently used to provide a global overview over two variables. A straight-forward example is to compare expression values from two samples (i.e., here the `x` and `y` parameters are sample names from the data set):
 
-```{r fig.height=4, fig.width=4}
+```{r fig.height=4, fig.width=4, fig.alt = "Scatter plot"}
 PlotScatter(banp,x="mESC.0h.dTag.2h.4sU.A",y="mESC.0h.dTag.2h.4sU.B")
 ```
 
@@ -164,19 +164,19 @@ GeneInfo(banp,"BANP-Target")<-factor(ifelse(Genes(banp) %in% tar,"yes","no"),
 
 Now we could for instance compare log2 fold change computed for total and new RNA, respectively:
 
-```{r fig.height=4, fig.width=4}
+```{r fig.height=4, fig.width=4, fig.alt = "Scatter plot"}
 PlotScatter(banp,x="total.6h vs 0h.LFC",y="total.2h vs 0h.LFC")
 ```
 
 Here, both the `x` and `y` parameters to `PlotScatter` are character strings that are (i) sample (or cell, in case of single cell data) names (like mESC.0h.dTag.2h.4sU.A) or (ii) fully qualified analysis results (like "total.4h vs 0h.LFC"). A fully qualified analysis result is the analysis name (for "total.4h vs 0h.LFC" this is "total.4h vs 0h", which is build by the `LFC` function used above from the name.prefix parameter - "total" - and the name in the used contrast matrix - "4h vs 0h") followed by a dot (".") and the name of the computed statistic (here "LFC"). If you don't know what is available so far in your object, call `Analyses(banp,description=TRUE)`. However, you can also use arbitrary expressions, that are evaluated in an environment that has both the sample names as well as the fully qualified analysis results. Thus, you can also do (if you don't want to use the `VulcanoPlot` function, see the [differential expression vignette](differential-expression.html); note the backticks since the names contain spaces):
 
-```{r fig.height=4, fig.width=4}
+```{r fig.height=4, fig.width=4, fig.alt = "Scatter plot (Vulcano)"}
 PlotScatter(banp,x=`total.2h vs 0h.LFC`,y=-log10(`total.2h vs 0h.Q`))
 ```
 
 Axes can also be plotted in log scale (there are also parameters called `log.x` and `log.y`), and it is possible to change the axis labels. `PlotScatter` returns a ggplot object, so it is also straight-forward to further adjust the plot to your needs (e.g. like with `ggtitle` here).
 
-```{r fig.height=4, fig.width=4}
+```{r fig.height=4, fig.width=4, fig.alt = "Scatter plot"}
 PlotScatter(banp,x=`mESC.0h.dTag.2h.4sU.A`,y=`mESC.0h.dTag.2h.4sU.B`,
             xlab="Replicate A",ylab="Replicate B",log=TRUE)+
   ggtitle("0h normalized expression")+
@@ -185,7 +185,7 @@ PlotScatter(banp,x=`mESC.0h.dTag.2h.4sU.A`,y=`mESC.0h.dTag.2h.4sU.B`,
 
 You might have noticed that the outlier filtering for one of the plots above (the log2 fold change comparison) was too stringent. How stringently outliers are filtered is defined via the `remove.outlier` parameter (the higher, the more points are included and not defined as outliers), or limits can be defined directly via `xlim` and `ylim` (note that we use the pipe "|" and division "/" operators defined in the patchwork package to combine plots):
 
-```{r fig.height=6, fig.width=6}
+```{r fig.height=6, fig.width=6, fig.alt = "Scatter plots"}
 x="total.6h vs 0h.LFC"
 y="total.2h vs 0h.LFC"
 (PlotScatter(banp,x=x,y=y,xlab="",ylab="") | 
@@ -196,7 +196,7 @@ y="total.2h vs 0h.LFC"
 
 A specific subset of genes (e.g., BANP targets found by ChIP-seq) can be highlighted and specific genes can be labeled:
 
-```{r fig.height=4, fig.width=4}
+```{r fig.height=4, fig.width=4, fig.alt = "Scatter plot with highlight"}
 PlotScatter(banp,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),ylim=c(-1,0.5),
             highlight = GeneInfo(banp,"BANP-Target")=="yes",
             label="Thap7")
@@ -204,7 +204,7 @@ PlotScatter(banp,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),yl
 
 It is also possible to color points according to an annotation in the `GeneInfo` table (instead of using the colors from estimated point densities):
 
-```{r fig.height=4, fig.width=5}
+```{r fig.height=4, fig.width=5, fig.alt = "Scatter plot with highlight"}
 PlotScatter(banp,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),ylim=c(-1,0.5),
             color = "BANP-Target")+
   scale_color_manual("BANP target",values=c(yes="blue",no="gray"))
@@ -212,14 +212,14 @@ PlotScatter(banp,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),yl
 
 Since in many cases, scatter plots are supposed to show correlated variables, correlation statistics can be easily annotated:
 
-```{r fig.height=4, fig.width=5}
+```{r fig.height=4, fig.width=5, fig.alt = "Scatter plot with correlation"}
 PlotScatter(banp,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),ylim=c(-1,0.5),
             correlation = FormatCorrelation("pearson"))
 ```
 
 Finally, it is also possible to divide the scatter plot up into multiple panels (ggplot "facets"). Note that the point densities as well as correlation statistics are computed separately per panel.
 
-```{r fig.height=3, fig.width=6}
+```{r fig.height=3, fig.width=6, fig.alt = "Scatter plot panels with correlation"}
 PlotScatter(banp,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),ylim=c(-1,0.5),
             correlation = FormatCorrelation("pearson",n.format="%d"),facet=`BANP-Target`)
 ```
@@ -233,20 +233,20 @@ While scatter plots are frequently used to provide a global overview over two va
  3. Determine reasonable colors
  4. Use ComplexHeatmap::Heatmap
 
-```{r fig.height=6, fig.width=6}
+```{r fig.height=6, fig.width=6, fig.alt = "Heatmap"}
 sig.genes <- GetSignificantGenes(banp,analysis = "total.6h vs 0h")
 PlotHeatmap(banp,genes=sig.genes)
 ```
 
 The sample names might be overly long, so it is possible to change that using the `xlab` parameter (which works the same way as for `PlotGeneGroupsBars`, see above)
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Heatmap"}
 PlotHeatmap(banp,genes=sig.genes,xlab=paste(Experimental.time.original,Replicate,sep="."))
 ```
 
 Gene names can be shown by setting the `label.genes` parameter to TRUE. If there are at most 50 genes, they are shown by default:
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Heatmap"}
 sig.genes2 <- GetSignificantGenes(banp,analysis = "total.6h vs 0h",
                                   criteria = Q<0.05 & abs(LFC)>2)
 PlotHeatmap(banp,genes=sig.genes2,xlab=paste(Experimental.time.original,Replicate,sep="."))
@@ -254,21 +254,21 @@ PlotHeatmap(banp,genes=sig.genes2,xlab=paste(Experimental.time.original,Replicat
 
 Instead of Z transforming the matrix as per default, here it might also make sense to show log2 fold changes vs the 0h time point:
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Heatmap"}
 PlotHeatmap(banp,genes=sig.genes,xlab=paste(Experimental.time.original,Replicate,sep="."),
             transform=Transform.logFC(columns=1:2))
 ```
 
 Another option is to transform by using a variance stabilizing function:
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Heatmap"}
 PlotHeatmap(banp,genes=sig.genes,xlab=paste(Experimental.time.original,Replicate,sep="."),
             transform="VST")
 ```
 
 Note that the coloring changed since VST values are not zero centered. You can change the coloring scheme by the `colors` parameter (use any of the colorbrewer palette names):
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Heatmap"}
 PlotHeatmap(banp,genes=sig.genes,xlab=paste(Experimental.time.original,Replicate,sep="."),
             colors = "PiYG")
 ```
@@ -276,7 +276,7 @@ PlotHeatmap(banp,genes=sig.genes,xlab=paste(Experimental.time.original,Replicate
 
 Finally, it is also possible to visualize analysis results in a heatmap:
 
-```{r fig.width=6}
+```{r fig.width=6, fig.alt = "Heatmap"}
 PlotHeatmap(banp,type="total",columns = "LFC",genes=sig.genes,transform="no")
 ```
 
@@ -383,7 +383,7 @@ data <- AddAnalysis(data,"ServeGrandR",tab)
 
 3. Come up with useful global plots:
 
-```{r}
+```{r fig.alt = "Scatter plots"}
 PlotScatter(data,x=`QC.4sU effect.LFC`,y=`QC.dTag effect.LFC`,xlim=c(-1.4,1.4),ylim=c(-1.5,1.1))+
   ggtitle("QC")
 PlotScatter(data,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),ylim=c(-1,0.5),
@@ -393,7 +393,7 @@ PlotScatter(data,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),yl
 
 4. Add them as deferred plots to the grandR object:
 
-```{r}
+```{r fig.alt = "Global plots"}
 qc.plot <- Defer(PlotScatter,x="QC.4sU effect.LFC",y="QC.dTag effect.LFC",
                  xlim=c(-1.4,1.4),ylim=c(-1.5,1.1),add = list(ggtitle("QC")))
 reg.plot <- Defer(PlotScatter,x="total.6h vs 0h.LFC",y="total.2h vs 0h.LFC",
@@ -408,7 +408,7 @@ data <- AddGlobalPlot(data,"Regulation",reg.plot)
 
 To create a deferred function from the `PlotScatter` commands from above, use the following scheme:
 
-```{r eval=FALSE}
+```{r eval=FALSE, fig.alt = "Scatter plots"}
 PlotScatter(data,PARAMS)+gg1+...+ggn
 -->
 Defer(PlotScatter,PARAMS,add=list(gg1,...,ggn))
@@ -420,7 +420,7 @@ Do *not* execute these deferred functions (otherwise they would cache the plot w
 
 5. Come up with useful gene plots (just test them with an example gene)
 
-```{r warning=FALSE}
+```{r warning=FALSE, fig.alt = "Gene plots"}
 PlotGeneGroupsBars(data,"Tubgcp5",columns = Genotype=="wt")
 PlotGeneSnapshotTimecourse(data,"Tubgcp5",columns = Genotype=="dTag",
                      time="Experimental.time",mode.slot="norm",show.CI = TRUE)
@@ -449,7 +449,7 @@ data <- AddGenePlot(data,"New RNA",plotfun.new)
 
 To create a deferred function from any `PlotGeneXYZ` commands from above, use the following scheme:
 
-```{r eval=FALSE}
+```{r eval=FALSE, fig.alt = "Gene plots"}
 PlotGeneXYZ(data,"<Gene>",PARAMS)+gg1+...+ggn
 -->
 Defer(PlotGeneXYZ,PARAMS,add=list(gg1,...,ggn))
@@ -476,7 +476,7 @@ This server is available [here](http://einstein.virologie.uni-wuerzburg.de:3839/
 
 Let's say you want to show a scatter plot on the web interface:
 
-```{r}
+```{r fig.alt = "Scatter plots"}
 PlotScatter(data,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),ylim=c(-1,0.5),
             highlight = GeneInfo(banp,"BANP-Target")=="yes")+
   ggtitle("Regulation")
@@ -484,7 +484,7 @@ PlotScatter(data,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),yl
 
 First idea is to pre-compute it and store the ggplot object alongside with the grandR object.
 
-```{r}
+```{r fig.alt = "Scatter plot"}
 plot.reg <- PlotScatter(data,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,xlim=c(-2,0.5),ylim=c(-1,0.5),
             highlight = GeneInfo(banp,"BANP-Target")=="yes")+
   ggtitle("Regulation")
@@ -495,7 +495,7 @@ This object is surprisingly large in memory, which means also surprisingly large
 
 However, it is of course not necessary to precompute it, it can of course be computed on the fly (since all necessary data is there!). A solution would therefore be to just store a function that generates the ggplot:
 
-```{r}
+```{r fig.alt = "Scatter plot"}
 f1 <- function() PlotScatter(data,x=`total.6h vs 0h.LFC`,y=`total.2h vs 0h.LFC`,
                              xlim=c(-2,0.5),ylim=c(-1,0.5),
                              highlight = GeneInfo(banp,"BANP-Target")=="yes")+
@@ -505,7 +505,7 @@ print(object.size(f1),units="b")
 ```
 Perfect, now we can implement our web interface to just call the function when the plot is supposed to be shown:
 
-```{r}
+```{r fig.alt = "Scatter plot"}
 f1()
 ```
 ```{r}
@@ -516,7 +516,7 @@ cat(sprintf("Time for precomputed plot: %.3fms\nTime for function: %.3fms",time.
 
 We can also do this without actually plotting:
 
-```{r}
+```{r fig.alt = "Scatter plot"}
 time.precomp <- system.time({ plot.reg })[3]
 time.f1 <- system.time({ f1() })[3]
 cat(sprintf("Time for precomputed plot: %.3fms\nTime for function: %.3fms",time.precomp,time.f1))
@@ -524,7 +524,7 @@ cat(sprintf("Time for precomputed plot: %.3fms\nTime for function: %.3fms",time.
 
 This is quite slow (just imagine you have many plots, more data, or more complicated plots, and the server is already busy; Heatmaps are even worse, actually!). Enter deferred functions:
 
-```{r}
+```{r fig.alt = "Scatter plot"}
 f2 <- Defer(PlotScatter,x="total.6h vs 0h.LFC",y="total.2h vs 0h.LFC",
                   xlim=c(-2,0.5),ylim=c(-1,0.5),
                   highlight = GeneInfo(banp,"BANP-Target")=="yes",
@@ -533,7 +533,7 @@ print(object.size(f2),units="b")
 ```
 This is nothing, and it won't get larger if you have more complex plots.
 
-```{r}
+```{r fig.alt = "Scatter plot"}
 time.precomp <- system.time({ plot.reg })[3]
 time.f1 <- system.time({ f1() })[3]
 time.f2.first <- system.time({ f2(data) })[3]

@@ -26,6 +26,7 @@ suppressPackageStartupMessages({
     library(grandR)
     library(ggplot2)
     library(patchwork)
+options(timeout = 600)
 })
 ```
 ```{r}
@@ -55,12 +56,12 @@ sars
 The actual data is available in so-called "data slots". `ReadGRAND` adds the read counts, new to total RNA ratios (NTRs) and information on the NTR posterior distribution (alpha,beta).
 
 As a quick quality check, we can inspect a principal component analysis of all samples involved:
-```{r,fig.height=4}
+```{r,fig.height=4, fig.alt = "PCA plot Mock vs SARS"}
 PlotPCA(sars)
 ```
 
 The samples are colored according to the `Condition` annotation (see above in the Coldata table). `Condition` has a special meaning in grandR, not only for `PlotPCA`, but also for other analyses (see below). The `Condition` can be set conveniently using the `Condition` function. For more information, see the [Loading data vignette](loading-data.html). For `PlotPCA`, the visual attributes can be adapted via a parameter (this is the mapping parameter to ggplot, and, thus, all names from the Coldata table can be used in expressions):
-```{r,fig.height=4}
+```{r,fig.height=4, fig.alt = "time points"}
 PlotPCA(sars,aest=aes(color=duration.4sU.original,shape=Condition))
 ```
 There are no obvious problems with the samples, even though the virus infected 3hpi sample is the top-most whereas the other virus infected samples are ordered along infection time from bottom to top.
@@ -73,13 +74,13 @@ sars
 Make sure that the normalization you use here is appropriate. Calling `Normalize` will add an additional slot which is set to be the default slot.
 
 Before we conduct any kinetic modeling, we inspect the 4sU dropout plots:
-```{r fig.height=4, warning=FALSE}
+```{r fig.height=4, warning=FALSE, fig.alt = "4sU dropout plots"}
 Plot4sUDropoutRankAll(subset(sars,Condition=="Mock"))
 ```
 4sU labeling can have impact on transcription before cell viability suffers. Such an effect would be observable in these plots by a substantial negative correlation, i.e. genes with high NTR (which are to the right), should tend to be downregulated in the 4sU labeled sample vs an equivalent 4sU naive sample. It is important that these analyses are only done by comparing biologically equivalent samples (and not on the SARS infected samples here, as the no4sU sample is from 3h post infection, and all others are later). Here, there are such effects, but they are not very strong.
 
 Before we estimate kinetic parameters globally, we inspect an example:
-```{r,fig.height=3.5,fig.width=5}
+```{r,fig.height=3.5,fig.width=5, fig.alt = "Progressive labeling plot for SRSF6"}
 PlotGeneProgressiveTimecourse(sars,"SRSF6")
 ```
 
@@ -88,7 +89,7 @@ $$
  \frac{da}{dt}=\sigma - \delta \cdot a(t) \Leftrightarrow a(t)=\frac{\sigma}{\delta}
 $$
 For the virus infected samples ("SARS"), this is not the case. So we specify an additional parameter:
-```{r,fig.height=3.5,fig.width=5}
+```{r,fig.height=3.5,fig.width=5, fig.alt = "Progressive labeling time plot for SRSF6 with correct steady state configuration"}
 PlotGeneProgressiveTimecourse(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 
@@ -116,7 +117,7 @@ head(df)
 ```
 See the [Working with data matrices and analysis results](data-matrices-and-analysis-results.html) vignette for more information how to retrieve data from a grandR object. We can use the `PlotScatter` function to compare half-lives from Mock and SARS:
 
-```{r warning=FALSE}
+```{r warning=FALSE, fig.alt = "Scatter plot comparing RNA half-lives in Mock and SARS"}
 PlotScatter(sars,x=`kinetics.Mock.Half-life`,y=`kinetics.SARS.Half-life`,log=TRUE)+geom_abline()
 ```
 
@@ -154,7 +155,7 @@ We could also extract the relative residuals of new RNA from the model fit:
 sars<-FitKinetics(sars,"kinetics",steady.state=list(Mock=TRUE,SARS=FALSE),return.extra = function(s) setNames(s$residuals$Relative,paste0("Residuals.",s$residuals$Name))[s$residuals$Type=="new"])
 ```
 Let's plot their distributions:
-```{r}
+```{r fig.alt = "Residual distribution of fits across all genes"}
 df <- GetAnalysisTable(sars,columns = "Residuals",gene.info = FALSE,prefix.by.analysis = FALSE)
 df <- reshape2::melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
 df$Sample=gsub("Residuals.","",df$Sample)
@@ -166,7 +167,7 @@ ggplot(df,aes(Sample,`Relative residual`))+
 ```
 
 We see that the residuals from the 1h timepoints are systematically below zero. A canonical example of this is SMAD3:
-```{r}
+```{r, fig.alt = "Progressive labeling plot for SMAD3"}
 PlotGeneProgressiveTimecourse(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 For both Mock and SARS, we see that new RNA from 1h is well below the model fit, i.e. has negative residual. This indicates that the effective labeling time was much lower than the nominal labeling time of 1h for these samples, i.e. that actually, these samples should move to the left. This can be rectified by temporal recalibration:
@@ -182,7 +183,7 @@ Coldata(sars)
 ```
 
 This recalibrated time can now be used to plot fitted models:
-```{r}
+```{r, fig.alt = "Progressive labeling time plot for SMAD3 after recalibration of effective labeling times"}
 PlotGeneProgressiveTimecourse(sars,"SMAD3",steady.state=list(Mock=TRUE,SARS=FALSE),
                  time = "calibrated_time",exact.tics = FALSE)
 ```
@@ -193,7 +194,7 @@ sars<-FitKinetics(sars,"corrected",time = "calibrated_time",steady.state=list(Mo
 ```
 
 This indeed corrected the residuals:
-```{r}
+```{r fig.alt = "Residual distributions after recalibration"}
 df <- GetAnalysisTable(sars,analyses = "corrected", columns = "Residuals",gene.info = FALSE,prefix.by.analysis = FALSE)
 df <- reshape2::melt(df,variable.name = "Sample",value.name = "Relative residual",id.vars = c())
 df$Sample=gsub("Residuals.","",df$Sample)

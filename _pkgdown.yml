@@ -30,6 +30,8 @@ navbar:
           href: articles/web/single-cell.html
         - text: "Detecting and correcting 4sU dropout"
           href: articles/web/4sU-dropout.html
+        - text: "Heterogeneity-seq"
+          href: articles/web/hetseq.html
     - text: Discussions
       href: "https://github.com/erhard-lab/grandR/discussions"
     - text: "News"
@@ -39,8 +41,10 @@ navbar:
   right:
     - icon: fa-home
       href: ../
+      aria-label: Home
     - icon: fa-github
       href: https://github.com/erhard-lab/grandR
+      aria-label: Github
 reference:
 - title: Fundamentals
 - subtitle: Loading data

@@ -26,6 +26,8 @@ At first, we load the grandR package, read in the GRAND-SLAM output and only ret
 ```{r}
 library(grandR)
 library(ggplot2)
+options(timeout = 600)
+
 r <- ReadGRAND("https://zenodo.org/record/7753473/files/nih_kinetics_rescued.tsv.gz",design=c(Design$dur.4sU,Design$Replicate))
 r <- FilterGenes(r,minval = 200)
 ```
@@ -35,13 +37,13 @@ Now, we can check if we observe any dropout effects in our data set, e.g. the 12
 
 For this, we create a dropout plot, showing us the log2 fold change for all genes between the 120 min labeling sample vs. a 4sU naïve  sample.
 
-```{r}
+```{r fig.alt = "120min.A dropout plot"}
 Plot4sUDropoutRank(r,"120min.A",ylim=c(-0.5,0.5),title=NULL,size=0.6,label.corr = FALSE,invert.ranks=TRUE)
 ```
 
 Additionally, with the Scatter plot, we can compare both replicates and confirm that the dropout effects are consistent among both replicates.
 
-```{r fig.height=5, fig.width=5}
+```{r fig.height=5, fig.width=5, fig.alt = "120min dropout scatter plot"}
 co=GetContrasts(r,contrast=c("duration.4sU.original","no4sU"),group="Replicate",no4sU=TRUE)
 r=LFC(r,contrasts=co)
 PlotScatter(r,`total.120min vs no4sU.A.LFC`,`total.120min vs no4sU.B.LFC`,lim=c(-1,1),correlation=FormatCorrelation(method="spearman"),xlab=bquote(log[2]~"FC 2h vs 0h (Rep. A)"),ylab=bquote(log[2]~"FC 2h vs 0h (Rep. B)"))
@@ -51,10 +53,10 @@ PlotScatter(r,`total.120min vs no4sU.A.LFC`,`total.120min vs no4sU.B.LFC`,lim=c(
 
 For this, we compute a summary of the statistics in our data set and plot the dropout rate over time and as we can see, the dropout rates increase consistently in both replicates for longer labeling times.
 
-```{r}
+```{r fig.alt = "dropout statistics"}
 stat.r=ComputeSummaryStatistics(r,coldata=TRUE)
 
-ggplot(stat.r,aes(duration.4sU*60,`4sU dropout`,group=Replicate))+
+ggplot(stat.r,aes(duration.4sU,`4sU dropout`,group=Replicate))+
   coord_cartesian(ylim=c(0,0.4))+
   geom_point(position=position_dodge(width=8))+
   cowplot::theme_cowplot()+
@@ -74,13 +76,13 @@ rc=Correct4sUDropoutHLFactor(r)
 
 Looking at the dropout plot for the corrected data set, we do not observe dropout effects anymore:
 
-```{r}
+```{r fig.alt = "120min.A dropout plot after correction"}
 Plot4sUDropoutRank(rc,"120min.A",ylim=c(-0.5,0.5),title=NULL,size=0.6,label.corr = FALSE,invert.ranks=TRUE)
 ```
 
 Maybe more importantly, we need to check whether 4sU induced effects are removed. For that we again compare the replicates and observe, that the correlation is gone now (indicating that any factor that still plays a role is less relevant than the differences between replicates):
 
-```{r fig.height=5, fig.width=5}
+```{r fig.height=5, fig.width=5, fig.alt = "120min dropout scatter plot after correction"}
 rc=LFC(rc,contrasts=co)
 PlotScatter(rc,`total.120min vs no4sU.A.LFC`,`total.120min vs no4sU.B.LFC`,lim=c(-1,1),correlation=FormatCorrelation(method="spearman"),xlab=bquote(log[2]~"FC 2h vs 0h (Rep. A)"),ylab=bquote(log[2]~"FC 2h vs 0h (Rep. B)"))+scale_x_continuous(breaks=c(-1,0,1))+scale_y_continuous(breaks=c(-1,0,1))
 

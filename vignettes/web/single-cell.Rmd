@@ -32,7 +32,7 @@ The default time limit in R is 60 seconds, which might be insufficient.
 We change increase the time limit as follows:
 
 ```{r}
-options(timeout=300)
+options(timeout=600)
 getOption("timeout")
 ```
 
@@ -90,7 +90,7 @@ head(Coldata(d))
 
 Here, the global percentage of new RNA correlates very well with the percentage of intronic reads in each cell (which is part of the table downloaded from GEO), i.e. there are two independent pieces of evidence that there are cells that are transcriptionally more active than others:
 
-```{r}
+```{r fig.alt = "Scatter plot comparing % new vs intronic reads"}
 PlotScatter(Coldata(d),percent.new,all_intron/all_reads*100,
             correlation = FormatCorrelation(),
             remove.outlier = FALSE)
@@ -119,7 +119,7 @@ s
 
 The percentage of new RNA could now be used as an additional QC filter:
 
-```{r}
+```{r fig.alt = "Violin plots showing % new per cell"}
 VlnPlot(s,features = "percent.new",group.by = "treatment_time")
 ```
 
@@ -127,7 +127,7 @@ E.g. cells with extremely high amounts of new or old RNA could be filtered out. 
 
 Note that the new Seurat object has two assays, RNA and newRNA (which are the names we defined for the modalities). Let's do the normal Seurat workflow for total RNA:
 
-```{r message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, fig.alt = "UMAP colored according to time point"}
 s <- NormalizeData(s)
 s <- FindVariableFeatures(s)
 s <- ScaleData(s)
@@ -139,7 +139,7 @@ DimPlot(s,group.by = 'treatment_time')
 
 And now repeat with new RNA:
 
-```{r message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, fig.alt = "UMAP by new RNA colored according to time point"}
 DefaultAssay(s) <- 'newRNA'
 s <- NormalizeData(s)
 s <- FindVariableFeatures(s)
