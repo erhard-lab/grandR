@@ -441,6 +441,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param colorpalette either NULL (use default colors), or a palette name from color brewer or viridis
 #' @param colorbreaks either NULL (use default algorithm of using quantiles of the values), or "minmax" for 5 breaks in between the minimum and maximum of the values, or the actual color breaks to distribute the colors from the palette
 #' @param color.label the label for the color legend
+#' @param na.color the color for NA values
 #' @param density.margin for density colors, one of 'n','x' or 'y'; should the density be computed along both axes ('n'), or along 'x' or 'y' axis only
 #' @param density.n how many bins to use for density calculation (see \link[MASS]{kde2d})
 #' @param rasterize use ggrastr to rasterize points? (can be NULL, see details)
@@ -490,7 +491,7 @@ PlotScatter=function(data,
                      filter=NULL,
                      genes=NULL,highlight=NULL, label=NULL, label.repel=1,
                      facet=NULL,
-                     color=NULL, colorpalette=NULL, colorbreaks=NULL, color.label=NULL,
+                     color=NULL, colorpalette=NULL, colorbreaks=NULL, color.label=NULL, na.color = "grey50",
                      density.margin = 'n', density.n = 100,
                      rasterize=NULL,
                      correlation=NULL,correlation.x=-Inf,correlation.y=Inf,correlation.hjust=0.5,correlation.vjust=0.5,
@@ -629,10 +630,10 @@ PlotScatter=function(data,
       df$color=density2d(df$A.trans, df$B.trans, n = density.n,margin = density.margin,facet = df$facet)
     }
     if (is.null(colorpalette)) {
-      colorscale=scale_color_viridis_c(name = "Density",guide="none")
+      colorscale=scale_color_viridis_c(name = "Density",guide="none",na.value = na.color)
     } else {
       col=make.continuous.colors(values=df$color,colors = colorpalette, breaks=colorbreaks)
-      colorscale = scale_color_gradientn(name="Density",guide="none",colors=col$colors)
+      colorscale = scale_color_gradientn(name="Density",guide="none",colors=col$colors,na.value = na.color)
     }
 #  } else if (length(color)==1 && as.character(color) %in% names(GeneInfo(data))) {
 #    df$color=GeneInfo(data,color)[ToIndex(data,genes)]
@@ -644,13 +645,13 @@ PlotScatter=function(data,
     }
     df$color=ccol
     if (is.character(df$color)) {
-      colorscale=scale_color_identity(guide="none")
+      colorscale=scale_color_identity(guide="none",na.value = na.color)
     } else if (is.factor(df$color)) {
-      colorscale=if (!is.null(colorpalette)) scale_color_manual(color.label,values = colorpalette, guide=guide_legend(override.aes = list(size = 2))) else scale_color_discrete(color.label, guide=guide_legend(override.aes = list(size = 2)))
+      colorscale=if (!is.null(colorpalette)) scale_color_manual(color.label,values = colorpalette, guide=guide_legend(override.aes = list(size = 2)),na.value = na.color) else scale_color_discrete(color.label, guide=guide_legend(override.aes = list(size = 2)),na.value = na.color)
     } else {
       col=make.continuous.colors(values = df$color,colors=colorpalette, breaks=colorbreaks)
       df$color=pmin(pmax(df$color,min(col$breaks)),max(col$breaks))
-      colorscale = scale_color_gradientn(color.label,colors=col$colors,breaks=scales::breaks_pretty(n=5)(df$color),limits=c(min(col$breaks),max(col$breaks)))
+      colorscale = scale_color_gradientn(color.label,colors=col$colors,breaks=scales::breaks_pretty(n=5)(df$color),limits=c(min(col$breaks),max(col$breaks)),na.value = na.color)
     }
   }
 

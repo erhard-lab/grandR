@@ -11,14 +11,15 @@
 #' @param plot.gene a list of gene plots; can be NULL, then the stored gene plots are used (see \link{Plots})
 #' @param plot.global  a list of global plots; can be NULL, then the stored global plots are used (see \link{Plots})
 #' @param plot.window a list of static plots to show in a floating window; see details
-#' @param highlight a vector of gene names that are highlighted in the beginning; can also be a column name in the (first) table
+#' @param highlight a vector of gene names that are highlighted in the beginning; can also be a column name in the (first) table (see details)
 #' @param df.identifier the main identifier (column name) from the table; this is used when calling the gene plot functions;
 #' @param title the title to show in the header of the website
 #' @param show.sessionInfo whether to show session info
 #' @param help a list of characters that is shown as help text at the beginning (when no gene plot is shown); should describe the contents of your table
 #'
 #' @details If the table parameter is NULL, either an analysis table named "ServeGrandR" is
-#' used (if it exists), otherwise the columns "Q", "LFC", "Synthesis" and "Half-life" of all analysis tables are used. If it is a list, a menu is created in the navbar
+#' used (if it exists), otherwise the columns "Q", "LFC", "Synthesis" and "Half-life" of all analysis tables are used. If it is a list, a menu is created in the navbar.
+#' If the table has a column equal to the highlight parameter, the currently highlighted genes are updated in the table (to allow filtering for highlighted genes).
 #'
 #' @details plot.window must be a list of plotting functions that receive the grandR object and return a plot. It can also be a list of list, in which case more than one plotting windows are generated.
 #' Each plot will be rendered with a size of 350x350.
@@ -262,7 +263,7 @@ ServeGrandR=function(data,
             tags$p(sprintf("Filtered genes (n=%d)",length(highlighted.genes$filtered.rows)), style = "font-weight: bold;"),
             shiny::actionButton(ns("sethighlightdia"),label="Set as"),
             shiny::actionButton(ns("unionhighlightdia"),label="Union with"),
-            shiny::actionButton(ns("intersecthighlightdia"),label="Intersect wit"),
+            shiny::actionButton(ns("intersecthighlightdia"),label="Intersect with"),
             shiny::actionButton(ns("subhighlightdia"),label="Subtract from"),
             shiny::tags$div(style = "height: 20px;"),
             shiny::textAreaInput(ns("highlightedgenesdia"), label=sprintf("... highlighted genes (n=%d)",length(highlighted.genes$genes)),height = 150,cols=40, value = paste0(highlighted.genes$genes,collapse="\n")),

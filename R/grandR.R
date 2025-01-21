@@ -502,7 +502,7 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
   if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
 
   ind=ToIndex(data,rownames(matrix))
-  rownames(matrix)[ind]=Genes(data,genes=ind,use.symbols=FALSE)
+  rownames(matrix)=Genes(data,genes=ind,use.symbols=FALSE)
   missing=setdiff(rownames(data$data$count),rownames(matrix))
   if (length(missing>0)) {
     warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(utils::head(missing,5),collapse=",")))
@@ -1626,7 +1626,7 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
 Plots=function(data) {
   re=list()
   if (!is.null(data$plots$gene)) re=c(re,list(gene=names(data$plots$gene)))
-  if (!is.null(data$plots$global)) re=c(re,list(gene=names(data$plots$global)))
+  if (!is.null(data$plots$global)) re=c(re,list(global=names(data$plots$global)))
   re
 }
 #' @describeIn Plots Add a gene plot to the grandR object
