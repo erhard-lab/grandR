@@ -27,3 +27,16 @@ bibentry(bibtype = "Article",
          url = "https://doi.org/10.1038/s41586-019-1369-y",
          textVersion = "Erhard et al. scSLAM-seq reveals core features of transcription dynamics in single cells. Nature (2019) [scSLAM-seq]"
 )
+
+bibentry(bibtype = "Article",
+         author = c(person("Teresa","Rummel"),
+                             person("Lygeri","Sakellaridi"),
+                             person("Florian","Erhard")),
+         title = "grandR: a comprehensive package for nucleotide conversion RNA-seq data analysis",
+         journal = "Nature Communications",
+         year = "2023",
+         doi = "10.1038/s41467-023-39163-4",
+         url = "https://doi.org/10.1038/s41467-023-39163-4",
+         textVersion = "Rummel et al. grandR: a comprehensive package for nucleotide conversion RNA-seq data analysis. Nature Commun (2023) [grandR]"
+)
+

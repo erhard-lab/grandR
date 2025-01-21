@@ -40,7 +40,7 @@ The GRAND-SLAM output normally contains any gene with at least 1 read, i.e. >30k
 
 We start by creating a plot showing the kinetics for a gene:
 
-```{r}
+```{r fig.alt = "Progressive labeling plot for SRSF6"}
 PlotGeneProgressiveTimecourse(sars,"SRSF6",steady.state=list(Mock=TRUE,SARS=FALSE))
 ```
 
@@ -66,7 +66,7 @@ head(GetAnalysisTable(sars))
 
 We can also easily plot the RNA half-lives of mock infected cells against virus infected cells:
 
-```{r fig.height=4, fig.width=4}
+```{r fig.height=4, fig.width=4, fig.alt = "Half-lives scatter plot mock vs SARS"}
 PlotScatter(sars,`kinetics.Mock.Half-life`,`kinetics.SARS.Half-life`,
             lim=c(0,24),correlation = FormatCorrelation())+
   geom_abline()

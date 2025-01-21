@@ -735,10 +735,10 @@ GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
   ll$callback()
 
   # buffer it in the grandR object
-  qc=data$metadata$qc
-  if (is.null(qc)) qc = list()
-  qc[[name]]=re
-  data$metadata$qc <<- qc
+  #qc=data$metadata$qc
+  #if (is.null(qc)) qc = list()
+  #qc[[name]]=re
+  #data$metadata$qc <<- qc
 
   return(re)
 

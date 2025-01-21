@@ -135,8 +135,12 @@ dbinommix=function(k,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.co
 # Generate expected number vectors
 etbbinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.mconv=par$p.mconv,shape=par$shape) setNames(dtbbinommix(0:size,size,ntr=ntr,p.err=p.err,p.mconv=p.mconv,shape=shape)*n,0:size)
 ebinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.conv=par$p.conv)  setNames(dbinommix(0:size,size,ntr=ntr,p.err=p.err,p.conv=p.conv)*n,0:size)
-etbbinom=function(n,size,l,u,shape=0)  setNames(dtbbinom(0:size,size,l,u,exp(shape),exp(-shape))*n,0:size)
-ebinom=function(n,size,prob=1E-4)  setNames(dbinom(0:size,size,prob)*n,0:size)
+etbbinom=function(n,size,l,u,shape=0)  setNames(dtbbinom(0:size,size,l,u,shape)*n,0:size)
+ebinom=function(n,size,prob=1E-4,round=FALSE)  {
+  re = setNames(dbinom(0:size,size,prob)*n,0:size)
+  if (round) re = round(re)
+  re
+}
 
 tabrtbbinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.mconv=par$p.mconv,shape=par$shape) table(rtbbinommix(n,size,ntr=ntr,p.err=p.err,p.mconv=p.mconv,shape=shape))
 tabrbinommix=function(n,size,par=default.model.par,ntr=par$ntr,p.err=par$p.err,p.conv=par$p.conv)  table(rbinommix(n,size,ntr=ntr,p.err=p.err,p.conv=p.conv))
@@ -230,7 +234,12 @@ matrix2MixMatrix=function(m,n,k) {
 	m
 }
 
-
+SplitMixMatErrComponent=function(mixmat,par=default.model.par,p.err=par$p.err,p.ntr=par$ntr) {
+  ns=colSums(mixmat)*(1-p.ntr)
+  n.vector=rep(0,max(as.integer(names(ns))))
+  n.vector[as.integer(names(ns))]=ns
+  CreateMixMatrix(n.vector,ebinom,prob=p.err,round=TRUE)[GetMixMatk(mixmat),GetMixMatn(mixmat)]
+}
 
 ExpectedOld=function(mixmat,par=default.model.par,p.err=par$p.err) {
 	ns=colSums(mixmat)
@@ -718,3 +727,23 @@ PlotShapeAdjust=function(...) {
 }
 
 #PlotShapeAdjust(model.par(ntr=0.1,shape=1.1),model.par(ntr=0.3,shape=1.1),model.par(ntr=0.3,shape=1.5))
+
+PlotMixMat=function(mixmat,cutoff.fraction=0.01,mode=c("fill","stack","dodge")) {
+  cs = colSums(mixmat)
+  cutoff = GetMixMatn(mixmat)[max(which(cs>cutoff.fraction*max(cs)))]
+
+  df = reshape2::melt(unclass(mixmat),varnames=c("k","n"),value.name = "count")
+  df = df[df$n<=cutoff,]
+  df$k=pmin(df$k,8)
+  df$k = factor(df$k,c(0,max(df$k):1))
+
+  cols = c('gray',RColorBrewer::brewer.pal(length(levels(df$k))-1,name="Reds"))
+
+  ggplot(df,aes(n,count,fill=k))+
+    geom_bar(stat="identity",position=mode[1],width=1)+
+    scale_fill_manual("T>C",values=cols)+
+    scale_y_continuous(labels = scales::percent_format())+
+    cowplot::theme_cowplot()+
+    ylab("% of reads with k T>C")+xlab("Number of genomic T covered by a read")
+}
+

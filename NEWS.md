@@ -1,8 +1,22 @@
 # grandR 0.2.6
 
+## Major updates
+* Can now read and process Grand3 output
+* Hetseq vignette
+
+## Smaller updates
+* Keep parameter for FilterGenes now allows not only logical vectors
+* Total expression computation
+* n.obs in PlotScatter
+* Merge can now work genewise
+
 ## Shiny improvement
 * Plotting function can now either implement the arguments highlight and label or not
 * Bug fixes with spaces in names of plots
+* Pdfs in subfolders are now included in the reports menu
+* Floating windows
+* Improved handling of highlighted genes
+
 
 # grandR 0.2.5
 

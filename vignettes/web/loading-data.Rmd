@@ -33,6 +33,7 @@ suppressPackageStartupMessages({
     library(grandR)
     library(ggplot2)
     library(patchwork)
+    options(timeout = 600)
 })
 sars <- ReadGRAND("https://zenodo.org/record/5834034/files/sars.tsv.gz",
                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
@@ -245,7 +246,7 @@ Coldata(sars)
 
 There are also some build-in grandR functions that add metadata, such as `ComputeExpressionPercentage`:
 
-```{r}
+```{r fig.alt = "Viral percentage for each sample"}
 sars <- ComputeExpressionPercentage(sars,name = "viral_percentage",
                                     genes = GeneInfo(sars,"Type")=="viral")
 ggplot(Coldata(sars),aes(Name,viral_percentage))+
@@ -257,7 +258,7 @@ ggplot(Coldata(sars),aes(Name,viral_percentage))+
 Interestingly the 4sU-naive sample shows more viral gene expression, suggesting that 4sU had an effect on viral gene expression.
 
 Since this is such an important control, there is also a specialized plotting function built into grandR for that:
-```{r}
+```{r, fig.alt = "Type distribution per sample"}
 PlotTypeDistribution(sars,relative = TRUE)
 ```
 

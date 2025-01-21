@@ -24,6 +24,7 @@ suppressPackageStartupMessages({
     library(grandR)
     library(ggplot2)
     library(patchwork)
+    options(timeout = 600)
 })
 ```
 ```{r}
@@ -52,7 +53,7 @@ banp
 The actual data is available in so-called "data slots". `ReadGRAND` adds the read counts, new to total RNA ratios (NTRs) and information on the NTR posterior distribution (alpha,beta).
 
 As a quick quality check, we can inspect a principal component analysis of all samples involved:
-```{r,fig.height=4}
+```{r,fig.height=4, fig.alt = "Uncolored PCA plot"}
 PlotPCA(banp)
 ```
 By default, the samples are colored according to the `Condition` annotation. `Condition` has a special meaning in grandR, not only for `PlotPCA`, but also for other analyses (see below). We do not have a condition set (see the Coldata table above, there is no column named Condition). There are two ways how the condition can be set:
@@ -62,7 +63,7 @@ By default, the samples are colored according to the `Condition` annotation. `Co
 
 Here a useful condition is to combine the genotype, timepoint and 4sU status. We can set this like this (for more information, see the [Loading data vignette](loading-data.html)):
 
-```{r}
+```{r fig.alt = "Colored PCA plot"}
 Condition(banp) <- c("Genotype","Experimental.time.original","has.4sU")
 Coldata(banp)
 PlotPCA(banp)
@@ -89,19 +90,19 @@ GetContrasts(banp,contrast = c("Condition"))
 If one value is given, all pairwise comparisons with this as reference are created (i.e., if A is given, all X vs A for all other values X):
 
 ```{r}
-GetContrasts(banp,contrast = c("Condition","dTag.0h.4sU"))
+GetContrasts(banp,contrast = c("Condition","dTag 0h 4sU"))
 ```
 
 If two values are given, a single pairwise comparison is created:
 
 ```{r}
-GetContrasts(banp,contrast = c("Condition","dTag.2h.4sU","dTag.0h.4sU"))
+GetContrasts(banp,contrast = c("Condition","dTag 2h 4sU","dTag 0h 4sU"))
 ```
 
 It is possible to restrict the samples to be used by defining the `columns` parameter (samples for bulk experiments or cells for single cell experiments are jointly called "columns" in grandR):
 
 ```{r}
-GetContrasts(banp,contrast = c("Condition","dTag.0h.4sU"),columns = Genotype=="dTag")
+GetContrasts(banp,contrast = c("Condition","dTag 0h 4sU"),columns = Genotype=="dTag")
 # note that you can use names from the Coldata table here to build an expression
 ```
 
@@ -145,7 +146,7 @@ banp
 
 As you see, now we have two analyses added to our grandR object. We can use `PlotScatter` to directly plot them:
 
-```{r}
+```{r fig.alt = "QC scatter plot of 4sU effect vs dTAG effect"}
 PlotScatter(banp,xlim=c(-2,2),ylim=c(-2,2))
 ```
 
@@ -160,7 +161,7 @@ We see that there are quite some effects for both pairwise comparison.
 To focus on the 4sU effect, we first create 4sU dropout plots. 4sU labeling can have impact on transcription before cell viability suffers. Such an effect would be observable in these plots by a substantial negative correlation, i.e. genes with high NTR (which are to the right), should tend to be downregulated in the 4sU labeled sample vs an equivalent 4sU naive sample. It is important that these analyses are only done by comparing biologically equivalent samples (and not on the SARS infected samples here, as the no4sU sample is from 3h post infection, and all others are later). 
 
 
-```{r fig.height=4, warning=FALSE}
+```{r fig.height=4, warning=FALSE, fig.alt = "4sU dropout plots"}
 Condition(banp)="Genotype"  # Plot4sUDropoutRankAll will use all no4sU samples within the same Condition as reference
 Plot4sUDropoutRankAll(banp)
 Condition(banp) <- c("Genotype","Experimental.time.original","has.4sU") # reset
@@ -181,13 +182,13 @@ Analyses(banp,description = TRUE)
 
 Now we can have a look at a Vulcano plot for the 4sU effect:
 
-```{r fig.height=3, fig.width=3}
+```{r fig.height=3, fig.width=3, fig.alt = "Vulcano plot"}
 VulcanoPlot(banp,analysis = "QC.4sU effect",lfc.cutoff = 0.5,ylim=c(-9,50))
 ```
 
 We can also create an MA plot:
 
-```{r fig.height=3, fig.width=3}
+```{r fig.height=3, fig.width=3, fig.alt = "MA plot"}
 MAPlot(banp,analysis = "QC.4sU effect",lfc.cutoff = 1)
 ```
 
@@ -202,7 +203,7 @@ The `criteria` parameter can be used to define which genes you want to have. The
 
 There are no obvious (at least to us) biological functions for these genes. We therefore perform gene set enrichment analysis (GSEA) on MSigDB hallmark gene sets:
 
-```{r}
+```{r fig.alt = "Clusterprofiler ridge plot"}
 gsea <- AnalyzeGeneSets(banp,analysis = "QC.4sU effect",category="H")
 clusterProfiler::ridgeplot(gsea)
 ```
@@ -228,13 +229,13 @@ AnalyzeGeneSets(banp,analysis = "QC.4sU effect",category="H",criteria = LFC<0.5 
 
 We next investigate whether there is anything peculiar about the expression differences between the dTag and wild-type cells:
 
-```{r fig.height=3, fig.width=3}
+```{r fig.height=3, fig.width=3,  fig.alt = "Vulcano of dTAG effect"}
 VulcanoPlot(banp,analysis = "QC.dTag effect",ylim=c(-40,300))
 ```
 
 There are a lot of genes that are substantially and statistically significantly downregulated.
 
-```{r}
+```{r fig.alt = "Clusterprofiler ridge plot"}
 gsea <- AnalyzeGeneSets(banp,analysis = "QC.dTag effect",category="C5",subcategory = "GO:BP")
 clusterProfiler::ridgeplot(gsea)
 ```
@@ -270,21 +271,21 @@ banp <- PairwiseDESeq2(banp,name.prefix = "new",contrasts = contrasts,mode="new"
 
 Note that actually new RNA comparisons do not make sense at all for 1h and (maybe) 2h, since the labeling times for these samples were 30min and 90 min, respectively, whereas the labeling time for all other samples was 2h:
 
-```{r fig.height=3, fig.width=6, warning=FALSE}
+```{r fig.height=3, fig.width=6, warning=FALSE, fig.alt = "MA plots of 1h and 2h vs 0h"}
 MAPlot(banp,analysis = "new.1h vs 0h")|
   MAPlot(banp,analysis = "new.2h vs 0h")
 ```
 
 The MA plots indicate that changes in new RNA are much more pronounced than changes in total RNA, even after 4h:
 
-```{r fig.height=3, fig.width=6, warning=FALSE}
+```{r fig.height=3, fig.width=6, warning=FALSE, fig.alt = "MA plot of 4h vs 0h (total and new RNA)"}
 MAPlot(banp,analysis = "total.4h vs 0h",highlight=GeneInfo(banp,"BANP-Target")=="yes")|
   MAPlot(banp,analysis = "new.4h vs 0h",highlight=GeneInfo(banp,"BANP-Target")=="yes")
 ```
 
 We compare this using boxplots:
 
-```{r fig.height=3, fig.width=5}
+```{r fig.height=3, fig.width=5, fig.alt = "Boxplots of log FC distributions for targets and non-targets"}
 df <- GetAnalysisTable(banp,analyses = "4h",by.rows = TRUE)
 ggplot(df,aes(Analysis,LFC,fill=`BANP-Target`))+
   geom_hline(yintercept = 0)+
@@ -304,7 +305,7 @@ table(GeneInfo(banp,"HL category"))
 
 Now we can do the same comparison as above but differentiate between half-life classes:
 
-```{r}
+```{r, fig.alt = "Boxplots of log FC distributions for targets and non-targets in different HL categories"}
 df <- GetAnalysisTable(banp,analyses = "4h vs 0h",by.rows = TRUE)
 df <- df[!is.na(df$`HL category`),]
 ggplot(df,aes(`HL category`,LFC,fill=`BANP-Target`))+
@@ -339,7 +340,7 @@ banp <- FitKineticsSnapshot(banp,name.prefix = "MAP",reference.columns=reference
 
 Now we can obtain the analysis table and plot the distributions of half-live estimated from each timepoint:
 
-```{r}
+```{r fig.alt = "Boxplots of half-lives per time point"}
 df <- GetAnalysisTable(banp,analyses = "^MAP",by.rows = TRUE)
 df$HL=pmin(df$HL,48)   # for 4h, there are extreme outliers, which mess up the computation of violins
 ggplot(df,aes(Analysis,HL))+
@@ -362,7 +363,7 @@ banp <- FitKineticsSnapshot(banp,name.prefix = "cMAP",reference.columns=referenc
 
 Now we can obtain the analysis table after recalibration and plot the distributions of half-lives estimated from each timepoint:
 
-```{r}
+```{r fig.alt = "Boxplots of half-lives per time point after calibrating effective labeling times"}
 df <- GetAnalysisTable(banp,analyses = "cMAP",by.rows = TRUE)
 ggplot(df,aes(Analysis,HL))+
   geom_boxplot()+
@@ -384,7 +385,7 @@ banp <- EstimateRegulation(banp,"Regulation",
 
 Now we can compare the estimated synthesis fold changes between the time points:
 
-```{r fig.height=7, fig.width=7}
+```{r fig.height=7, fig.width=7, fig.alt = "Scatter plots log FC synthesis vs HL at different time points"}
 a<-PlotScatter(banp,x=`Regulation.1h vs 0h.s.log2FC`,y=`Regulation.2h vs 0h.s.log2FC`,
              xlim=c(-3,3),ylim=c(-3,3),highlight = GeneInfo(banp,"BANP-Target")=="yes")+
    geom_abline()
@@ -400,4 +401,5 @@ d<-PlotScatter(banp,x=`Regulation.6h vs 0h.s.log2FC`,y=`Regulation.20h vs 0h.s.l
 
 (a|b)/(c|d)
 ```  
+
 Note that for the first comparison (1h vs 0h against 2h vs 0h) most genes do not scatter around the main diagonal, but the actual BANP targets do. This suggests that there is a lot of noise w.r.t. the x axis (which is not unexpected considering the short labeling time), but the the estimation of synthesis rate fold changes is unbiased for genes that actually change their synthesis rate.

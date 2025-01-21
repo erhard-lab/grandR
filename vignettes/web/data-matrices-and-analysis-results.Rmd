@@ -158,7 +158,7 @@ GetTable(sars,genes="MYC")
 ```
 
 Sometimes, it makes sense to add the `GeneInfo` table (for more on gene metadata, see the [loading data vignette](loading-data.html)):
-```{r warning=FALSE}
+```{r warning=FALSE, fig.alt = "Scatterplot SARS 4h A vs no4sU"}
 df <- GetTable(sars,type="norm",gene.info = TRUE)
 head(df)
 ggplot(df,aes(`SARS.4h.A`,`SARS.no4sU.A`,color=Type))+
@@ -253,7 +253,7 @@ GetData(sars,genes=c("MYC","SRSF6"),columns=duration.4sU<2,by.rows = TRUE)
 
 This can be quite helpful, as for the following example: We retrieve total, old and new RNA for SRSF6 (only replicate A), and do this by rows. This way, the data can directly be used for ggplot to plot the progressive labeling time course (note the much shorter half-life, which is the time where the new and old lines cross, for SARS as compared to Mock):
 
-```{r warning=FALSE}
+```{r warning=FALSE, fig.alt = "Line plot for old, new and total RNA of SRSF6"}
 df <- GetData(sars,mode.slot=c("old.norm","new.norm","total.norm"),genes="SRSF6",
               columns=Replicate=="A",by.rows = TRUE)
 ggplot(df,aes(duration.4sU,Value,color=mode.slot))+
@@ -302,7 +302,7 @@ rbind(head(df,4),tail(df,4))
 
 Now we can directly create an ecdf plot from this using ggplot, and we see that there are significant changes for short half-lives:
 
-```{r}
+```{r fig.alt = "Half-life distributins for 'kinetics' and 'restricted'"}
 ggplot(df,aes(`Half-life`,color=Analysis))+
   stat_ecdf()+
   scale_x_log10()+

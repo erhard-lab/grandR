@@ -20,6 +20,7 @@ suppressPackageStartupMessages({
   library(grandR)
   library(ggplot2)
   library(patchwork)
+  options(timeout = 600)
 })
 ```
 
@@ -57,7 +58,7 @@ head(GetAnalysisTable(d))
 
 We can also visualize single genes graphically (this is the same gene as used in Fig 4a in Herzog et al. 2017 [[1]](https://www.nature.com/articles/nmeth.4435)):
 
-```{r}
+```{r fig.alt = "Progressive labeling plot for Dnmt3b"}
 PlotGeneProgressiveTimecourse(d,gene=Genes(d,"Dnmt3b",regex=TRUE),time="Time",type="chase")
 ```
 
@@ -70,7 +71,7 @@ Genes(d,"Dnmt3b",regex=TRUE)
 
 In this step, we compare the half-life values obtained from the `FitKinetics` function with those from Herzog et al. The latter was estimated by observing the decrease in mismatches during the chase period, while our method also considers the GRAND-SLAM-estimated NTR and posterior. To compare, we add Herzog et al's half-life values to our analysis table and create a scatter plot with half-life values on both the x and y axes. The plot clearly shows a correlation between the two sets of results, indicating that the `FitKinetics` results are consistent with those from Herzog et al.
 
-```{r,warning=FALSE}
+```{r,warning=FALSE, fig.alt = "Scatterplot comparing pulse-chase half-lives vs half-lives from Herzog et al."}
 t=read.delim("https://zenodo.org/record/7612564/files/halflifes.tsv?download=1")
 t$Gene=paste0(t$Name,".",t$End)
 d = AddAnalysis(data = d,"kinetics",table = t,by="Gene")
