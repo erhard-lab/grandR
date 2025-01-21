@@ -1244,6 +1244,8 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     re$ntr=correctmat(re$ntr)
     re$alpha=correctmat(re$alpha)
     re$beta=correctmat(re$beta)
+    re$shape=correctmat(re$shape)
+    re$llr=correctmat(re$llr)
   }
 
   checknames=function(n,a){
