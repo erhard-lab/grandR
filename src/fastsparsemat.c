@@ -69,9 +69,12 @@ SEXP fastsparsematsum(SEXP Xi, SEXP Xj, SEXP Xx, SEXP Yi, SEXP Yj, SEXP Yx) {
       ++y;
     }
   }
-  SETLENGTH(Ri, k);
-  SETLENGTH(Rj, k);
-  SETLENGTH(Rx, k);
+//  SETLENGTH(Ri, k);
+//  SETLENGTH(Rj, k);
+//  SETLENGTH(Rx, k);
+  Ri = Rf_xlengthgets(Ri, k);
+  Rj = Rf_xlengthgets(Rj, k);
+  Rx = Rf_xlengthgets(Rx, k);
 
   SEXP re = PROTECT(allocVector(VECSXP, 3));
   SET_VECTOR_ELT(re, 0, Ri);
@@ -125,9 +128,12 @@ SEXP fastsparsematcompmult(SEXP Xi, SEXP Xj, SEXP Xx, SEXP Yi, SEXP Yj, SEXP Yx)
       ++y;
     }
   }
-  SETLENGTH(Ri, k);
-  SETLENGTH(Rj, k);
-  SETLENGTH(Rx, k);
+//SETLENGTH(Ri, k);
+//SETLENGTH(Rj, k);
+//SETLENGTH(Rx, k);
+  Ri = Rf_xlengthgets(Ri, k);
+  Rj = Rf_xlengthgets(Rj, k);
+  Rx = Rf_xlengthgets(Rx, k);
 
   SEXP re = PROTECT(allocVector(VECSXP, 3));
   SET_VECTOR_ELT(re, 0, Ri);
@@ -189,9 +195,12 @@ SEXP fastsparsematcompmult1m(SEXP Xi, SEXP Xj, SEXP Xx, SEXP Yi, SEXP Yj, SEXP Y
       ++y;
     }
   }
-  SETLENGTH(Ri, k);
-  SETLENGTH(Rj, k);
-  SETLENGTH(Rx, k);
+//  SETLENGTH(Ri, k);
+//  SETLENGTH(Rj, k);
+//  SETLENGTH(Rx, k);
+  Ri = Rf_xlengthgets(Ri, k);
+  Rj = Rf_xlengthgets(Rj, k);
+  Rx = Rf_xlengthgets(Rx, k);
 
   SEXP re = PROTECT(allocVector(VECSXP, 3));
   SET_VECTOR_ELT(re, 0, Ri);

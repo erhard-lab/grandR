@@ -1,3 +1,17 @@
+# Comments for submission of grandR 0.2.6
+## R CMD check results
+There were no ERRORs or WARNINGs or NOTEs. 
+
+## CRAN Package Check Results
+There were no ERRORs or WARNINGs.
+
+There was 1 additional NOTE:
+  Package suggested but not available for checking: ‘monocle’
+  
+This is a Bioconductor package.
+
+
+
 # Comments for submission of grandR 0.2.5
 ## R CMD check results
 There were no ERRORs or WARNINGs. 
