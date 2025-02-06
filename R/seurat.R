@@ -88,6 +88,7 @@ as.Seurat.grandR=function(data,modalities=c(RNA="total",newRNA="new"),hls=NULL,t
   })
   append.meta=function(s) {
     for (i in seq_len(ncol(data$coldata))) s[[names(data$coldata)[i]]]=rep(data$coldata[cols,i],nrow(s[[]])/nrow(data$coldata[cols,]))
+    Seurat::Misc(object=s,slot="prefix")=data$prefix
     s
   }
   re = if ("Seurat" %in% class(re)) append.meta(re) else lapply(re,append.meta)
