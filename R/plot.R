@@ -1187,7 +1187,7 @@ PlotGeneGroupsBars=function(data,gene,slot=DefaultSlot(data),columns=NULL,show.C
   g=g+ylab(paste0("Total RNA (",slot,")"))
   if (show.CI) {
     if (!all(c("lower","upper") %in% Slots(data))) stop("Compute lower and upper slots first! (ComputeNtrCI)")
-    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
+    df2=GetData(data,genes=gene,mode.slot=c("lower","upper",slot),columns=columns,by.rows=FALSE,coldata=TRUE,ntr.na = FALSE)
     g=g+geom_errorbar(data=df2,mapping=aes(y=!!sym(slot),fill=NULL,ymin=(1-upper)*!!sym(slot),ymax=(1-lower)*!!sym(slot)),width=0)
   }
   g
