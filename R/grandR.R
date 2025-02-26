@@ -1219,7 +1219,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
     round5up = function(x) trunc(x+0.5)
     round5down = function(x) ceiling(x-0.5)
     conv=if (mode.slot=="count") {
-      if (tno == "t") function(m) {mode(m) <- "integer";m} else if (tno == "n") function(m) { m = round5up(m); mode(m) <- "integer";m} else if (tno == "o") function(m) { m = round5down(m); mode(m) <- "integer";m}
+      if (tno == "t") function(m) {mode(m) <- "integer";m} else if (tolower(substr(tno,1,1))=="n") function(m) { m = round5up(m); mode(m) <- "integer";m} else if (tolower(substr(tno,1,1))=="o") function(m) { m = round5down(m); mode(m) <- "integer";m}
       }else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
   if (!(mode.slot %in% names(data$data))) stop(paste0(mode.slot," unknown!"))
