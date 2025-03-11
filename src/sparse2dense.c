@@ -4,10 +4,10 @@
 SEXP sparse2dense(SEXP sparse_mat, SEXP fill_val) {
   if (!isS4(sparse_mat)) error("Input must be an S4 object");
 
-  SEXP i = GET_SLOT(sparse_mat, install("i"));
-  SEXP j = GET_SLOT(sparse_mat, install("j"));
-  SEXP x = GET_SLOT(sparse_mat, install("x"));
-  SEXP dims = GET_SLOT(sparse_mat, install("Dim"));
+  SEXP i = R_do_slot(sparse_mat, install("i"));
+  SEXP j = R_do_slot(sparse_mat, install("j"));
+  SEXP x = R_do_slot(sparse_mat, install("x"));
+  SEXP dims = R_do_slot(sparse_mat, install("Dim"));
   
   int nrow = INTEGER(dims)[0];
   int ncol = INTEGER(dims)[1];
@@ -29,7 +29,7 @@ SEXP sparse2dense(SEXP sparse_mat, SEXP fill_val) {
     out_ptr[i_ptr[k] + j_ptr[k] * nrow] = x_ptr[k];
   }
 
-  SEXP dimnames = GET_SLOT(sparse_mat, install("Dimnames"));
+  SEXP dimnames = R_do_slot(sparse_mat, install("Dimnames"));
   if (!isNull(dimnames)) {
     setAttrib(out, R_DimNamesSymbol, dimnames);
   }
