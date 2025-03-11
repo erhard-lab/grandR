@@ -1222,8 +1222,9 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
       if (tno == "t") function(m) {mode(m) <- "integer";m} else if (tolower(substr(tno,1,1))=="n") function(m) { m = round5up(m); mode(m) <- "integer";m} else if (tolower(substr(tno,1,1))=="o") function(m) { m = round5down(m); mode(m) <- "integer";m}
       }else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
-  if (!(mode.slot %in% names(data$data))) stop(paste0(mode.slot," unknown!"))
-    if (length(genes)==1) data.frame(conv(as.matrix(data$data[[mode.slot]][genes,columns])*mf)) else as.data.frame(conv(t(as.matrix(data$data[[mode.slot]][genes,columns])*mf)))
+    if (!(mode.slot %in% names(data$data))) stop(paste0(mode.slot," unknown!")) 
+    f=if (mode.slot %in% c("shape","ll") && data$metadata$Output=="sparse") function(m) .Call('sparse2dense',m,NA_real_) else function(m) as.matrix(m)
+    if (length(genes)==1) data.frame(conv(f(data$data[[mode.slot]][genes,columns])*mf)) else as.data.frame(conv(t(f(data$data[[mode.slot]][genes,columns])*mf)))
   }
   re=as.data.frame(lapply(mode.slot,uno))
   if(length(mode.slot)==1 && length(genes)==1) names(re)="Value" else if (length(mode.slot)==1) names(re)=og else if (length(genes)==1) names(re)=mode.slot else names(re)=paste0(rep(og,length(mode.slot)),".",rep(mode.slot,each=length(og)))
