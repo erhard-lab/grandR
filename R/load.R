@@ -1321,7 +1321,8 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     if (!all(rownames(a)==gene.info$Gene)) stop(sprintf("Row names do not match for %s!",n))
   }
 
-  for (slotname in names(re)) checknames(slotname,re[[slotname]])
+   # avoid error due to missing LL data
+  for (slotname in names(re)[names(re) != "ll"]) checknames(slotname,re[[slotname, exact = TRUE]])
 
   coldata$no4sU=no4sU.cols
 
