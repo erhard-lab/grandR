@@ -763,6 +763,71 @@ GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
 }
 
 
+                                                                                                              #' Parse prefix for data file path manipulation
+#'
+#' @description
+#' Parses a prefix string to extract components according to expected semantic patterns.
+#' The function handles different formats of prefixes, determining whether they include
+#' path information, pseudobulk specifications, target names, etc.
+#'
+#' @param prefix Character string or grandR object. If a grandR object is provided, 
+#'        the prefix component will be extracted.
+#'
+#' @return A list with the following components:
+#'   \item{path}{Directory path (NULL if not present)}
+#'   \item{prefix}{Base prefix identifier}
+#'   \item{pseudobulk}{Pseudobulk indicator (NULL if not present)}
+#'   \item{targets.name}{Target name identifier}
+#'   \item{pseudobulk.name}{Pseudobulk name (NULL if not present)}
+#'
+#' @details
+#' The function expects prefixes in one of the following formats:
+#' \itemize{
+#'   \item Two fields: \code{prefix.targets_name}
+#'   \item Four fields: \code{prefix.pseudobulk.targets_name.pseudobulk_name}
+#'   \item Single field: \code{prefix} used to unambiguously match one directory that matches one of the above patterns.
+#' }
+#' All semantic fields are dot-separated and must not be empty.
+#'
+#' @examples
+#' # Basic prefix with target name
+#' PrefixSemantics("sample1.targets")
+#'
+#' # Prefix with pseudobulk information
+#' PrefixSemantics("sample1.pseudobulk.targets.celltype")
+#'
+#' # Prefix with path information
+#' PrefixSemantics("/path/to/sample1.targets")
+#'
+#' @export
+#'
+#' @importFrom stringr str_split
+PrefixSemantics = function(prefix) {
+  re <- list(path=NULL,prefix=NULL,pseudobulk=NULL,targets.name=NULL,pseudobulk.name=NULL)
+  if (is.grandR(prefix)) prefix <- prefix$prefix
+  prefix <- gsub("(/data\\.tsv\\.gz$)|(/data\\.tsv$)|(/data$)|(/$)", "", prefix) # remove file suffix if sparse and trailing slash if present
+  prefix.dir <- gsub("(.*/).+$", "\\1", prefix)
+  prefix <- gsub("^.*/", "", prefix) # remove any path information
+  prefix.fields <- str_split(prefix, "\\.")[[1]]
+  if (prefix.dir != prefix) re$path <- prefix.dir
+  re$prefix <- prefix.fields[1]
+  if (length(prefix.fields) == 2) { # no pseudobulk
+    re$targets.name <- prefix.fields[2]
+  } else if (length(prefix.fields) == 4) { 
+    re$pseudobulk <- prefix.fields[2] # should always be "pseudobulk"
+    re$targets.name <- prefix.fields[3]
+    re$pseudobulk.name <- prefix.fields[4]
+  } else if (length(prefix.fields) == 1) { # prefix only
+    putative.dir <- list.dirs(prefix.dir)[grep(paste0(prefix, "\\..*"), list.dirs(prefix.dir))] # dir containing prefix
+    if (length(putative.dir) > 1) stop("Ambiguous prefix: '", prefix, "' matches ", paste(putative.dir, collapse = ", "))
+    if (length(putative.dir) == 0) stop("Invalid prefix: '", prefix, "'")
+    re <- PrefixSemantics(prefix = normalizePath(putative.dir))
+  } else {
+    stop("Invalid number of fields (", length(prefix.fields), ") in prefix '", prefix, "'.\n", "Expecting 2 (default) or 4 (if pseudobulked) fields.\n", "Prefix semantic fields are dot-separated and must not be empty.")
+  }
+  if (any(sapply(unlist(re), \(p) nchar(p) == 0)))  stop("Invalid prefix: '", prefix, "'\n", "Prefix semantic fields are dot-separated and must not be empty.")
+  return(re)
+}
 
 #' Read the output of GRAND-SLAM 3.0 into a grandR object.
 #'
@@ -818,47 +883,49 @@ ReadGRAND3=function(prefix,
                     read.posterior=NULL,
                     rename.sample=NULL,
                     verbose=FALSE) {
-
+  
   if (length(estimator)!=1 || !estimator %in% c("Binom","TbBinom","TbBinomShape")) stop("Invalid estimator!")
-
-  # TODO: do not use read.delim or .csv, nor file.exists (to allow using urls!)
-  isSparse=function(prefix) !file.exists(paste0(prefix,".targets/data.tsv.gz")) & !file.exists(prefix)
-
-  if (isSparse(prefix)) {
+  
+  # TODO: do not use read.delim or .csv, nor file.exists (to allow using urls!) - solved by try.file?
+  # read.table(gzfile(url), sep = "\t", header = TRUE) can replace read.delim and handle urls
+  
+  # TODO test for sparse input via url
+  build_prefix = function() {
+    if (RCurl::url.exists(prefix)) return(prefix)
+    l = PrefixSemantics(prefix)
+    prefix = paste0(l[[1]], paste0(unlist(l[2:5]), collapse = "."))
+    f = paste0(prefix, "/data.tsv.gz")
+    if (file.exists(f)) f else prefix
+  }
+  prefix=build_prefix()
+  isSparse=function() !grepl("/data\\.tsv\\.gz$", prefix)
+  
+  if (isSparse()) {
     if (is.null(design)) design=c(Design$Library,Design$Sample,Design$Barcode)
     if (is.null(read.posterior)) read.posterior=FALSE
-    ReadGRAND3_sparse(prefix=prefix,design=design,label=label,estimator=estimator,classify.genes=classify.genes,read.posterior=read.posterior,rename.sample = rename.sample,verbose=verbose)
+    ReadGRAND3_sparse(prefix=prefix,design=design,label=label,estimator=estimator,classify.genes=classify.genes,read.posterior=read.posterior,rename.sample=rename.sample,verbose=verbose)
   } else {
     if (is.null(design)) design=c(Design$Condition,Design$Replicate)
     if (is.null(read.posterior)) read.posterior=TRUE
-    ReadGRAND3_dense(prefix=prefix,design=design,label=label,estimator=estimator,classify.genes=classify.genes,read.posterior=read.posterior,rename.sample = rename.sample,verbose=verbose)
+    ReadGRAND3_dense(prefix=prefix,design=design,label=label,estimator=estimator,classify.genes=classify.genes,read.posterior=read.posterior,rename.sample=rename.sample,verbose=verbose)
   }
 }
-ReadGRAND3_sparse=function(prefix,
-                           design=c(Design$Library,Design$Sample,Design$Barcode),
-                           label="4sU",
-                           estimator="Binom",
-                           classify.genes=ClassifyGenes(),
-                           read.posterior=FALSE,
-                           rename.sample=NULL,
-                           verbose=FALSE) {
-
-  cols=readLines(paste0(prefix, ".targets/barcodes.tsv.gz"))
+                                                                                                              
+ReadGRAND3_sparse=function(prefix,design=c(Design$Library,Design$Sample,Design$Barcode),label="4sU",estimator="Binom",classify.genes=ClassifyGenes(),read.posterior=FALSE,rename.sample=NULL,verbose=FALSE) {
+  
+  cols=readLines(paste0(prefix,"/barcodes.tsv.gz"))
   if (!is.null(rename.sample)) cols=sapply(cols,rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
-
+  
   conds=strsplit(cols,".",fixed=TRUE)[[1]]
-
+  
   if (length(conds)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(conds,collapse=".")))
-
-
-  if (verbose) cat("Reading count matrix...\n")
-  count=Matrix::readMM(paste0(prefix, ".targets/matrix.mtx.gz"))
-  gene.info=utils::read.delim(paste0(prefix, ".targets/features.tsv.gz"),header = FALSE,stringsAsFactors = FALSE)
-  if (ncol(gene.info)==4) gene.info$Length=1
+  
+  gene.info=utils::read.delim(paste0(prefix,"/features.tsv.gz"),header=FALSE,stringsAsFactors=FALSE)
+  if (ncol(gene.info)==4) gene.info$Length=1 #TODO: what does this indicate, i.e., what does Length mean?
   gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
-
-  gene.info$Gene = check.and.make.unique(gene.info$Gene,label="gene names")
-  gene.info$Symbol = check.and.make.unique(gene.info$Symbol,ref=gene.info$Gene,label="gene symbols",ref.label = "gene names")
+  
+  gene.info$Gene=check.and.make.unique(gene.info$Gene,label="gene names")
+  gene.info$Symbol=check.and.make.unique(gene.info$Symbol,ref=gene.info$Gene,label="gene symbols",ref.label="gene names")
 
   #if (anyDuplicated(gene.info$Gene)) {
   #  dupp=table(gene.info$Gene)
@@ -884,66 +951,61 @@ ReadGRAND3_sparse=function(prefix,
 #    gene.info$Symbol=make.names(gene.info$Symbol)
 #  }
 
-  colnames(count)=cols
-  rownames(count)=gene.info$Gene
-  re=list()
-  re$count=count
-
-  if (verbose) cat("Reading NTRs...\n")
-  ntr=Matrix::readMM(sprintf("%s.targets/%s.%s.ntr.mtx.gz",prefix,label,estimator))
-  colnames(ntr)=cols
-  rownames(ntr)=gene.info$Gene
-  re$ntr=ntr
-
-  if (estimator=="TbBinomShape") {
-
-    if (verbose) cat("Reading LLRs...\n")
-    llr <- Matrix::readMM(paste0(prefix,".targets/4sU.llr.mtx.gz"))
-    colnames(llr)=cols
-    rownames(llr)=gene.info$Gene
-    re$llr=llr
-
-    if (verbose) cat("Reading Shapes...\n")
-    shape <- Matrix::readMM(paste0(prefix,".targets/4sU.shape.mtx.gz"))
-    colnames(shape)=cols
-    rownames(shape)=gene.info$Gene
-    re$shape=shape
-
+ re=list()  
+  
+  make_MM=function(path) {
+    mm=Matrix::readMM(path)
+    colnames(mm)=cols
+    rownames(mm)=gene.info$Gene
+    return(mm)
   }
 
-  if (read.posterior && file.exists(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
-    if (verbose) cat("Reading posterior beta parameters...\n")
-    alpha=Matrix::readMM(sprintf("%s.targets/%s.%s.alpha.mtx.gz",prefix,label,estimator))
-    colnames(alpha)=cols
-    rownames(alpha)=gene.info$Gene
-    re$alpha=alpha
+  if (verbose) cat("Reading count matrix...\n")
+  re$count=make_MM(paste0(prefix,"/matrix.mtx.gz"))
 
-    beta=Matrix::readMM(sprintf("%s.targets/%s.%s.beta.mtx.gz",prefix,label,estimator))
-    colnames(beta)=cols
-    rownames(beta)=gene.info$Gene
-    re$beta=beta
+  if (verbose) cat("Reading NTRs...\n")
+  re$ntr=make_MM(sprintf("%s/%s.%s.ntr.mtx.gz",prefix,label,estimator))
+  
+  if (estimator=="TbBinomShape") {
+    
+    if (verbose) cat("Reading LLRs...\n")
+    re$llr=make_MM(paste0(prefix,"/4sU.llr.mtx.gz"))
+
+    # not all data we are working with already produced this output
+    if (verbose) cat("Reading LLs...\n")
+    ll.file <- paste0(prefix,"/4sU.ll.mtx.gz")
+    if (file.exists(ll.file)) re$ll=make_MM(ll.file) else message(sprintf("%s not found - skipping", ll.file))
+    
+    if (verbose) cat("Reading Shapes...\n")
+    re$shape=make_MM(paste0(prefix,"/4sU.shape.mtx.gz"))
+  }
+  
+  if (read.posterior && file.exists(sprintf("%s/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
+    if (verbose) cat("Reading posterior beta parameters...\n")
+    re$alpha=make_MM(sprintf("%s/%s.%s.alpha.mtx.gz",prefix,label,estimator))
+    re$beta=make_MM(sprintf("%s/%s.%s.beta.mtx.gz",prefix,label,estimator))
   }
   if (is.null(gene.info$Mode)) {
     gene.info$Mode=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
     gene.info$Mode=factor(gene.info$Mode,levels=unique(gene.info$Mode))
   }
-
+  
   gene.info$Type=classify.genes(gene.info)
-
+  
   coldata=MakeColdata(cols,design)
-  # use make coldata instead. add no4sU column!
+   # use make coldata instead. add no4sU column!
   #coldata=data.frame(Name=cols)
   #spl=strsplit(as.character(coldata$Name),".",fixed=TRUE)
   #for (i in 1:length(design)) coldata=cbind(coldata,factor(sapply(spl,function(v) v[i]),levels=unique(sapply(spl,function(v) v[i]))))
   #names(coldata)[-1]=design
   #rownames(coldata)=coldata$Name
-
-  coldata$no4sU=Matrix::colSums(ntr)==0
-
+  coldata$no4sU=Matrix::colSums(re$ntr)==0
+  
   re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(`GRAND-SLAM version`=3,Output="sparse"))
   DefaultSlot(re)="count"
-  re
+  return(re)
 }
+ 
 
 
 ReadGRAND3_dense=function(prefix,
@@ -956,14 +1018,16 @@ ReadGRAND3_dense=function(prefix,
                           verbose=FALSE) {
   annotations=c("Gene","Symbol","Category","Length")
   slots=c("count","ntr","alpha","beta")
-  names(slots)=c("Read count",sprintf("%s %s %s",label,estimator,c("NTR MAP","alpha","beta")))
+  names(slots)=c("Read count", sprintf("%s %s %s",label,estimator,c("NTR MAP","alpha","beta")))
   if (!read.posterior) slots=slots[1:2]
-  if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr")
-
-  re=read.grand.internal(description="GRAND-SLAM 3.0 dense data",prefix = prefix, design = design, slots=slots, annotations=annotations,classify.genes = classify.genes,rename.sample = rename.sample,verbose = verbose)
+  if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr",LL="ll") 
+  # TODO: not all data we are working with already produced LL output, but it should be inculded in the next release    
+  
+  re=read.grand.internal(description="GRAND-SLAM 3.0 dense data",prefix=prefix,design=design,slots=slots,annotations=annotations,classify.genes=classify.genes,rename.sample=rename.sample,verbose=verbose)
   re$metadata=c(re$metadata,list(`GRAND-SLAM version`=3,Output="dense"))
-  re
+  return(re)
 }
+
 
 
 #' Read sparse new/total matrices
@@ -1137,6 +1201,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   #
   # if (!file.exists(file) && !hascurl) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
   # if (!file.exists(file)) stop("File not found!")
+  
   tfile=try.file(prefix,verbose=verbose)
   file=tfile$file
   prefix=tfile$prefix
@@ -1246,6 +1311,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     re$beta=correctmat(re$beta)
     if (!is.null(re$shape)) re$shape=correctmat(re$shape)
     if (!is.null(re$llr)) re$llr=correctmat(re$llr)
+    if (!is.null(re$ll)) re$ll=correctmat(re$ll)
   }
 
   checknames=function(n,a){
