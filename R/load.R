@@ -1314,6 +1314,9 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     if (!is.null(re$ll)) re$ll=correctmat(re$ll)
   }
 
+   # avoid error due to missing LL data by removing slot (holds zero-column matrix otherwise) 
+  if (dim(re$ll)[2]==0) re$ll=NULL
+
   checknames=function(n,a){
     if (nrow(a)!=nrow(gene.info)) stop(sprintf("Number of rows do not match for %s!",n))
     if (ncol(a)!=nrow(coldata)) stop(sprintf("Number of columns do not match for %s!",n))
@@ -1321,8 +1324,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
     if (!all(rownames(a)==gene.info$Gene)) stop(sprintf("Row names do not match for %s!",n))
   }
 
-   # avoid error due to missing LL data
-  for (slotname in names(re)[names(re) != "ll"]) checknames(slotname,re[[slotname, exact = TRUE]])
+  for (slotname in names(re)) checknames(slotname,re[[slotname, exact = TRUE]])
 
   coldata$no4sU=no4sU.cols
 
