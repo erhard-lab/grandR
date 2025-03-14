@@ -188,9 +188,9 @@ as.Seurat.legacy.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NU
 #'
 #' @concept data
 CreatePseudobulkTable <- function(data,name.column="Name",pseudobulk.column="Condition") {
-  table = data[[]][,c(pseudobulk.column, name.column)]
+  table = data[[]][,c(name.column, pseudobulk.column)]
   rownames(table) = seq(nrow(table))
-  colnames(table) = c("Pseudobulk","Cell")
+  colnames(table) = c("Cell","Pseudobulk")
   return(table)
 }
 
