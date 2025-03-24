@@ -392,9 +392,9 @@ logLik_MixMat=function(m,fun,...) {
 	re
 }
 
-fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE) {
+fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE, prior = c(1,1)) {
   start=0
-  optfun=function(p) logLik_MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
+  optfun=function(p) dbeta(p,prior[1],prior[2],log=TRUE)+logLik_MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
   start=optfun(par$ntr)
   opt=optimize(optfun,maximum=TRUE,lower=0,upper=1)
 
