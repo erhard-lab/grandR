@@ -502,7 +502,7 @@ AddSlot=function(data,name,matrix,set.to.default=FALSE,warn=TRUE) {
   if (!all(colnames(matrix)==colnames(data$data$count))) stop("Column names do not match!")
 
   ind=ToIndex(data,rownames(matrix))
-  rownames(matrix)[ind]=Genes(data,genes=ind,use.symbols=FALSE)
+  rownames(matrix)=Genes(data,genes=ind,use.symbols=FALSE)
   missing=setdiff(rownames(data$data$count),rownames(matrix))
   if (length(missing>0)) {
     warning(sprintf("Could not find all genes in matrix, setting to 0 (n=%d missing, e.g. %s)!",length(missing),paste(utils::head(missing,5),collapse=",")))
@@ -1215,10 +1215,16 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
     if (!ntr.na) {
       mf[is.na(mf)|is.nan(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
     }
-    conv=if (mode.slot=="count") function(m) {mode(m) <- "integer";m} else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
+    #conv=if (mode.slot=="count") function(m) {mode(m) <- "integer";m} else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
+    round5up = function(x) trunc(x+0.5)
+    round5down = function(x) ceiling(x-0.5)
+    conv=if (mode.slot=="count") {
+      if (tno == "t") function(m) {mode(m) <- "integer";m} else if (tolower(substr(tno,1,1))=="n") function(m) { m = round5up(m); mode(m) <- "integer";m} else if (tolower(substr(tno,1,1))=="o") function(m) { m = round5down(m); mode(m) <- "integer";m}
+      }else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
-  if (!(mode.slot %in% names(data$data))) stop(paste0(mode.slot," unknown!"))
-    if (length(genes)==1) data.frame(conv(as.matrix(data$data[[mode.slot]][genes,columns])*mf)) else as.data.frame(conv(t(as.matrix(data$data[[mode.slot]][genes,columns])*mf)))
+    if (!(mode.slot %in% names(data$data))) stop(paste0(mode.slot," unknown!")) 
+    f=if (mode.slot %in% c("shape","ll") && data$metadata$Output=="sparse") function(m) .Call('sparse2dense',m,NA_real_) else function(m) as.matrix(m)
+    if (length(genes)==1) data.frame(conv(f(data$data[[mode.slot]][genes,columns])*mf)) else as.data.frame(conv(t(f(data$data[[mode.slot]][genes,columns])*mf)))
   }
   re=as.data.frame(lapply(mode.slot,uno))
   if(length(mode.slot)==1 && length(genes)==1) names(re)="Value" else if (length(mode.slot)==1) names(re)=og else if (length(genes)==1) names(re)=mode.slot else names(re)=paste0(rep(og,length(mode.slot)),".",rep(mode.slot,each=length(og)))
@@ -1626,7 +1632,7 @@ GetAnalysisTable=function(data,analyses=NULL,regex=TRUE,columns=NULL,genes=Genes
 Plots=function(data) {
   re=list()
   if (!is.null(data$plots$gene)) re=c(re,list(gene=names(data$plots$gene)))
-  if (!is.null(data$plots$global)) re=c(re,list(gene=names(data$plots$global)))
+  if (!is.null(data$plots$global)) re=c(re,list(global=names(data$plots$global)))
   re
 }
 #' @describeIn Plots Add a gene plot to the grandR object
