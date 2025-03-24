@@ -88,6 +88,7 @@ as.Seurat.grandR=function(data,modalities=c(RNA="total",newRNA="new"),hls=NULL,t
   })
   append.meta=function(s) {
     for (i in seq_len(ncol(data$coldata))) s[[names(data$coldata)[i]]]=rep(data$coldata[cols,i],nrow(s[[]])/nrow(data$coldata[cols,]))
+    Seurat::Misc(object=s,slot="prefix")=data$prefix
     s
   }
   re = if ("Seurat" %in% class(re)) append.meta(re) else lapply(re,append.meta)
@@ -187,35 +188,53 @@ as.Seurat.legacy.grandR=function(d,old=TRUE,new=TRUE,ntr=FALSE,prev=FALSE,hls=NU
 #'
 #' @concept data
 CreatePseudobulkTable <- function(data,name.column="Name",pseudobulk.column="Condition") {
-  table = data[[]][,c(pseudobulk.column, name.column)]
+  table = data[[]][,c(name.column, pseudobulk.column)]
   rownames(table) = seq(nrow(table))
-  colnames(table) = c("Pseudobulk","Cell")
+  colnames(table) = c("Cell","Pseudobulk")
   return(table)
 }
 
+                            
 #' Create Convolution Table from a Seurat object
 #'
 #' @param data a Seurat object
 #' @param n.neighbors the number of neighbors to be convoluted
+#' @param group.column character specifying a column to split data by or NULL (see details)
 #'
-#' @details This function returns a table which can be used as input for GRAND3. Note that a data set contatining multiple time points should be split before convolution.
+#' @details This function returns a table which can be used as input for GRAND3. Note that a data set containing multiple time points should be split for convolution (can be done by specifying a \code(group.column)).
 #'
 #' @return a table with two columns "Cell" and "Pseudobulk"
 #'
 #' @concept data
-CreateConvolutionTable<- function(data,n.neighbors=20) {
+CreateConvolutionTable <- function(data, n.neighbors = 20, group.column = "Condition", ...) {
   checkPackages(c("Seurat"))
-
-  data <- Seurat::FindNeighbors(data, dims = 1:10, k.param = n.neighbors)
-  knn <- data@graphs$RNA_nn
-  knn <- data.frame(knn)
-  tab <- matrix(nrow=0, ncol=2)
-  colnames(tab) <- c("Cell", "Pseudobulk")
-
-  for(x in (1:length(knn[1,]))){
-    for(y in colnames(knn[x,(knn[x,] == 1)])){
-      tab <- rbind(tab, c(y, rownames(knn[x,])))
-    }
+  n.cells <- ncol(data)
+  n.groups <- as.character(unique(data[[group.column]])[,1])
+  if (!length(n.groups)) n.groups <- "__NO_GROUPS__"
+  # create return object
+  tab <- matrix(nrow = n.neighbors * n.cells, ncol = 2, dimnames = list(NULL, c("Cell", "Pseudobulk")))
+  # index to populate return object
+  i <- 1
+  # iterate over groups; could be parallelized here
+  for (grp in n.groups) {
+    sub <- if (grp == "__NO_GROUPS__") data else subset(data, subset = !!rlang::ensym(group.column) == grp)
+    sub <- Seurat::FindNeighbors(sub, k.param = n.neighbors, verbose = FALSE, ...)
+    knn <- data.frame(sub@graphs$RNA_nn)
+    #> long format represents knn graph as pairs, i.e., pairs of cells in 
+    #> separate columns and a value column indicating whether they are neighbors
+    knn$Pseudobulk <- rownames(knn)
+    knn <- stats::reshape(data = knn, 
+                          idvar = "Pseudobulk",
+                          varying = rownames(knn), 
+                          v.names = "is_neighbor", 
+                          times = rownames(knn), 
+                          timevar = "Cell", 
+                          direction = "long")
+    # keep only neighbors and relevant columns (!!! match column order of tab !!!)
+    this_tab <- knn[knn$is_neighbor == 1, c("Cell", "Pseudobulk")]
+    # populate return object and increment index; order just for tidyness
+    tab[i:(i + nrow(this_tab) - 1), ] <- as.matrix(this_tab)[order(this_tab$Pseudobulk), ]
+    i <- i + nrow(this_tab)
   }
   return(tab)
 }

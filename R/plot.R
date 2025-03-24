@@ -310,7 +310,9 @@ PlotHeatmap=function(data,
     }
   }
 
-  mat=as.matrix(GetTable(data,type=type,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE,reorder.columns=TRUE))
+  mat=as.matrix(GetTable(data,type=type,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE))
+
+  mat=mat[,columns]
   if (is.character(transform)) transform=Transform(transform)
   mat=transform(mat)
 
