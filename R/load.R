@@ -1217,12 +1217,17 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   gene.info$Type=classify.genes(gene.info)
 
 
-  re=list()
+    re=list()
   for (n in names(slots)) {
     cols=intersect(paste0(conds," ",n),names(data))
     a=tomat(data[,cols],data$Gene,cols)
     if (ncol(a)==0 && n=="Conversions") stop("Columns for conversions are not available in GRAND-SLAM output; rerun gedi -e Slam with parameter -full!")
-    re[[slots[n]]]=a
+    if (ncol(a)==0 && n=="LL") {
+      warning("Column LL is not available in GRAND3 output; rerun gedi -e Grand3!")
+      re[[slots[n]]]=NULL # explicitly set to NULL; is zero column matrix otherwise and does not pass check during grandR object creation
+    } else {
+      re[[slots[n]]]=a
+    }
   }
   #re$count=tomat(data[,count],data$Gene,names(data)[count])
   ##	re$tpm=comp.tpm(re$count,gene.info$Length)
