@@ -780,7 +780,7 @@ GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
 #' @param estimator which estimator to use (one of Binom,TbBinom,TbBinomShape)
 #' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{ClassifyGenes}
 #' @param read.posterior also read the posterior parameters alpha and beta? if NULL, TRUE for dense data, FALSE for sparse data
-#' @param rename.sample function that is applied to each sample name before parsing (or NULL)
+#' @param rename.sample function that is applied to each sample name before parsing (or NULL; use the \link{Renamer} function)
 #' @param verbose Print status updates
 #'
 #' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta)
@@ -805,7 +805,7 @@ GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
 #' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
 #' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
 #'
-#' @seealso \link{ReadGRAND},\link{ClassifyGenes},\link{MakeColdata},\link{DesignSemantics}
+#' @seealso \link{ReadGRAND},\link{ClassifyGenes},\link{MakeColdata},\link{DesignSemantics},\link{Renamer}
 #'
 #'
 #' @export
@@ -821,12 +821,12 @@ ReadGRAND3=function(prefix,
                     read.posterior=NULL,
                     rename.sample=NULL,
                     verbose=FALSE) {
-  
+
   if (length(estimator)!=1 || !estimator %in% c("Binom","TbBinom","TbBinomShape")) stop("Invalid estimator!")
-  
+
   # TODO: do not use read.delim or .csv, nor file.exists (to allow using urls!)
   # read.table(gzfile(url), sep = "\t", header = TRUE) can replace read.delim and handle urls
-  
+
   build_prefix = function() {
     if (RCurl::url.exists(prefix) || file.exists(prefix)) return(prefix)
     prefix = paste0(c(prefix, if (!is.null(pseudobulk.name)) "pseudobulk", targets.name, pseudobulk.name), collapse = ".")
@@ -834,9 +834,9 @@ ReadGRAND3=function(prefix,
     if (RCurl::url.exists(f) || file.exists(f)) f else prefix
   }
   prefix=build_prefix()
-  
+
   isSparse=function() !grepl("/data\\.tsv\\.gz$", prefix)
-  
+
   if (isSparse()) {
     if (is.null(design)) design=c(Design$Library,Design$Sample,Design$Barcode)
     if (is.null(read.posterior)) read.posterior=FALSE
@@ -850,18 +850,18 @@ ReadGRAND3=function(prefix,
 
 
 ReadGRAND3_sparse=function(prefix,design=c(Design$Library,Design$Sample,Design$Barcode),label="4sU",estimator="Binom",classify.genes=ClassifyGenes(),read.posterior=FALSE,rename.sample=NULL,verbose=FALSE) {
-  
+
   cols=readLines(paste0(prefix,"/barcodes.tsv.gz"))
   if (!is.null(rename.sample)) cols=sapply(cols,rename.sample) # let's use sapply, we have no idea whether the function works with vectorization
-  
+
   conds=strsplit(cols,".",fixed=TRUE)[[1]]
-  
+
   if (length(conds)!=length(design)) stop(paste0("Design parameter is incompatible with input data: ",paste(conds,collapse=".")))
-  
+
   gene.info=utils::read.delim(paste0(prefix,"/features.tsv.gz"),header=FALSE,stringsAsFactors=FALSE)
   if (ncol(gene.info)==4) gene.info$Length=1 #TODO: what does this indicate, i.e., what does Length mean?
   gene.info=setNames(gene.info,c("Gene","Symbol","Mode","Category","Length"))
-  
+
   gene.info$Gene=check.and.make.unique(gene.info$Gene,label="gene names")
   gene.info$Symbol=check.and.make.unique(gene.info$Symbol,ref=gene.info$Gene,label="gene symbols",ref.label="gene names")
 
@@ -889,8 +889,8 @@ ReadGRAND3_sparse=function(prefix,design=c(Design$Library,Design$Sample,Design$B
 #    gene.info$Symbol=make.names(gene.info$Symbol)
 #  }
 
- re=list()  
-  
+ re=list()
+
   make_MM=function(path) {
     mm=Matrix::readMM(path)
     colnames(mm)=cols
@@ -903,9 +903,9 @@ ReadGRAND3_sparse=function(prefix,design=c(Design$Library,Design$Sample,Design$B
 
   if (verbose) cat("Reading NTRs...\n")
   re$ntr=make_MM(sprintf("%s/%s.%s.ntr.mtx.gz",prefix,label,estimator))
-  
+
   if (estimator=="TbBinomShape") {
-    
+
     if (verbose) cat("Reading LLRs...\n")
     re$llr=make_MM(paste0(prefix,"/4sU.llr.mtx.gz"))
 
@@ -913,11 +913,11 @@ ReadGRAND3_sparse=function(prefix,design=c(Design$Library,Design$Sample,Design$B
     if (verbose) cat("Reading LLs...\n")
     ll.file <- paste0(prefix,"/4sU.ll.mtx.gz")
     if (file.exists(ll.file)) re$ll=make_MM(ll.file) else message(sprintf("%s not found - skipping", ll.file))
-    
+
     if (verbose) cat("Reading Shapes...\n")
     re$shape=make_MM(paste0(prefix,"/4sU.shape.mtx.gz"))
   }
-  
+
   if (read.posterior && file.exists(sprintf("%s/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
     if (verbose) cat("Reading posterior beta parameters...\n")
     re$alpha=make_MM(sprintf("%s/%s.%s.alpha.mtx.gz",prefix,label,estimator))
@@ -927,9 +927,9 @@ ReadGRAND3_sparse=function(prefix,design=c(Design$Library,Design$Sample,Design$B
     gene.info$Mode=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
     gene.info$Mode=factor(gene.info$Mode,levels=unique(gene.info$Mode))
   }
-  
+
   gene.info$Type=classify.genes(gene.info)
-  
+
   coldata=MakeColdata(cols,design)
    # use make coldata instead. add no4sU column!
   #coldata=data.frame(Name=cols)
@@ -938,12 +938,12 @@ ReadGRAND3_sparse=function(prefix,design=c(Design$Library,Design$Sample,Design$B
   #names(coldata)[-1]=design
   #rownames(coldata)=coldata$Name
   coldata$no4sU=Matrix::colSums(re$ntr)==0
-  
+
   re=grandR(prefix=prefix,gene.info=gene.info,slots=re,coldata=coldata,metadata=list(`GRAND-SLAM version`=3,Output="sparse"))
   DefaultSlot(re)="count"
   return(re)
 }
- 
+
 
 
 ReadGRAND3_dense=function(prefix,
@@ -958,9 +958,9 @@ ReadGRAND3_dense=function(prefix,
   slots=c("count","ntr","alpha","beta")
   names(slots)=c("Read count", sprintf("%s %s %s",label,estimator,c("NTR MAP","alpha","beta")))
   if (!read.posterior) slots=slots[1:2]
-  if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr",LL="ll") 
-  # TODO: not all data we are working with already produced LL output, but it should be inculded in the next release    
-  
+  if (estimator=="TbBinomShape") slots=c(slots,Shape="shape",LLR="llr",LL="ll")
+  # TODO: not all data we are working with already produced LL output, but it should be inculded in the next release
+
   re=read.grand.internal(description="GRAND-SLAM 3.0 dense data",prefix=prefix,design=design,slots=slots,annotations=annotations,classify.genes=classify.genes,rename.sample=rename.sample,verbose=verbose)
   re$metadata=c(re$metadata,list(`GRAND-SLAM version`=3,Output="dense"))
   return(re)
@@ -1139,7 +1139,7 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   #
   # if (!file.exists(file) && !hascurl) stop("File not found; If you want to access non-local files directly, please install the RCurl package!")
   # if (!file.exists(file)) stop("File not found!")
-  
+
   tfile=try.file(prefix,verbose=verbose)
   file=tfile$file
   prefix=tfile$prefix
