@@ -9,7 +9,7 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
       utils::read.delim(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,...)
     }
 
-  if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
+  if (!file.exists(t) && suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
     fn=gsub(".*/","",gsub("\\?.*","",t))
     fn1 = gsub("\\..*","",fn)
     ext=substr(fn,nchar(fn1)+1,nchar(fn))

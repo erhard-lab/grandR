@@ -435,7 +435,8 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param diag if TRUE, add main diagonal; if numeric vector, add these diagonals
 #' @param filter restrict to these rows; is evaluated for the data frame, and should result in a logical vector
 #' @param genes restrict to these genes; can be either numeric indices, gene names, gene symbols or a logical vector
-#' @param highlight highlight these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
+#' @param highlight highlight these genes; can be either numeric indices, gene names, gene symbols, a logical vector or a list thereof (see details)
+#' @param highlight.label labels for the highlighted genes (see details)
 #' @param label label these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
 #' @param label.repel force to repel labels from points and each other (increase if labels overlap)
 #' @param facet an expression (evaluated in the same environment as x and y); for each unique value a panel (facet) is created; can be NULL
@@ -491,7 +492,7 @@ PlotScatter=function(data,
                      size=0.3,
                      cross=NULL,diag=NULL,
                      filter=NULL,
-                     genes=NULL,highlight=NULL, label=NULL, label.repel=1,
+                     genes=NULL,highlight=NULL, highlight.label = NULL, label=NULL, label.repel=1,
                      facet=NULL,
                      color=NULL, colorpalette=NULL, colorbreaks=NULL, color.label=NULL, na.color = "grey50",
                      density.margin = 'n', density.n = 100,
@@ -683,9 +684,51 @@ PlotScatter=function(data,
       for (col in names(highlight)) {
         g=g+geom_point(data=df[highlight[[col]],],color=col,size=size*3)
       }
+      if (!is.null(highlight.label)) {
+        stopifnot(length(highlight)==length(highlight.label))
+        highlight.label = as.list(highlight.label)
+        names(highlight.label)=names(highlight)
+        for (col in names(highlight)) {
+          g=g+geom_point(data=df[highlight[[col]],],color=col,size=size*3)
+          highlight.label[[col]] = sprintf("%s (n=%d)",highlight.label[[col]],nrow(df[highlight[[col]],]))
+        }
+        legend_data <- data.frame(
+          x = Inf, y = Inf,
+          group = factor(unlist(highlight.label),levels=unlist(highlight.label))
+        )
+
+        g=g+
+          geom_point(data = legend_data,
+                     aes(x=x,y=y, fill = group),shape = 21,color=NA,size=2,
+                     show.legend = TRUE,inherit.aes = FALSE) +
+          scale_fill_manual(
+            name = NULL,
+            values = setNames(names(highlight.label),unlist(highlight.label))
+          )+guides(fill = guide_legend(override.aes = list(shape = 21)))
+
+      }
     } else {
       g=g+geom_point(data=df[highlight,],color='red',size=size*3)
+      if (!is.null(highlight.label)) {
+        highlight.label = sprintf("%s (n=%d)",highlight.label,nrow(df[highlight,]))
+        legend_data <- data.frame(
+          x = Inf, y = Inf,
+          group = c(highlight.label)
+        )
+
+        g=g+
+          geom_point(data = legend_data,
+                     aes(x=x,y=y, fill = group),shape = 21,color=NA,size=2,
+                     show.legend = TRUE,inherit.aes = FALSE) +
+          scale_fill_manual(
+            name = NULL,
+            values = setNames(names(highlight.label),unlist(highlight.label))
+          )+guides(fill = guide_legend(override.aes = list(shape = 21)))
+
+
+      }
     }
+
   }
   if (!is.null(label)) {
     df2=df[if (is.grandR(data)) ToIndex(data,label) else label,]
