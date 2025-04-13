@@ -442,11 +442,11 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   url=NULL
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
-    if (RCurl::url.exists(prefix)) {
+    if (RCurl::url.exists(prefix,timeout.ms=1000)) {
       url=prefix
-    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
+    } else if (RCurl::url.exists(paste0(prefix,".tsv"),timeout.ms=1000)) {
       url=paste0(prefix,".tsv")
-    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
+    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"),timeout.ms=1000)) {
       url=paste0(prefix,".tsv.gz")
     } else {
       url=NULL
@@ -624,11 +624,11 @@ ReadFeatureCounts=function(file, design=c(Design$Condition,Design$Replicate),cla
 
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
-    if (RCurl::url.exists(prefix)) {
+    if (RCurl::url.exists(prefix,timeout.ms=1000)) {
       url=prefix
-    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
+    } else if (RCurl::url.exists(paste0(prefix,".tsv"),timeout.ms=1000)) {
       url=paste0(prefix,".tsv")
-    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
+    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"),timeout.ms=1000)) {
       url=paste0(prefix,".tsv.gz")
     } else {
       url=NULL
@@ -828,10 +828,10 @@ ReadGRAND3=function(prefix,
   # read.table(gzfile(url), sep = "\t", header = TRUE) can replace read.delim and handle urls
 
   build_prefix = function() {
-    if (RCurl::url.exists(prefix) || file.exists(prefix)) return(prefix)
+    if (RCurl::url.exists(prefix,timeout.ms=1000) || file.exists(prefix)) return(prefix)
     prefix = paste0(c(prefix, if (!is.null(pseudobulk.name)) "pseudobulk", targets.name, pseudobulk.name), collapse = ".")
     f = paste0(prefix, "/data.tsv.gz")
-    if (RCurl::url.exists(f) || file.exists(f)) f else prefix
+    if (RCurl::url.exists(f,timeout.ms=1000) || file.exists(f)) f else prefix
   }
   prefix=build_prefix()
 
@@ -1056,7 +1056,7 @@ try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/da
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
     url=NULL
     for (suffix in possible.suffixes) {
-      if (RCurl::url.exists(paste0(prefix,suffix))) {
+      if (RCurl::url.exists(paste0(prefix,suffix),timeout.ms=1000)) {
         url=paste0(prefix,suffix)
         break
       }
@@ -1217,12 +1217,17 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   gene.info$Type=classify.genes(gene.info)
 
 
-  re=list()
+    re=list()
   for (n in names(slots)) {
     cols=intersect(paste0(conds," ",n),names(data))
     a=tomat(data[,cols],data$Gene,cols)
     if (ncol(a)==0 && n=="Conversions") stop("Columns for conversions are not available in GRAND-SLAM output; rerun gedi -e Slam with parameter -full!")
-    re[[slots[n]]]=a
+    if (ncol(a)==0 && n=="LL") {
+      warning("Column LL is not available in GRAND3 output; rerun gedi -e Grand3!")
+      re[[slots[n]]]=NULL # explicitly set to NULL; is zero column matrix otherwise and does not pass check during grandR object creation
+    } else {
+      re[[slots[n]]]=a
+    }
   }
   #re$count=tomat(data[,count],data$Gene,names(data)[count])
   ##	re$tpm=comp.tpm(re$count,gene.info$Length)
