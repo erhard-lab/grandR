@@ -442,11 +442,11 @@ ReadCounts=function(file, design=c(Design$Condition,Design$Replicate),classify.g
   url=NULL
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
-    if (RCurl::url.exists(prefix)) {
+    if (RCurl::url.exists(prefix,timeout.ms=1000)) {
       url=prefix
-    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
+    } else if (RCurl::url.exists(paste0(prefix,".tsv"),timeout.ms=1000)) {
       url=paste0(prefix,".tsv")
-    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
+    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"),timeout.ms=1000)) {
       url=paste0(prefix,".tsv.gz")
     } else {
       url=NULL
@@ -624,11 +624,11 @@ ReadFeatureCounts=function(file, design=c(Design$Condition,Design$Replicate),cla
 
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
-    if (RCurl::url.exists(prefix)) {
+    if (RCurl::url.exists(prefix,timeout.ms=1000)) {
       url=prefix
-    } else if (RCurl::url.exists(paste0(prefix,".tsv"))) {
+    } else if (RCurl::url.exists(paste0(prefix,".tsv"),timeout.ms=1000)) {
       url=paste0(prefix,".tsv")
-    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"))) {
+    } else if (RCurl::url.exists(paste0(prefix,".tsv.gz"),timeout.ms=1000)) {
       url=paste0(prefix,".tsv.gz")
     } else {
       url=NULL
@@ -780,7 +780,7 @@ GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
 #' @param estimator which estimator to use (one of Binom,TbBinom,TbBinomShape)
 #' @param classify.genes A function that is used to add the \emph{type} column to the gene annotation table, always a call to \link{ClassifyGenes}
 #' @param read.posterior also read the posterior parameters alpha and beta? if NULL, TRUE for dense data, FALSE for sparse data
-#' @param rename.sample function that is applied to each sample name before parsing (or NULL)
+#' @param rename.sample function that is applied to each sample name before parsing (or NULL; use the \link{Renamer} function)
 #' @param verbose Print status updates
 #'
 #' @return A grandR object containing the read counts, NTRs, information on the NTR posterior distribution (alpha,beta)
@@ -805,7 +805,7 @@ GetTableQC=function(data,name,stop.if.not.exist=TRUE) {
 #' @details Sometimes you might have forgotten to name all samples consistently (or you simply messed something up).
 #' In this case, the rename.sample parameter can be handy (e.g. to rename a particular misnamed sample).
 #'
-#' @seealso \link{ReadGRAND},\link{ClassifyGenes},\link{MakeColdata},\link{DesignSemantics}
+#' @seealso \link{ReadGRAND},\link{ClassifyGenes},\link{MakeColdata},\link{DesignSemantics},\link{Renamer}
 #'
 #'
 #' @export
@@ -1056,7 +1056,7 @@ try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/da
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
     url=NULL
     for (suffix in possible.suffixes) {
-      if (RCurl::url.exists(paste0(prefix,suffix))) {
+      if (RCurl::url.exists(paste0(prefix,suffix),timeout.ms=1000)) {
         url=paste0(prefix,suffix)
         break
       }
@@ -1217,12 +1217,17 @@ read.grand.internal=function(prefix, design=c(Design$Condition,Design$Replicate)
   gene.info$Type=classify.genes(gene.info)
 
 
-  re=list()
+    re=list()
   for (n in names(slots)) {
     cols=intersect(paste0(conds," ",n),names(data))
     a=tomat(data[,cols],data$Gene,cols)
     if (ncol(a)==0 && n=="Conversions") stop("Columns for conversions are not available in GRAND-SLAM output; rerun gedi -e Slam with parameter -full!")
-    re[[slots[n]]]=a
+    if (ncol(a)==0 && n=="LL") {
+      warning("Column LL is not available in GRAND3 output; rerun gedi -e Grand3!")
+      re[[slots[n]]]=NULL # explicitly set to NULL; is zero column matrix otherwise and does not pass check during grandR object creation
+    } else {
+      re[[slots[n]]]=a
+    }
   }
   #re$count=tomat(data[,count],data$Gene,names(data)[count])
   ##	re$tpm=comp.tpm(re$count,gene.info$Length)
