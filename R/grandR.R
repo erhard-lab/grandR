@@ -1042,6 +1042,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #' @param mode.slot Which kind of data to access (see details)
 #' @param columns which columns (i.e. samples or cells) to return (see details)
 #' @param genes Restrict the output table to the given genes
+#' @param round Round to integers?
 #' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
 #' @param summarize Should replicates by summarized? see details
 #'
@@ -1062,7 +1063,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #'
 #' @useDynLib grandR, .registration = TRUE
 #' @concept data
-GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),name.by="Symbol",summarize=NULL) {
+GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),round=TRUE,name.by="Symbol",summarize=NULL) {
 
   if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(data,mode.slot)],collapse=",")))
   if (length(mode.slot)!=1) stop("Specify exactly one mode.slot!")
@@ -1090,7 +1091,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
     re=re*mf
     if (mode.slot=="count") {
-      mode(re) <- "integer"
+      if (round) mode(re) <- "integer"
     } else if (mode.slot=="ntr") {
       re[is.na(re)]=0
     }
@@ -1101,7 +1102,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round5up(R[[3]])),dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=if (round) conv(round5up(R[[3]])) else R[[3]],dims=dim(re),
                                   dimnames=dimnames(re)))
 
       # all that have zero in ntr matrix will be zero, so this is fine
@@ -1115,7 +1116,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult1m',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=conv(round5down(R[[3]])),dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=if (round) conv(round5down(R[[3]])) else R[[3]],dims=dim(re),
                                   dimnames=dimnames(re)))
 
       #sX <- Matrix::summary(re)
@@ -1253,7 +1254,7 @@ SaveNtrSlot=function(data,name) {
   AddSlot(data,name,data$data$ntr)
 }
 
-#' Copy the NTR slot and save under new name
+#' Use the given slot as NTR (is overwritten!)
 #'
 #' @param data the grandR object
 #' @param name the name of the new slot

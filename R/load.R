@@ -828,10 +828,10 @@ ReadGRAND3=function(prefix,
   # read.table(gzfile(url), sep = "\t", header = TRUE) can replace read.delim and handle urls
 
   build_prefix = function() {
-    if (RCurl::url.exists(prefix,timeout.ms=1000) || file.exists(prefix)) return(prefix)
+    if (file.exists(prefix)) return(prefix)
     prefix = paste0(c(prefix, if (!is.null(pseudobulk.name)) "pseudobulk", targets.name, pseudobulk.name), collapse = ".")
     f = paste0(prefix, "/data.tsv.gz")
-    if (RCurl::url.exists(f,timeout.ms=1000) || file.exists(f)) f else prefix
+    if (file.exists(f)) f else prefix
   }
   prefix=build_prefix()
 
@@ -1051,7 +1051,7 @@ try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/da
   for (suffix in possible.suffixes) {
     if (file.exists(paste0(prefix,suffix))) return(list(file=paste0(prefix,suffix),prefix=cut.suffix(prefix),callback=do.callback))
   }
-
+  prefix
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
     url=NULL

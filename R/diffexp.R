@@ -156,6 +156,7 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",slot="count",normaliza
 #' @param mode.slot which slot to take expression values from
 #' @param FUN a function taking 1. the data matrix, 2. a logical vector indicating condition A and 3. a logical vector indicating condition B
 #' @param genes restrict analysis to these genes; NULL means all genes
+#' @param table use GetTable and not GetMatrix
 #' @param verbose print status messages?
 #' @param ... further parameters forward to FUN
 #'
@@ -168,10 +169,10 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",slot="count",normaliza
 #' @export
 #'
 #' @concept helper
-ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,genes=NULL,verbose=FALSE,FUN,...) {
+ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,genes=NULL,table=TRUE,verbose=FALSE,FUN,...) {
   if (is.null(mode.slot)) stop("Need to specify mode.slot!")
 
-  mat=as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE,genes = genes))
+  mat=if (table) as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE,genes = genes)) else GetMatrix(data,mode.slot=mode.slot,genes=genes,round=get.mode.slot(data,mode.slot)$slot=="count")
   mode.slot=get.mode.slot(data,mode.slot)
   for (n in names(contrasts)) {
     if (verbose) cat(sprintf("Computing %s for %s...\n",analysis,n))
@@ -289,24 +290,85 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
   }
   if (!check.mode.slot(data,mode.slot)) stop("Invalid mode")
   ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,genes=genes,verbose=verbose,analysis="LFC",FUN=function(mat,A,B) {
+    LFC.fun.2 = if ("verbose" %in% names(formals(LFC.fun))) function(...) LFC.fun(verbose=verbose,...) else LFC.fun
     if (!is.null(normalization)) {
       if (is.numeric(normalization)) {
         shift=log2(sum(normalization[A])/sum(normalization[B]))
-        lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-shift,...)
+        lfcs=LFC.fun.2(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-shift,...)
       } else {
         norm.mat=as.matrix(GetTable(data,type=normalization,genes=genes,ntr.na=FALSE))
-        nlfcs=LFC.fun(rowSums(norm.mat[,A,drop=FALSE]),rowSums(norm.mat[,B,drop=FALSE]),normalizeFun=function(i) i)
+        nlfcs=LFC.fun.2(rowSums(norm.mat[,A,drop=FALSE]),rowSums(norm.mat[,B,drop=FALSE]),normalizeFun=function(i) i)
         med.element=median(nlfcs)
-        lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-med.element,...)
+        lfcs=LFC.fun.2(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),normalizeFun=function(i) i-med.element,...)
       }
     } else {
-      lfcs=LFC.fun(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),...)
+      lfcs=LFC.fun.2(rowSums(mat[,A,drop=FALSE]),rowSums(mat[,B,drop=FALSE]),...)
     }
     lfcs = if (is.data.frame(lfcs)) lfcs else data.frame(LFC=lfcs)
     if (compute.M) lfcs$M=10^(0.5*(log10(rowSums(mat[,A,drop=FALSE])+0.5)+log10(rowSums(mat[,B,drop=FALSE])+0.5)))
     lfcs
   })
 }
+
+#' Perform Wilcoxon tests for differential expression
+#'
+#' Apply the wilcoxon test for comparisons defined in a contrast matrix, requires the presto package for fast computation.
+#'
+#' @param data the grandR object
+#' @param name.prefix the prefix for the new analysis name; a dot and the column names of the contrast matrix are appended; can be NULL (then only the contrast matrix names are used)
+#' @param contrasts contrast matrix that defines all pairwise comparisons, generated using \link{GetContrasts}
+#' @param mode.slot compute mode.slot to use (should be normalized values)
+#' @param genes restrict analysis to these genes; NULL means all genes
+#' @param verbose print status messages?
+#'
+#' @return a new grandR object including a new analysis table. The columns of the new analysis table are
+#'  \item{"P"}{the Wilcoxon test P value}
+#'  \item{"Q"}{same as P but Benjamini-Hochberg multiple testing corrected}
+#'  \item{"LFC"}{the log2 fold change (only with the logFC parameter set to TRUE)}
+#'
+#' @seealso \link{LFC},\link{GetContrasts}
+#' @export
+#'
+#' @concept diffexp
+Wilcoxon=function(data, name.prefix = get.mode.slot(data,mode.slot)$mode, contrasts, mode.slot=DefaultSlot(data),
+             genes=NULL,
+             verbose=FALSE,...) {
+
+  contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
+  if (ncol(contrasts)==0) stop("Contrasts do not define any comparison!")
+  if (!check.mode.slot(data,mode.slot)) stop("Invalid mode.slot!")
+
+  if (checkPackages("presto",error=FALSE,warn=FALSE)) {
+    ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,genes=genes,verbose=verbose,analysis="Wilcoxon",table=FALSE,FUN=function(mat,A,B) {
+      A = mat[,A,drop=FALSE]
+      B = mat[,B,drop=FALSE]
+      M = cbind(A,B)
+      y = c(rep("A",ncol(A)),rep("B",ncol(B)))
+      re = presto::wilcoxauc(M,y=y)
+      re = re[re$group=='A',]
+      P = re$pval
+      Q = re$padj
+      re = data.frame(P,Q)
+      rownames(re)=rownames(A)
+      return(re)
+    })
+  } else {
+    singleMessage("Package 'presto' not installed. Falling back to slow wilcox.test!")
+    ApplyContrasts(data,name.prefix=name.prefix,contrasts=contrasts,mode.slot=mode.slot,genes=genes,verbose=verbose,analysis="Wilcoxon",table=FALSE,FUN=function(mat,A,B) {
+      A = mat[,A,drop=FALSE]
+      B = mat[,B,drop=FALSE]
+
+      P = psapply(1:nrow(A),function(i) wilcox.test(A[i,],B[i,])$p.value)
+      Q = p.adjust(P,method="BH")
+      re = data.frame(P,Q)
+      rownames(re)=rownames(A)
+      return(re)
+    })
+  }
+
+
+}
+
 
 #' Perform Wald tests for differential expression
 #'
