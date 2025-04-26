@@ -432,7 +432,16 @@ fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE,
     fs[i] = lse(fs[i-1],fs[i]);
   }
   fs2=exp(fs2-fs2[length(fs2)])
-  shapes=constrOptim(c(alpha=3,beta=3),function(par) sum((pbeta(x,par[1],par[2])-fs2)^2),grad=NULL,ui=cbind(c(1,0),c(0,1)),ci=c(0,0))$par
+  ooptfun = function(par) sum((pbeta(x,par[1],par[2])-fs2)^2)
+  shapes=constrOptim(c(alpha=3,beta=3),ooptfun,grad=NULL,ui=cbind(c(1,0),c(0,1)),ci=c(0,0))$par
+
+  logpost <- sapply(x, function(p) logLik_MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv))
+  #optfun_safe <- Vectorize(optfun)
+  #int_part <- integrate(function(p) exp(optfun_safe(p)), lower = left, upper = right)$value
+  #integral1 <- start + log(int_part)
+  log_int <- lsse(logpost) + log(x[2]-x[1])
+
+  integral <- start + log_int
 
   if (plot) {
     plot(x,fs2,xlab="ntr",ylab="Cumulative freq",type='l')
@@ -440,7 +449,7 @@ fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE,
     graphics::legend("topleft",legend=c("Actual distribution","Beta approximation"),fill=c("black","red"))
   }
 
-  if (conversion.reads) c(ntr=opt$maximum,shapes,conversion.reads=sum(mixmat)-sum(mixmat[0,])) else c(ntr=opt$maximum,shapes)
+  if (conversion.reads) c(ntr=opt$maximum,shapes,conversion.reads=sum(mixmat)-sum(mixmat[0,]),integral=integral) else c(ntr=opt$maximum,shapes, integral = integral)
 }
 
 binom.optim=function(mixmat,par,fix=c(F,F,F)) {

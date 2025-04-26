@@ -78,7 +78,11 @@ ServeGrandR=function(data,
   plot.static=list()
   if (is.null(table)) {
     table=if ("ServeGrandR" %in% Analyses(data)) GetAnalysisTable(data,analyses = "ServeGrandR",regex = FALSE,gene.info = FALSE,prefix.by.analysis=FALSE) else GetAnalysisTable(data,columns="Synthesis|Half-life|LFC|Q|log2FC|ROPE",gene.info = FALSE)
+    if (is.null(highlight) && "Highlight" %in% names(GeneInfo(data))) {
+      table = cbind(data.frame(Highlight=GeneInfo(data,"Highlight")),table)
+    }
   }
+  if ("Highlight" %in% names(table) &&is.null(highlight)) highlight="Highlight"
 
 
   if (is.data.frame(table)) table = list(Table=table)
