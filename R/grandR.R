@@ -356,6 +356,8 @@ merge_columns=function(re,add,addname) {
     for (l1 in intersect(names(re$data),names(add$data))) {
       mat = re$data[[l1]]
       mat2 = add$data[[l1]]
+      # allow only dense data to be merged; sparse data is assumed to be derived of single cell experiments and hence merging is not applicable due to batch effects
+      if (!inherits(mat, "matrix") || !inherits(mat2, "matrix")) stop(sprintf("All inputs must be of class 'matrix'. Got '%s' and '%s'", class(mat)[1], class(mat2)[1]))
       m <- matrix(0, nrow = length(genes), ncol = ncol(mat)+ncol(mat2))
       colnames(m) <- c(colnames(mat),colnames(mat2))
       rownames(m) <- genes
