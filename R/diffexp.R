@@ -1021,11 +1021,11 @@ GetSummarizeMatrix.grandR=function(x,no4sU=FALSE,columns=NULL,average=TRUE,...) 
 #' @rdname GetSummarizeMatrix
 #' @export
 GetSummarizeMatrix.default=function(x,subset=NULL,average=TRUE,...) {
-  v=x
+  v=factor(x)
 	re=NULL
-	for (e in unique(v)) re=cbind(re,ifelse(v==e,1,0))
+	for (e in levels(v)) re=cbind(re,ifelse(v==e,1,0))
 	rownames(re)=names(v)
-	colnames(re)=unique(v)
+	colnames(re)=levels(v)
 	if (!is.null(subset)) {
   	save=re[subset,,drop=FALSE]
   	re[,]=0

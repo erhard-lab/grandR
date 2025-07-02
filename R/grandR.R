@@ -1042,7 +1042,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #' @param mode.slot Which kind of data to access (see details)
 #' @param columns which columns (i.e. samples or cells) to return (see details)
 #' @param genes Restrict the output table to the given genes
-#' @param round Round to integers?
+#' @param count.as.integer Round to integers?
 #' @param name.by A column name of \link{Coldata}(data). This is used as the rownames of the output table
 #' @param summarize Should replicates by summarized? see details
 #'
@@ -1063,7 +1063,7 @@ GetTable=function(data,type=DefaultSlot(data),columns=NULL,genes=Genes(data),ntr
 #'
 #' @useDynLib grandR, .registration = TRUE
 #' @concept data
-GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),round=TRUE,name.by="Symbol",summarize=NULL) {
+GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),count.as.integer=TRUE,name.by="Symbol",summarize=NULL) {
 
   if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(data,mode.slot)],collapse=",")))
   if (length(mode.slot)!=1) stop("Specify exactly one mode.slot!")
@@ -1091,7 +1091,10 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       mf[is.na(mf)]=if(tolower(substr(tno,1,1))=="n") 0 else 1
     re=re*mf
     if (mode.slot=="count") {
-      if (round) mode(re) <- "integer"
+      if (count.as.integer) {
+        re = switch(tolower(substr(tno,1,1)),t=re,n=round5up(re),o=round5down(re),stop(paste0(mode.slot," unknown!")))
+        mode(re) <- "integer"
+      }
     } else if (mode.slot=="ntr") {
       re[is.na(re)]=0
     }
@@ -1102,7 +1105,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=if (round) conv(round5up(R[[3]])) else R[[3]],dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=if (count.as.integer) conv(round5up(R[[3]])) else R[[3]],dims=dim(re),
                                   dimnames=dimnames(re)))
 
       # all that have zero in ntr matrix will be zero, so this is fine
@@ -1116,7 +1119,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
       Y <- Matrix::summary(data$data$ntr[genes,columns,drop=FALSE])
       R=.Call('fastsparsematcompmult1m',X$i,X$j,X$x,Y$i,Y$j,Y$x)
 
-      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=if (round) conv(round5down(R[[3]])) else R[[3]],dims=dim(re),
+      re=(Matrix::sparseMatrix(i=R[[1]], j=R[[2]], x=if (count.as.integer) conv(round5down(R[[3]])) else R[[3]],dims=dim(re),
                                   dimnames=dimnames(re)))
 
       #sX <- Matrix::summary(re)
@@ -1169,6 +1172,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
 #' @param coldata Should the table contain the \link{Coldata} values as well (at the beginning)?
 #' @param ntr.na For columns representing a 4sU naive sample, should mode.slot \emph{ntr},\emph{new.count} and \emph{old.count} be 0,0 and count (ntr.na=FALSE; can be any other slot than count) or NA,NA and NA (ntr.na=TRUE)
 #' @param name.by A column name of \link{Coldata}(data). This is used as the colnames of the output table
+#' @param count.as.integer Convert table to integers if slot="count"?
 #'
 #' @return A data frame containing the desired values
 #'
@@ -1197,7 +1201,7 @@ GetMatrix=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(dat
 #' @export
 #'
 #' @concept data
-GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),by.rows=FALSE,coldata=TRUE,ntr.na=TRUE,name.by="Symbol") {
+GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data),by.rows=FALSE,coldata=TRUE,ntr.na=TRUE,name.by="Symbol",count.as.integer = TRUE) {
   if (!all(check.mode.slot(data,mode.slot))) stop(sprintf("mode.slot %s unknown!",paste(mode.slot[!check.mode.slot(data,mode.slot)],collapse=",")))
 
   columns=substitute(columns)
@@ -1219,7 +1223,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
     #conv=if (mode.slot=="count") function(m) {mode(m) <- "integer";m} else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
     round5up = function(x) trunc(x+0.5)
     round5down = function(x) ceiling(x-0.5)
-    conv=if (mode.slot=="count") {
+    conv=if (mode.slot=="count" && count.as.integer) {
       if (tolower(substr(tno,1,1))=="n") function(m) { m = round5up(m); mode(m) <- "integer";m} else if (tolower(substr(tno,1,1))=="o") function(m) { m = round5down(m); mode(m) <- "integer";m} else function(m) {mode(m) <- "integer";m}
       }else if (mode.slot=="ntr" && !ntr.na) function(m) {m[is.na(m)]=0; m} else function(m) m
 
