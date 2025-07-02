@@ -356,6 +356,8 @@ merge_columns=function(re,add,addname) {
     for (l1 in intersect(names(re$data),names(add$data))) {
       mat = re$data[[l1]]
       mat2 = add$data[[l1]]
+      # allow only dense data to be merged; sparse data is assumed to be derived of single cell experiments and hence merging is not applicable due to batch effects
+      if (!inherits(mat, "matrix") || !inherits(mat2, "matrix")) stop(sprintf("All inputs must be of class 'matrix'. Got '%s' and '%s'", class(mat)[1], class(mat2)[1]))
       m <- matrix(0, nrow = length(genes), ncol = ncol(mat)+ncol(mat2))
       colnames(m) <- c(colnames(mat),colnames(mat2))
       rownames(m) <- genes
@@ -1229,7 +1231,7 @@ GetData=function(data,mode.slot=DefaultSlot(data),columns=NULL,genes=Genes(data)
 
     if (!(mode.slot %in% names(data$data))) stop(paste0(mode.slot," unknown!"))
     f=if (mode.slot %in% c("shape","ll") && data$metadata$Output=="sparse") function(m) .Call('sparse2dense',m,NA_real_) else function(m) as.matrix(m)
-    if (length(genes)==1) data.frame(conv(f(data$data[[mode.slot]][genes,columns])*mf)) else as.data.frame(conv(t(f(data$data[[mode.slot]][genes,columns])*mf)))
+    if (length(genes)==1) data.frame(conv(f(data$data[[mode.slot]][genes,columns,drop=FALSE])[1,]*mf)) else as.data.frame(conv(t(f(data$data[[mode.slot]][genes,columns])*mf)))
   }
   re=as.data.frame(lapply(mode.slot,uno))
   if(length(mode.slot)==1 && length(genes)==1) names(re)="Value" else if (length(mode.slot)==1) names(re)=og else if (length(genes)==1) names(re)=mode.slot else names(re)=paste0(rep(og,length(mode.slot)),".",rep(mode.slot,each=length(og)))
