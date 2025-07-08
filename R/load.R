@@ -918,11 +918,46 @@ ReadGRAND3_sparse=function(prefix,design=c(Design$Library,Design$Sample,Design$B
     re$shape=make_MM(paste0(prefix,"/4sU.shape.mtx.gz"))
   }
 
-  if (read.posterior && file.exists(sprintf("%s/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
-    if (verbose) cat("Reading posterior beta parameters...\n")
-    re$alpha=make_MM(sprintf("%s/%s.%s.alpha.mtx.gz",prefix,label,estimator))
-    re$beta=make_MM(sprintf("%s/%s.%s.beta.mtx.gz",prefix,label,estimator))
+  # if (read.posterior && file.exists(sprintf("%s/%s.%s.alpha.mtx.gz",prefix,label,estimator)) && file.exists(sprintf("%s/%s.%s.beta.mtx.gz",prefix,label,estimator))) {
+  #   if (verbose) cat("Reading posterior beta parameters...\n")
+  #   re$alpha=make_MM(sprintf("%s/%s.%s.alpha.mtx.gz",prefix,label,estimator))
+  #   re$beta=make_MM(sprintf("%s/%s.%s.beta.mtx.gz",prefix,label,estimator))
+  # }
+  if (read.posterior) {
+    alpha_files <- list.files(prefix, pattern = sprintf("^%s\\.%s\\.(alpha[^\\.]*)\\.mtx\\.gz$", label, estimator), full.names = TRUE)
+    beta_files  <- list.files(prefix, pattern = sprintf("^%s\\.%s\\.(beta[^\\.]*)\\.mtx\\.gz$", label, estimator), full.names = TRUE)
+    integral_file <- file.path(prefix, sprintf("%s.%s.integral.mtx.gz", label, estimator))
+    mix_file      <- file.path(prefix, sprintf("%s.%s.mix.mtx.gz", label, estimator))
+
+    if (length(alpha_files) > 0 && length(beta_files) > 0) {
+      if (verbose) cat("Reading posterior beta parameters from multiple files...\n")
+
+      for (f in alpha_files) {
+        name <- sub(sprintf("^%s/%s\\.%s\\.(alpha[^\\.]*)\\.mtx\\.gz$", prefix, label, estimator), "\\1", f)
+        re[[name]] <- make_MM(f)
+      }
+
+      for (f in beta_files) {
+        name <- sub(sprintf("^%s/%s\\.%s\\.(beta[^\\.]*)\\.mtx\\.gz$", prefix, label, estimator), "\\1", f)
+        re[[name]] <- make_MM(f)
+      }
+
+      if (file.exists(integral_file)) {
+        if (verbose) cat("Reading posterior integral matrix...\n")
+        re$integral <- make_MM(integral_file)
+      } else if (verbose) {
+        cat("Integral file not found: ", integral_file, "\n")
+      }
+
+      if (file.exists(mix_file)) {
+        if (verbose) cat("Reading posterior mix matrix...\n")
+        re$mix <- make_MM(mix_file)
+      } else if (verbose) {
+        cat("Mix file not found: ", mix_file, "\n")
+      }
+    }
   }
+
   if (is.null(gene.info$Mode)) {
     gene.info$Mode=gsub(".*\\(","",gsub(")","",gene.info$Category,fixed=TRUE))
     gene.info$Mode=factor(gene.info$Mode,levels=unique(gene.info$Mode))
