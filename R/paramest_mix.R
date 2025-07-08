@@ -62,7 +62,7 @@ fit.ntr.betamix <- function(ll0,ll1,c,
     graphics::lines(x,mix_cdf(x),col='red')
     graphics::legend("topleft",legend=c("Actual distribution","Beta Mix approximation"),fill=c("black","red"))
   }
-  return(c(fit,int=integral))
+  return(c(opt$maximum,fit,int=integral))
 }
 
 fit_beta_mixture_cdf_fast <- function(x, Femp,
