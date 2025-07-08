@@ -39,8 +39,8 @@ fit.ntr.betamix <- function(ll0,ll1,c,
     x = seq(left, right, length.out = len)
   }
   logpost <- sapply(x, optfun)
-  #log_int <- logSumExp(logpost) + log(diff(range(x)) / (len - 1))
-  #integral <- start + log_int
+  log_int <- logSumExp(logpost) + log(diff(range(x)) / (len - 1))
+  integral <- start + log_int
   log_density <- logpost - logSumExp(logpost)
   density <- exp(log_density)
   dx <- diff(x)
@@ -62,7 +62,7 @@ fit.ntr.betamix <- function(ll0,ll1,c,
     graphics::lines(x,mix_cdf(x),col='red')
     graphics::legend("topleft",legend=c("Actual distribution","Beta Mix approximation"),fill=c("black","red"))
   }
-  return(c(fit))
+  return(c(fit,int=integral))
 }
 
 fit_beta_mixture_cdf_fast <- function(x, Femp,
