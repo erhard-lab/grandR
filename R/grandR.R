@@ -1481,6 +1481,7 @@ AddAnalysis=function(data,name,table,by = NULL, warn.present=TRUE,warn.genes=TRU
     ntab=table[rep(NA,nrow(data)),,drop=FALSE]
     rownames(ntab) = Genes(data,use.symbols = FALSE)
     ind=setNames(1:nrow(ntab),Genes(data,use.symbols = FALSE))
+    table = table[names(ind), ]
     ntab[ind[Genes(data,rownames(table),use.symbols = FALSE)],]=table
     table <- ntab
   }
