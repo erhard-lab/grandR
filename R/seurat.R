@@ -67,7 +67,7 @@ read_slot <- function(g3, slot, fill = NA_real_, t = FALSE) {
   if (g3$metadata$Output == "dense" || is.matrix(g3$data[[slot]])) {
     m <- as.matrix(g3$data[[slot]]) 
     } else {
-      m <- sparse2dense(g3$data[[slot]], fill)
+      m <- .Call('sparse2dense',g3$data[[slot]], fill)
     }
   if (t) {
     n <- dimnames(m)
