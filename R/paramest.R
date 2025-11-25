@@ -765,3 +765,14 @@ PlotMixMat=function(mixmat,cutoff.fraction=0.01,mode=c("fill","stack","dodge")) 
     ylab("% of reads with k T>C")+xlab("Number of genomic T covered by a read")
 }
 
+
+
+
+# llr: log-likelihood ratio (difference in log-likelihoods between models)
+# Returns: p-value for likelihood ratio test with 1 degree of freedom
+llr.chisq <- function(llr) stats::pchisq(2 * llr, df = 1, lower.tail = FALSE)
+
+# ll0: log-likelihood of the null (simpler/nested) model
+# ll: log-likelihood of the alternative (more complex) model
+# Returns: p-value for likelihood ratio test with 1 degree of freedom
+ll.chisq <- function(ll0, ll) stats::pchisq(-2 * (ll0 - ll), df = 1, lower.tail = FALSE)
