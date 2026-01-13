@@ -140,43 +140,6 @@ ComputeSteadyStateHalfLives=function(data,time=Design$dur.4sU,name="HL", columns
 }
 
 
-#' Compute absolute expression using ERCC spike ins
-#'
-#' Compute absolute expression in a grandR object and puts the normalized data into a new slot
-#'
-#' @param data the grandR object
-#' @param dilution the dilution of the spikein transcript in the lysis reaction mix
-#' @param volume 	the approximate volume of the lysis chamber (nanoliters)
-#' @param slot the slot containing relative expression values
-#' @param name the name of the new slot to put absolute expression values in
-#'
-#' @seealso \link[monocle]{relative2abs}
-#' @return a new grandR object with an additional slot
-#' @export
-#'
-#' @concept preprocess
-ComputeAbsolute=function(data,dilution=4E4,volume=10,slot="tpm",name="absolute") {
-  checkPackages(c("monocle","VGAM"))
-  fd=data.frame(gene_short_name=Genes(data))
-  rownames(fd)=Genes(data)
-  mat=GetTable(data,type=slot)
-  ercc=mat[GeneInfo(data,"Type")=='ERCC',]
-
-  cds <- monocle::newCellDataSet(mat,
-                        featureData = methods::new ("AnnotatedDataFrame",fd),
-                        lowerDetectionLimit = 0.1,
-                        expressionFamily = VGAM::tobit(Lower = 0.1))
-  rpc_matrix <- monocle::relative2abs(cds, method = "num_genes", ERCC_controls=ercc, ERCC_annotation=monocle::spike_df,dilution=dilution, volume=volume)
-  rpc_matrix[mat]=0
-
-  colnames(rpc_matrix)=colnames(data)
-  rownames(rpc_matrix)=Genes(data)
-  rpc_matrix[,grepl("test",colnames(rpc_matrix))]=NA
-  AddSlot(data,name,rpc_matrix)
-}
-
-
-
 #' Normalization
 #'
 #' Normalizes data in a grandR object and puts the normalized data into a new slot

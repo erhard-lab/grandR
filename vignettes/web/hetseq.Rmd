@@ -60,7 +60,7 @@ df$dex.percent.new = data$dex.percent.new
 ggplot(df, aes(x=umap_1,y=umap_2,color=dex.percent.new))+geom_point(size=0.2)+scale_color_viridis_c(option = "turbo", name="DEX score", limits=c(0,0.8), oob=scales::squish)+theme_cowplot()
 ```
 
-```{r, fig.width=5, fig.alt = "DEX response gene score distributions per time point"}
+```{r fig.alt="Boxplots of DEX scores", fig.width=5, message=FALSE, warning=FALSE}
 tab <- FetchData(data, c("treatmentTime", "dex.percent", "dex.percent.new"))
 tab_melt <- melt(tab)
 ggplot(tab_melt, aes(x=treatmentTime, y=value,color=variable))+geom_boxplot()+theme_cowplot()+theme(axis.title.x = element_blank())+

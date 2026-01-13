@@ -72,15 +72,15 @@ SEXP fastsparsematsum(SEXP Xi, SEXP Xj, SEXP Xx, SEXP Yi, SEXP Yj, SEXP Yx) {
 //  SETLENGTH(Ri, k);
 //  SETLENGTH(Rj, k);
 //  SETLENGTH(Rx, k);
-  Ri = Rf_xlengthgets(Ri, k);
-  Rj = Rf_xlengthgets(Rj, k);
-  Rx = Rf_xlengthgets(Rx, k);
+  PROTECT(Ri = Rf_xlengthgets(Ri, k));
+  PROTECT(Rj = Rf_xlengthgets(Rj, k));
+  PROTECT(Rx = Rf_xlengthgets(Rx, k));
 
   SEXP re = PROTECT(allocVector(VECSXP, 3));
   SET_VECTOR_ELT(re, 0, Ri);
   SET_VECTOR_ELT(re, 1, Rj);
   SET_VECTOR_ELT(re, 2, Rx);
-  UNPROTECT(4);
+  UNPROTECT(7);
 
   return re;
 }
@@ -131,15 +131,15 @@ SEXP fastsparsematcompmult(SEXP Xi, SEXP Xj, SEXP Xx, SEXP Yi, SEXP Yj, SEXP Yx)
 //SETLENGTH(Ri, k);
 //SETLENGTH(Rj, k);
 //SETLENGTH(Rx, k);
-  Ri = Rf_xlengthgets(Ri, k);
-  Rj = Rf_xlengthgets(Rj, k);
-  Rx = Rf_xlengthgets(Rx, k);
+PROTECT(Ri = Rf_xlengthgets(Ri, k));
+PROTECT(Rj = Rf_xlengthgets(Rj, k));
+PROTECT(Rx = Rf_xlengthgets(Rx, k));
 
   SEXP re = PROTECT(allocVector(VECSXP, 3));
   SET_VECTOR_ELT(re, 0, Ri);
   SET_VECTOR_ELT(re, 1, Rj);
   SET_VECTOR_ELT(re, 2, Rx);
-  UNPROTECT(4);
+  UNPROTECT(7);
 
   return re;
 }
@@ -198,15 +198,15 @@ SEXP fastsparsematcompmult1m(SEXP Xi, SEXP Xj, SEXP Xx, SEXP Yi, SEXP Yj, SEXP Y
 //  SETLENGTH(Ri, k);
 //  SETLENGTH(Rj, k);
 //  SETLENGTH(Rx, k);
-  Ri = Rf_xlengthgets(Ri, k);
-  Rj = Rf_xlengthgets(Rj, k);
-  Rx = Rf_xlengthgets(Rx, k);
+  PROTECT(Ri = Rf_xlengthgets(Ri, k));
+  PROTECT(Rj = Rf_xlengthgets(Rj, k));
+  PROTECT(Rx = Rf_xlengthgets(Rx, k));
 
   SEXP re = PROTECT(allocVector(VECSXP, 3));
   SET_VECTOR_ELT(re, 0, Ri);
   SET_VECTOR_ELT(re, 1, Rj);
   SET_VECTOR_ELT(re, 2, Rx);
-  UNPROTECT(4);
+  UNPROTECT(7);
 
   return re;
 }

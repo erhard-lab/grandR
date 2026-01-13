@@ -11,11 +11,13 @@
 extern SEXP fastsparsematcompmult(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP fastsparsematcompmult1m(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP fastsparsematdiv(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
+extern SEXP sparse2dense(SEXP, SEXP);
 
 static const R_CallMethodDef CallEntries[] = {
   {"fastsparsematcompmult",   (DL_FUNC) &fastsparsematcompmult,   6},
   {"fastsparsematcompmult1m", (DL_FUNC) &fastsparsematcompmult1m, 6},
   {"fastsparsematdiv",        (DL_FUNC) &fastsparsematdiv,        7},
+  {"sparse2dense",            (DL_FUNC) &sparse2dense,            2},
   {NULL, NULL, 0}
 };
 

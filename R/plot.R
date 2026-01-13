@@ -310,7 +310,9 @@ PlotHeatmap=function(data,
     }
   }
 
-  mat=as.matrix(GetTable(data,type=type,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE,reorder.columns=TRUE))
+  mat=as.matrix(GetTable(data,type=type,genes = genes,columns=columns,summarize = summarize,ntr.na = FALSE))
+
+  mat=mat[,columns]
   if (is.character(transform)) transform=Transform(transform)
   mat=transform(mat)
 
@@ -433,7 +435,8 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param diag if TRUE, add main diagonal; if numeric vector, add these diagonals
 #' @param filter restrict to these rows; is evaluated for the data frame, and should result in a logical vector
 #' @param genes restrict to these genes; can be either numeric indices, gene names, gene symbols or a logical vector
-#' @param highlight highlight these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
+#' @param highlight highlight these genes; can be either numeric indices, gene names, gene symbols, a logical vector or a list thereof (see details)
+#' @param highlight.label labels for the highlighted genes (see details)
 #' @param label label these genes; can be either numeric indices, gene names, gene symbols or a logical vector (see details)
 #' @param label.repel force to repel labels from points and each other (increase if labels overlap)
 #' @param facet an expression (evaluated in the same environment as x and y); for each unique value a panel (facet) is created; can be NULL
@@ -441,6 +444,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param colorpalette either NULL (use default colors), or a palette name from color brewer or viridis
 #' @param colorbreaks either NULL (use default algorithm of using quantiles of the values), or "minmax" for 5 breaks in between the minimum and maximum of the values, or the actual color breaks to distribute the colors from the palette
 #' @param color.label the label for the color legend
+#' @param na.color the color for NA values
 #' @param density.margin for density colors, one of 'n','x' or 'y'; should the density be computed along both axes ('n'), or along 'x' or 'y' axis only
 #' @param density.n how many bins to use for density calculation (see \link[MASS]{kde2d})
 #' @param rasterize use ggrastr to rasterize points? (can be NULL, see details)
@@ -488,13 +492,16 @@ PlotScatter=function(data,
                      size=0.3,
                      cross=NULL,diag=NULL,
                      filter=NULL,
-                     genes=NULL,highlight=NULL, label=NULL, label.repel=1,
+                     genes=NULL,highlight=NULL, highlight.label = NULL, label=NULL, label.repel=1,
                      facet=NULL,
-                     color=NULL, colorpalette=NULL, colorbreaks=NULL, color.label=NULL,
+                     color=NULL, colorpalette=NULL, colorbreaks=NULL, color.label=NULL, na.color = "grey50",
                      density.margin = 'n', density.n = 100,
                      rasterize=NULL,
                      correlation=NULL,correlation.x=-Inf,correlation.y=Inf,correlation.hjust=0.5,correlation.vjust=0.5,
                      layers.below=NULL) {
+  # R CMD check guard for non-standard evaluation
+  group <- NULL
+
   if (is.grandR(data)) {
     if (!is.null(analysis)) {
       df=cbind(GetAnalysisTable(data,analyses = analysis,regex=FALSE,prefix.by.analysis = FALSE,gene.info = FALSE),GeneInfo(data))
@@ -629,10 +636,10 @@ PlotScatter=function(data,
       df$color=density2d(df$A.trans, df$B.trans, n = density.n,margin = density.margin,facet = df$facet)
     }
     if (is.null(colorpalette)) {
-      colorscale=scale_color_viridis_c(name = "Density",guide="none")
+      colorscale=scale_color_viridis_c(name = "Density",guide="none",na.value = na.color)
     } else {
       col=make.continuous.colors(values=df$color,colors = colorpalette, breaks=colorbreaks)
-      colorscale = scale_color_gradientn(name="Density",guide="none",colors=col$colors)
+      colorscale = scale_color_gradientn(name="Density",guide="none",colors=col$colors,na.value = na.color)
     }
 #  } else if (length(color)==1 && as.character(color) %in% names(GeneInfo(data))) {
 #    df$color=GeneInfo(data,color)[ToIndex(data,genes)]
@@ -644,13 +651,13 @@ PlotScatter=function(data,
     }
     df$color=ccol
     if (is.character(df$color)) {
-      colorscale=scale_color_identity(guide="none")
+      colorscale=scale_color_identity(guide="none",na.value = na.color)
     } else if (is.factor(df$color)) {
-      colorscale=if (!is.null(colorpalette)) scale_color_manual(color.label,values = colorpalette, guide=guide_legend(override.aes = list(size = 2))) else scale_color_discrete(color.label, guide=guide_legend(override.aes = list(size = 2)))
+      colorscale=if (!is.null(colorpalette)) scale_color_manual(color.label,values = colorpalette, guide=guide_legend(override.aes = list(size = 2)),na.value = na.color) else scale_color_discrete(color.label, guide=guide_legend(override.aes = list(size = 2)),na.value = na.color)
     } else {
       col=make.continuous.colors(values = df$color,colors=colorpalette, breaks=colorbreaks)
       df$color=pmin(pmax(df$color,min(col$breaks)),max(col$breaks))
-      colorscale = scale_color_gradientn(color.label,colors=col$colors,breaks=scales::breaks_pretty(n=5)(df$color),limits=c(min(col$breaks),max(col$breaks)))
+      colorscale = scale_color_gradientn(color.label,colors=col$colors,breaks=scales::breaks_pretty(n=5)(df$color),limits=c(min(col$breaks),max(col$breaks)),na.value = na.color)
     }
   }
 
@@ -680,9 +687,51 @@ PlotScatter=function(data,
       for (col in names(highlight)) {
         g=g+geom_point(data=df[highlight[[col]],],color=col,size=size*3)
       }
+      if (!is.null(highlight.label)) {
+        stopifnot(length(highlight)==length(highlight.label))
+        highlight.label = as.list(highlight.label)
+        names(highlight.label)=names(highlight)
+        for (col in names(highlight)) {
+          g=g+geom_point(data=df[highlight[[col]],],color=col,size=size*3)
+          highlight.label[[col]] = sprintf("%s (n=%d)",highlight.label[[col]],nrow(df[highlight[[col]],]))
+        }
+        legend_data <- data.frame(
+          x = Inf, y = Inf,
+          group = factor(unlist(highlight.label),levels=unlist(highlight.label))
+        )
+
+        g=g+
+          geom_point(data = legend_data,
+                     aes(x=x,y=y, fill = group),shape = 21,color=NA,size=2,
+                     show.legend = TRUE,inherit.aes = FALSE) +
+          scale_fill_manual(
+            name = NULL,
+            values = setNames(names(highlight.label),unlist(highlight.label))
+          )+guides(fill = guide_legend(override.aes = list(shape = 21)))
+
+      }
     } else {
       g=g+geom_point(data=df[highlight,],color='red',size=size*3)
+      if (!is.null(highlight.label)) {
+        highlight.label = sprintf("%s (n=%d)",highlight.label,nrow(df[highlight,]))
+        legend_data <- data.frame(
+          x = Inf, y = Inf,
+          group = c(highlight.label)
+        )
+
+        g=g+
+          geom_point(data = legend_data,
+                     aes(x=x,y=y, fill = group),shape = 21,color=NA,size=2,
+                     show.legend = TRUE,inherit.aes = FALSE) +
+          scale_fill_manual(
+            name = NULL,
+            values = setNames(names(highlight.label),unlist(highlight.label))
+          )+guides(fill = guide_legend(override.aes = list(shape = 21)))
+
+
+      }
     }
+
   }
   if (!is.null(label)) {
     df2=df[if (is.grandR(data)) ToIndex(data,label) else label,]

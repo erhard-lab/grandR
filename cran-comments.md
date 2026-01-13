@@ -1,3 +1,17 @@
+# Comments for submission of grandR 0.2.7
+
+The package optionally supports 'presto' for high-performance computing. 
+'presto' is listed in Suggests and is used conditionally. A fallback to 
+base R statistics is provided if 'presto' is not installed. Documentation 
+for obtaining 'presto' is included in the Description field per CRAN policy.
+
+## R CMD check results
+There were no ERRORs or WARNINGs or NOTEs.
+
+## CRAN Package Check Results
+There were no ERRORs or WARNINGs or NOTEs.
+
+
 # Comments for submission of grandR 0.2.6
 ## R CMD check results
 There were no ERRORs or WARNINGs or NOTEs. 
@@ -9,8 +23,6 @@ There was 1 additional NOTE:
   Package suggested but not available for checking: ‘monocle’
   
 This is a Bioconductor package.
-
-
 
 # Comments for submission of grandR 0.2.5
 ## R CMD check results

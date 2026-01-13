@@ -9,7 +9,7 @@ read.tsv=function(t,verbose=FALSE,stringsAsFactors=FALSE,...) {
       utils::read.delim(file = file,stringsAsFactors=stringsAsFactors,check.names=FALSE,...)
     }
 
-  if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
+  if (!file.exists(t) && suppressWarnings(requireNamespace("RCurl",quietly = TRUE)) && RCurl::url.exists(t)) {
     fn=gsub(".*/","",gsub("\\?.*","",t))
     fn1 = gsub("\\..*","",fn)
     ext=substr(fn,nchar(fn1)+1,nchar(fn))
@@ -55,6 +55,35 @@ smartrbind=function(a,b) {
   }
   rownames(cd)=make.unique(c(rownames(a),rownames(b)))
   cd
+}
+
+
+#' Create a renamer function
+#'
+#' A renamer function can be used in the ReadGrand functions
+#'
+#' @param ... a named list of replacements
+#'
+#' @details
+#' if you want to replace all occurrences of X by Y, then call via Renamer(X="Y")
+#'
+#' @return a renamer function
+#' @export
+#'
+#' @concept data
+Renamer=function(...) {
+  map=list(...)
+  placeholders <- paste0("___REPLACE", seq_along(map), "___")
+  names(placeholders) <- names(map)
+  function(s) {
+    for (key in names(placeholders)) {
+      s <- gsub(key, placeholders[[key]], s)
+    }
+    for (key in names(placeholders)) {
+      s <- gsub(placeholders[[key]], map[[key]], s)
+    }
+    s
+  }
 }
 
 #' Summarize a data matrix
