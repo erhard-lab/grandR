@@ -61,6 +61,31 @@ as.Seurat.grandR=function(data,modalities=c(RNA="total",newRNA="new"),hls=NULL,t
 #    mats$new.lower=round(mats$total*d$data$lower[rows,cols])
 #    if ("old.upper" %in% modalities) mats$old.upper=mats$total-mats$new.lower
 #  }
+
+  # helper function for correctly reading shape and llr
+read_slot <- function(g3, slot, fill = NA_real_, t = FALSE) {
+  if (g3$metadata$Output == "dense" || is.matrix(g3$data[[slot]])) {
+    m <- as.matrix(g3$data[[slot]]) 
+    } else {
+      m <- .Call('sparse2dense',g3$data[[slot]], fill)
+    }
+  if (t) {
+    n <- dimnames(m)
+    m <- t(m)
+    dimnames(m)[[1]] <- n[[2]]
+    dimnames(m)[[2]] <- n[[1]]
+  }
+  return(m)
+}
+
+  if (any(c("llr","shape") %in% modalities)) {
+       if(is.null(data$data$shape)) stop("You need to load Grand3 data using estimator 'TbBinomShape'!")
+       mats$shape=read_slot(data, "shape", fill = NA_real_)[rows,cols] # force dense matrix because substitution of missing shape values with zero is wrong
+       mats$llr=read_slot(data, "llr", fill = NA_real_)[rows,cols]
+       rownames(mats$shape)=rownames(mats$llr)=rownames(mats$total)
+       colnames(mats$shape)=colnames(mats$llr)=colnames(mats$total)
+     }
+  
   if (!all(modalities %in% names(mats))) stop("Modalities unknown! Can be any of total,new,old,ntr,prev!")
 
   mats=mats[modalities]
