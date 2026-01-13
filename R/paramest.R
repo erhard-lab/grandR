@@ -499,8 +499,8 @@ tbbinom.optim=function(mixmat,par,fix=c(F,F,F,F)) {
     opt=optimize(optfun,maximum=TRUE,lower=l[!fix],upper=u[!fix])
     re=list(convergence=0,par=setNames(opt$maximum,names(pp)[!fix]),value=opt$objective)
   } else {
-    ui=cbind(c(1,-1,0,0,0,0),c(0,0,1,-1,0,0),c(0,0,0,0,1,-1),c(0,0,0,0,0,0))
-    ci=c(0,-1,0,-MAX_ERR,0,-1)
+    ui=cbind(c(1,-1,0,0,0,0,0,0),c(0,0,1,-1,0,0,0,0),c(0,0,0,0,1,-1,0,0),c(0,0,0,0,0,0,1,-1))
+    ci=c(0,-1,0,-MAX_ERR,0,-1,-2,-5)
     ui=ui[,!fix,drop=FALSE]
     use=apply(ui!=0,1,any)
     ui=ui[use,,drop=FALSE]
@@ -582,7 +582,7 @@ tbbinom.optim2=function(mixmat,par,fix=c(F,F)) {
 }
 
 
-fit.MixMat=function(mixmat,par=default.model.par,type=c("binom","tubinom","tbbinom"),fix=rep(FALSE,4)) {
+fit.MixMat=function(mixmat,par=default.model.par,type=c("binom","tubinom","tbbinom"),fix=rep(FALSE,4),error.on.nonconverge=TRUE) {
 	if (is.list(mixmat)) return(lapply(mixmat,fit.MixMat,par=par,type=type,fix=fix))
 
 	opti=switch(type[1],
@@ -590,7 +590,7 @@ fit.MixMat=function(mixmat,par=default.model.par,type=c("binom","tubinom","tbbin
 			tubinom=tbbinom.optim(mixmat,model.par(ntr=par$ntr,p.err=par$p.err,p.mconv=par$p.mconv,0),fix=c(fix[1:3],FALSE)),
 			tbbinom=tbbinom.optim(mixmat,par,fix)
 		)
-	if (opti$convergence!=0) stop("Did not converge!")
+	if (error.on.nonconverge && opti$convergence!=0) stop("Did not converge!")
 
 	opti=c(opti$par,logLik=opti$value)
 	re=switch(type[1],
