@@ -392,6 +392,69 @@ logLik_MixMat=function(m,fun,...) {
 	re
 }
 
+fit.ntr.ll=function(ll0,ll1,c,beta.approx=FALSE,plot=FALSE, prior = c(1,1)) {
+  start <- 0
+  optfun = function(p) {
+    ldb = lse(ll0+log(1-p),ll1+log(p))
+    sum(c * ldb) - start
+  }
+  opt <- optimize(optfun, maximum = TRUE, lower = 0, upper = 1)
+
+  ll_0 <- optfun(0)
+  ll_1 <- optfun(1)
+
+  if (ll_0 > opt$objective) {
+    opt$maximum <- 0
+    opt$objective <- ll_0
+  }
+  else if (ll_1 > opt$objective) {
+    opt$maximum <- 1
+    opt$objective <- ll_1
+  }
+
+  if (!beta.approx) {
+    return(opt$maximum)
+  }
+
+  start=opt$objective+start
+
+  left=if(optfun(0)>log(1E-3)) 0 else uniroot(function(x) optfun(x)-log(1E-3),c(0,opt$maximum))$root
+  right=if(optfun(1)>log(1E-3)) 1 else uniroot(function(x) optfun(x)-log(1E-3),c(opt$maximum,1))$root
+
+  x=seq(left,right,length.out=100)
+  start=0
+  fs = sapply(x,optfun)-log(length(x)-1);
+  fs2=rep(NA,length(fs))
+
+  fs[1]=fs[1]-log(2);
+  fs2[1] = fs[1];
+
+  for (i in 2:length(fs)) {
+    fs2[i] =  lse(fs[i-1],fs[i]-log(2));
+    fs[i] = lse(fs[i-1],fs[i]);
+  }
+  fs2=exp(fs2-fs2[length(fs2)])
+  ooptfun = function(par) sum((pbeta(x,par[1],par[2])-fs2)^2)
+  shapes=constrOptim(c(alpha=3,beta=3),ooptfun,grad=NULL,ui=cbind(c(1,0),c(0,1)),ci=c(0,0))$par
+
+  logpost <- sapply(x, optfun)
+  #optfun_safe <- Vectorize(optfun)
+  #int_part <- integrate(function(p) exp(optfun_safe(p)), lower = left, upper = right)$value
+  #integral1 <- start + log(int_part)
+  log_int <- lsse(logpost) + log(x[2]-x[1])
+
+  integral <- start + log_int
+
+  if (plot) {
+    plot(x,fs2,xlab="ntr",ylab="Cumulative freq",type='l')
+    graphics::lines(x,pbeta(x,shapes[1],shapes[2]),col='red')
+    graphics::legend("topleft",legend=c("Actual distribution","Beta approximation"),fill=c("black","red"))
+  }
+
+  c(ntr=opt$maximum,shapes, integral = integral)
+}
+
+
 fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE, prior = c(1,1)) {
   start=0
   optfun=function(p) dbeta(p,prior[1],prior[2],log=TRUE)+logLik_MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
@@ -582,7 +645,7 @@ tbbinom.optim2=function(mixmat,par,fix=c(F,F)) {
 }
 
 
-fit.MixMat=function(mixmat,par=default.model.par,type=c("binom","tubinom","tbbinom"),fix=rep(FALSE,4)) {
+fit.MixMat=function(mixmat,par=default.model.par,type=c("binom","tubinom","tbbinom"),fix=rep(FALSE,4),error.on.nonconverge=TRUE) {
 	if (is.list(mixmat)) return(lapply(mixmat,fit.MixMat,par=par,type=type,fix=fix))
 
 	opti=switch(type[1],
@@ -590,7 +653,7 @@ fit.MixMat=function(mixmat,par=default.model.par,type=c("binom","tubinom","tbbin
 			tubinom=tbbinom.optim(mixmat,model.par(ntr=par$ntr,p.err=par$p.err,p.mconv=par$p.mconv,0),fix=c(fix[1:3],FALSE)),
 			tbbinom=tbbinom.optim(mixmat,par,fix)
 		)
-	if (opti$convergence!=0) stop("Did not converge!")
+	if (error.on.nonconverge && opti$convergence!=0) stop("Did not converge!")
 
 	opti=c(opti$par,logLik=opti$value)
 	re=switch(type[1],
