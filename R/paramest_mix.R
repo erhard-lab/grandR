@@ -47,7 +47,7 @@ fit.ntr.betamix <- function(ll0,ll1,c,
   mid_vals <- (density[-1] + density[-length(density)]) / 2
   fs2 <- c(0, cumsum(mid_vals * dx))
   fs2 <- fs2 / max(fs2)
-  fit <- fit_beta_mixture_cdf_fast(x, fs2,opt$maximum, nstart = nstart)
+  fit <- fit_beta_mixture_cdf_fast(x, fs2, nstart = nstart)
 
   # dx <- diff(x)
   # fx_obs <- (fs2[-1] + fs2[-length(fs2)]) / 2
@@ -62,11 +62,10 @@ fit.ntr.betamix <- function(ll0,ll1,c,
     graphics::lines(x,mix_cdf(x),col='red')
     graphics::legend("topleft",legend=c("Actual distribution","Beta Mix approximation"),fill=c("black","red"))
   }
-  return(c(ntr = opt$maximum, fit, int = integral))
+  return(c(opt$maximum,fit,int=integral))
 }
 
 fit_beta_mixture_cdf_fast <- function(x, Femp,
-                                      opt_maximum = NULL,
                                       nstart      = 5,
                                       p_range     = c(0,1),
                                       shape_lower = 1) {

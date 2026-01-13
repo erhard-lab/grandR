@@ -392,6 +392,69 @@ logLik_MixMat=function(m,fun,...) {
 	re
 }
 
+fit.ntr.ll=function(ll0,ll1,c,beta.approx=FALSE,plot=FALSE, prior = c(1,1)) {
+  start <- 0
+  optfun = function(p) {
+    ldb = lse(ll0+log(1-p),ll1+log(p))
+    sum(c * ldb) - start
+  }
+  opt <- optimize(optfun, maximum = TRUE, lower = 0, upper = 1)
+
+  ll_0 <- optfun(0)
+  ll_1 <- optfun(1)
+
+  if (ll_0 > opt$objective) {
+    opt$maximum <- 0
+    opt$objective <- ll_0
+  }
+  else if (ll_1 > opt$objective) {
+    opt$maximum <- 1
+    opt$objective <- ll_1
+  }
+
+  if (!beta.approx) {
+    return(opt$maximum)
+  }
+
+  start=opt$objective+start
+
+  left=if(optfun(0)>log(1E-3)) 0 else uniroot(function(x) optfun(x)-log(1E-3),c(0,opt$maximum))$root
+  right=if(optfun(1)>log(1E-3)) 1 else uniroot(function(x) optfun(x)-log(1E-3),c(opt$maximum,1))$root
+
+  x=seq(left,right,length.out=100)
+  start=0
+  fs = sapply(x,optfun)-log(length(x)-1);
+  fs2=rep(NA,length(fs))
+
+  fs[1]=fs[1]-log(2);
+  fs2[1] = fs[1];
+
+  for (i in 2:length(fs)) {
+    fs2[i] =  lse(fs[i-1],fs[i]-log(2));
+    fs[i] = lse(fs[i-1],fs[i]);
+  }
+  fs2=exp(fs2-fs2[length(fs2)])
+  ooptfun = function(par) sum((pbeta(x,par[1],par[2])-fs2)^2)
+  shapes=constrOptim(c(alpha=3,beta=3),ooptfun,grad=NULL,ui=cbind(c(1,0),c(0,1)),ci=c(0,0))$par
+
+  logpost <- sapply(x, optfun)
+  #optfun_safe <- Vectorize(optfun)
+  #int_part <- integrate(function(p) exp(optfun_safe(p)), lower = left, upper = right)$value
+  #integral1 <- start + log(int_part)
+  log_int <- lsse(logpost) + log(x[2]-x[1])
+
+  integral <- start + log_int
+
+  if (plot) {
+    plot(x,fs2,xlab="ntr",ylab="Cumulative freq",type='l')
+    graphics::lines(x,pbeta(x,shapes[1],shapes[2]),col='red')
+    graphics::legend("topleft",legend=c("Actual distribution","Beta approximation"),fill=c("black","red"))
+  }
+
+  c(ntr=opt$maximum,shapes, integral = integral)
+}
+
+
 fit.ntr=function(mixmat,par,beta.approx=FALSE,conversion.reads=FALSE,plot=FALSE, prior = c(1,1)) {
   start=0
   optfun=function(p) dbeta(p,prior[1],prior[2],log=TRUE)+logLik_MixMat(mixmat,dbinommix,ntr=p,p.err=par$p.err,p.conv=par$p.conv)-start
@@ -765,3 +828,14 @@ PlotMixMat=function(mixmat,cutoff.fraction=0.01,mode=c("fill","stack","dodge")) 
     ylab("% of reads with k T>C")+xlab("Number of genomic T covered by a read")
 }
 
+
+
+
+# llr: log-likelihood ratio (difference in log-likelihoods between models)
+# Returns: p-value for likelihood ratio test with 1 degree of freedom
+llr.chisq <- function(llr) stats::pchisq(2 * llr, df = 1, lower.tail = FALSE)
+
+# ll0: log-likelihood of the null (simpler/nested) model
+# ll: log-likelihood of the alternative (more complex) model
+# Returns: p-value for likelihood ratio test with 1 degree of freedom
+ll.chisq <- function(ll0, ll) stats::pchisq(-2 * (ll0 - ll), df = 1, lower.tail = FALSE)
