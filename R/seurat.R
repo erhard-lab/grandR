@@ -65,7 +65,7 @@ as.Seurat.grandR=function(data,modalities=c(RNA="total",newRNA="new"),hls=NULL,t
   # helper function for correctly reading shape and llr
 read_slot <- function(g3, slot, fill = NA_real_, t = FALSE) {
   if (g3$metadata$Output == "dense" || is.matrix(g3$data[[slot]])) {
-    m <- as.matrix(g3$data[[slot]]) 
+    m <- as.matrix(g3$data[[slot]])
     } else {
       m <- .Call('sparse2dense',g3$data[[slot]], fill)
     }
@@ -85,7 +85,7 @@ read_slot <- function(g3, slot, fill = NA_real_, t = FALSE) {
        rownames(mats$shape)=rownames(mats$llr)=rownames(mats$total)
        colnames(mats$shape)=colnames(mats$llr)=colnames(mats$total)
      }
-  
+
   if (!all(modalities %in% names(mats))) stop("Modalities unknown! Can be any of total,new,old,ntr,prev!")
 
   mats=mats[modalities]
@@ -219,14 +219,15 @@ CreatePseudobulkTable <- function(data,name.column="Name",pseudobulk.column="Con
   return(table)
 }
 
-                            
+
 #' Create Convolution Table from a Seurat object
 #'
 #' @param data a Seurat object
 #' @param n.neighbors the number of neighbors to be convoluted
 #' @param group.column character specifying a column to split data by or NULL (see details)
+#' @param ... additional parameters for FindNeighbors
 #'
-#' @details This function returns a table which can be used as input for GRAND3. Note that a data set containing multiple time points should be split for convolution (can be done by specifying a \code(group.column)).
+#' @details This function returns a table which can be used as input for GRAND3. Note that a data set containing multiple time points should be split for convolution (can be done by specifying a \code{group.column}).
 #'
 #' @return a table with two columns "Cell" and "Pseudobulk"
 #'
@@ -245,15 +246,15 @@ CreateConvolutionTable <- function(data, n.neighbors = 20, group.column = "Condi
     sub <- if (grp == "__NO_GROUPS__") data else subset(data, subset = !!rlang::ensym(group.column) == grp)
     sub <- Seurat::FindNeighbors(sub, k.param = n.neighbors, verbose = FALSE, ...)
     knn <- data.frame(sub@graphs$RNA_nn)
-    #> long format represents knn graph as pairs, i.e., pairs of cells in 
+    #> long format represents knn graph as pairs, i.e., pairs of cells in
     #> separate columns and a value column indicating whether they are neighbors
     knn$Pseudobulk <- rownames(knn)
-    knn <- stats::reshape(data = knn, 
+    knn <- stats::reshape(data = knn,
                           idvar = "Pseudobulk",
-                          varying = rownames(knn), 
-                          v.names = "is_neighbor", 
-                          times = rownames(knn), 
-                          timevar = "Cell", 
+                          varying = rownames(knn),
+                          v.names = "is_neighbor",
+                          times = rownames(knn),
+                          timevar = "Cell",
                           direction = "long")
     # keep only neighbors and relevant columns (!!! match column order of tab !!!)
     this_tab <- knn[knn$is_neighbor == 1, c("Cell", "Pseudobulk")]

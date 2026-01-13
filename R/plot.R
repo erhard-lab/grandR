@@ -499,6 +499,9 @@ PlotScatter=function(data,
                      rasterize=NULL,
                      correlation=NULL,correlation.x=-Inf,correlation.y=Inf,correlation.hjust=0.5,correlation.vjust=0.5,
                      layers.below=NULL) {
+  # R CMD check guard for non-standard evaluation
+  group <- NULL
+
   if (is.grandR(data)) {
     if (!is.null(analysis)) {
       df=cbind(GetAnalysisTable(data,analyses = analysis,regex=FALSE,prefix.by.analysis = FALSE,gene.info = FALSE),GeneInfo(data))

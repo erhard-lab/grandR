@@ -1086,17 +1086,10 @@ try.file = function(prefix, possible.suffixes=c("",".tsv",".tsv.gz",".targets/da
   for (suffix in possible.suffixes) {
     if (file.exists(paste0(prefix,suffix))) return(list(file=paste0(prefix,suffix),prefix=cut.suffix(prefix),callback=do.callback))
   }
-  prefix
+  #prefix
 
   if (suppressWarnings(requireNamespace("RCurl",quietly = TRUE))) {
-    url=NULL
-    for (suffix in possible.suffixes) {
-      if (RCurl::url.exists(paste0(prefix,suffix),timeout.ms=1000)) {
-        url=paste0(prefix,suffix)
-        break
-      }
-    }
-
+    url=prefix
 
     if (!is.null(url)) {
       fn=gsub(".*/","",gsub("\\?.*","",url))

@@ -4,7 +4,6 @@ logSumExp <- function(log_values) {
 }
 fit.ntr.betamix <- function(ll0,ll1,c,
                             beta.approx = TRUE,
-                            conversion_reads = FALSE,
                             len = 100,nstart = 20,plot=FALSE) {
   start <- 0
   optfun = function(p) {
@@ -29,9 +28,7 @@ fit.ntr.betamix <- function(ll0,ll1,c,
   right <- if (optfun(1) > log(1E-3)) 1 else uniroot(function(x) optfun(x) - log(1E-3), c(opt$maximum, 1))$root
 
   if (!beta.approx) {
-    return(if (conversion.reads)
-      c(ntr = opt$maximum, conversion.reads = sum(mixmat) - sum(mixmat[0, ]))
-      else opt$maximum)
+    return(opt$maximum)
   }
   if ((opt$maximum == 0  && (left == 0 && right == 1))) { x <- qbeta(seq(left, right, length.out = len), 0.5, 0.9)
   } else if ((opt$maximum == 1 && (left == 0 && right == 1))) { x <- qbeta(seq(left, right, length.out = len), 0.9, 0.5)
@@ -73,7 +70,7 @@ fit_beta_mixture_cdf_fast <- function(x, Femp,
   stopifnot(length(x) == length(Femp), all(diff(x) > 0))
 
   dx   <- diff(x)
-  xm   <- (head(x, -1) + tail(x, -1)) / 2
+  xm   <- (utils::head(x, -1) + utils::tail(x, -1)) / 2
   dens <- pmax(diff(Femp) / dx, 1e-12)
   weights <- dens * dx
   weights <- weights / sum(weights)

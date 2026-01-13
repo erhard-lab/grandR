@@ -172,7 +172,7 @@ LikelihoodRatioTest=function(data,name="LRT",mode="total",slot="count",normaliza
 ApplyContrasts=function(data,analysis,name.prefix,contrasts,mode.slot=NULL,genes=NULL,table=TRUE,verbose=FALSE,FUN,...) {
   if (is.null(mode.slot)) stop("Need to specify mode.slot!")
 
-  mat=if (table) as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE,genes = genes)) else GetMatrix(data,mode.slot=mode.slot,genes=genes,round=get.mode.slot(data,mode.slot)$slot=="count")
+  mat=if (table) as.matrix(GetTable(data,type=mode.slot,ntr.na=FALSE,genes = genes)) else GetMatrix(data,mode.slot=mode.slot,genes=genes,count.as.integer=get.mode.slot(data,mode.slot)$slot=="count")
   mode.slot=get.mode.slot(data,mode.slot)
   for (n in names(contrasts)) {
     if (verbose) cat(sprintf("Computing %s for %s...\n",analysis,n))
@@ -332,7 +332,7 @@ LFC=function(data, name.prefix = mode, contrasts, slot="count",LFC.fun=lfc::PsiL
 #' @concept diffexp
 Wilcoxon=function(data, name.prefix = get.mode.slot(data,mode.slot)$mode, contrasts, mode.slot=DefaultSlot(data),
              genes=NULL,
-             verbose=FALSE,...) {
+             verbose=FALSE) {
 
   contrasts = contrasts[,apply(contrasts,2,function(v) all(c(-1,1) %in% v)),drop=FALSE]
   if (ncol(contrasts)==0) stop("Contrasts do not define any comparison!")

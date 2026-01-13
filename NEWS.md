@@ -1,3 +1,15 @@
+# grandR 0.2.7
+
+## Major updates
+* Removed dependency to monocle (which caused problems on the newest cran build)
+* Added wilcoxon test (optionally via presto) for differential gene expression
+
+## Smaller updates
+* More useful parameter name count.as.integer for GetTable, GetMatrix and GetData
+* Expanded code for estimation in the mixture model
+* Removed the ComputeAbsolute function
+* Reading llr and shape matrices of Grand3 output
+
 # grandR 0.2.6
 
 ## Major updates
