@@ -1,5 +1,5 @@
 Package: grandR
-Version: 0.2.7
+Version: 0.2.8
 Title: Comprehensive Analysis of Nucleotide Conversion Sequencing Data
 Authors@R: c(
     person("Florian", "Erhard", email = "Florian.Erhard@informatik.uni-regensburg.de", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-3574-6983")),
@@ -12,7 +12,7 @@ Description: Nucleotide conversion sequencing experiments have been
   (see 'Jürges et al' <doi:10.1093/bioinformatics/bty256>) and specialized tools for 
   downstream analyses. 'grandR' provides a comprehensive toolbox for quality control,
   kinetic modeling, differential gene expression analysis and visualization of such data.
-  Fast Wilcoxon tests are supported via the 'presto' package (available at https://github.com/immunogenomics/presto).
+  Fast Wilcoxon tests are supported via the 'presto' package (available at <https://github.com/immunogenomics/presto>).
 Author: Florian Erhard [aut, cre] (<https://orcid.org/0000-0002-3574-6983>),
   Teresa Rummel [ctb],
   Julian Selke [ctb]
@@ -21,7 +21,6 @@ License: Apache License (>= 2)
 Encoding: UTF-8
 URL: https://github.com/erhard-lab/grandR
 BugReports: https://github.com/erhard-lab/grandR/issues
-Additional_repositories: https://immunogenomics.github.io/presto/
 Depends: R (>= 3.5.0)
 Imports: stats,
     Matrix,

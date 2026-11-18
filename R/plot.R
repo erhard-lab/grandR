@@ -59,6 +59,8 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #' @param y number of principal component to show on the y axis (numeric)
 #' @param columns which columns (i.e. samples or cells) to perform PCA on (see details)
 #' @param do.vst perform a variance stabilizing transformation for count data?
+#' @param scale.var scale width/height of plot by explained variance
+#' @param return.loadings instead of only returning the plot, return a list of both plot and table with loadings
 #'
 #' @details Columns can be given as a logical, integer or character vector representing a selection of the columns (samples or cells).
 #' The expression is evaluated in an environment having the \code{\link{Coldata}}, i.e. you can use names of \code{\link{Coldata}} as variables to
@@ -68,7 +70,7 @@ density2d=function(x, y, facet=NULL, n=100, margin='n') {
 #' @export
 #'
 #' @concept globalplot
-PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,columns=NULL,do.vst=TRUE) {
+PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,columns=NULL,do.vst=TRUE, scale.var = FALSE, return.loadings = FALSE) {
 
   aest=setup.default.aes(data,aest)
 
@@ -100,9 +102,11 @@ PlotPCA=function(data, mode.slot=DefaultSlot(data), ntop=500,aest=NULL,x=1,y=2,c
 	percentVar <- pca$sdev^2 / sum( pca$sdev^2 )
 	d <- as.data.frame(pca$x)
 	names(d)=paste0("PC",1:dim(d)[2])
-	d=cbind(d, cd)
-	ggplot(d,utils::modifyList(aes(!!sym(paste0("PC",x)),!!sym(paste0("PC",y))),aest))+cowplot::theme_cowplot()+
-	  geom_point(size=3)+xlab(paste0("PC",x,": ",round(percentVar[x] * 100),"% variance"))+ylab(paste0("PC",y,": ",round(percentVar[y] * 100),"% variance"))+coord_fixed()
+	d=cbind(d, cd[,setdiff(names(cd),names(d))])
+	g=ggplot(d,utils::modifyList(aes(!!sym(paste0("PC",x)),!!sym(paste0("PC",y))),aest))+cowplot::theme_cowplot()+
+	  geom_point(size=3)+xlab(paste0("PC",x,": ",round(percentVar[x] * 100),"% variance"))+ylab(paste0("PC",y,": ",round(percentVar[y] * 100),"% variance"))
+	g=if (scale.var) g + coord_fixed(ratio=percentVar[y] / percentVar[x]) else g + coord_fixed()
+	if (return.loadings) list(plot=g, loadings=pca$rotation) else g
 }
 
 Transform=function(name,label=NULL){
@@ -182,7 +186,7 @@ make.continuous.colors=function(values,colors=NULL,breaks=NULL) {
       lower=quantile(-values[values<0],quant/100,na.rm=TRUE)
       breaks=c(-rev(pmax(upper,lower)),0,pmax(upper,lower))
     }
-    if (is.null(colors)) colors="RdBu"
+    if (is.null(colors)) colors="revRdBu"
   } else {
     quant=c(5,25,50,75,95)
     if (identical(breaks,"minmax")) {
@@ -411,14 +415,14 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' Convenience method to compare two variables (slot data or analyses results).
 #'
 #' @param data the grandR object (can also be a plain data frame)
-#' @param x an expression to compute the x value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
-#' @param y an expression to compute the y value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
+#' @param x an expression to compute the x value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details); can also be a character vector of such names or a logical expression selecting samples (or cells) evaluated in the \link{Coldata} (e.g. Condition=="Mock") to create a grid of scatter plots (see details)
+#' @param y an expression to compute the y value or a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details); can also be a character vector of such names or a logical expression selecting samples (or cells) evaluated in the \link{Coldata} (e.g. Condition=="Mock") to create a grid of scatter plots (see details)
 #' @param analysis the name of an analysis table (can be NULL; see details)
-#' @param mode.slot the mode.slot (only relevant if data is a dense grandR object and analysis=NULL)
-#' @param xcol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
-#' @param ycol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details)
-#' @param xlab the label for x (can be NULL, then the x parameter is used)
-#' @param ylab the label for y (can be NULL, then the y parameter is used)
+#' @param mode.slot the mode.slot (only relevant if data is a dense grandR object and analysis=NULL); if given without x and y (and xcol/ycol), all samples (or cells) are plotted against each other in a grid (see details)
+#' @param xcol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details); can be a vector to create a grid of scatter plots
+#' @param ycol a character corresponding to a sample (or cell) name or a fully qualified analysis result name (see details); can be a vector to create a grid of scatter plots
+#' @param xlab the label for x (can be NULL, then the x parameter is used); for a grid of scatter plots, a vector with one label per x column
+#' @param ylab the label for y (can be NULL, then the y parameter is used); for a grid of scatter plots, a vector with one label per y column
 #' @param log if TRUE, use log scales for x and y axis
 #' @param log.x if TRUE, use log scale for the x axis
 #' @param log.y if TRUE, use log scale for the y axis
@@ -427,6 +431,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param axis.y if FALSE, don't show the y axis
 #' @param remove.outlier configure how outliers are selected (is the coef parameter to \link[grDevices]{boxplot.stats}); can be FALSE, in which case no points are considered outliers (see details)
 #' @param show.outlier if TRUE, show outlier as gray points at the border of the plotting plane
+#' @param label.outliers if TRUE, add a label ("n=...") in the middle of each of the four borders of the plot indicating how many outliers are shown there as gray points (omitted for borders without outliers; points outside of both limits are counted for both borders)
 #' @param lim define the both x and y axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param xlim define the x axis limits (vector of length 2 defining the lower and upper bound, respectively)
 #' @param ylim define the y axis limits (vector of length 2 defining the lower and upper bound, respectively)
@@ -454,6 +459,7 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' @param correlation.hjust x adjustment to put the correlation annotation in the plot (see details)
 #' @param correlation.vjust y adjustment to put the correlation annotation in the plot (see details)
 #' @param layers.below list of ggplot geoms to add before adding the layer containing the points
+#' @param dry if TRUE, do not plot, but return a character matrix with the layout of the grid (rows: y, columns: x) describing what would be plotted in each panel ("x=..., y=..."; in the upper triangle grid, the diagonal contains the column names and the lower triangle is NA)
 #'
 #' @details Both the x and y parameter are either expressions or names. Names are either sample (or cell, in case of single cell experiments) names or
 #' fully qualified analysis results (analysis name followed by a dot and the analysis result table column). If the analysis parameter is given, the analysis
@@ -480,7 +486,25 @@ FormatCorrelation=function(method="pearson",n.format=NULL,coeff.format="%.2f",p.
 #' statistics, parametrize \code{FormatCorrelation}. Use correlation.x and correlation.y to place the annotation in the plot, and correlation.hjust/correlation.vjust to align the
 #' annotation at the given x,y coordinates. Infinite values for correlation.x/correlation.y will put the annotation at the border of the plot.
 #'
-#' @return a ggplot object with the data frame used as the df attribute
+#' @details Grids of scatter plots: If x and/or y (or xcol/ycol) are character vectors of column names (see above), or logical vectors selecting samples (or cells)
+#' (like the columns parameter of other functions: the expression is evaluated in the \link{Coldata}, i.e. names of the Coldata can be used as variables, e.g. x=Condition=="Mock"), PlotScatter is called for each combination
+#' (all x against all y; columns of the grid correspond to x, rows to y) and the plots are arranged in a grid using patchwork. If only one of x or y is a vector
+#' (and the other is not given), or if data is a dense grandR object and only mode.slot is given (no x, y, xcol, ycol or analysis), all columns (in the latter case:
+#' all samples or cells of the given mode.slot) are plotted against each other in the upper triangle of a grid, with column names on the diagonal (like \link[graphics]{pairs}).
+#' All other parameters are passed to each of the individual plots. Unless xlim/ylim/lim are given, axis limits are shared across the grid: they are computed
+#' (including outlier removal, see above) from all x columns (for the x axis) and all y columns (for the y axis), respectively; in the triangle grid, x and y axis share the same limits.
+#'
+#' @return a ggplot object with the data frame used as the df attribute; for a grid of scatter plots, a patchwork object with the list of individual plots as the plots attribute; if dry=TRUE, a character matrix with the layout of the grid describing each panel
+#'
+#' @examples
+#' \dontrun{
+#' PlotScatter(sars, x=c("Mock.no4sU.A","Mock.4sU.1h.A"), y=c("SARS.no4sU.A","SARS.4sU.1h.A"))
+#' PlotScatter(sars, mode.slot="ntr", log=FALSE)
+#' PlotScatter(sars, x=Condition=="Mock", y=Condition=="SARS", log=TRUE)
+#' PlotScatter(sars, x=duration.4sU==2, mode.slot="ntr")
+#' PlotScatter(sars, mode.slot="ntr", dry=TRUE) # which columns would be plotted against each other?
+#' }
+#'
 #' @export
 #'
 #' @concept globalplot
@@ -488,7 +512,7 @@ PlotScatter=function(data,
                      x=NULL, y=NULL, analysis=NULL,mode.slot=NULL,xcol=NULL,ycol=NULL, xlab=NULL, ylab=NULL,
                      log=FALSE, log.x=log, log.y=log,
                      axis=TRUE, axis.x=axis, axis.y=axis,
-                     remove.outlier=1.5, show.outlier=TRUE,lim=NULL,xlim=lim, ylim=lim,
+                     remove.outlier=1.5, show.outlier=TRUE, label.outliers=FALSE,lim=NULL,xlim=lim, ylim=lim,
                      size=0.3,
                      cross=NULL,diag=NULL,
                      filter=NULL,
@@ -498,10 +522,12 @@ PlotScatter=function(data,
                      density.margin = 'n', density.n = 100,
                      rasterize=NULL,
                      correlation=NULL,correlation.x=-Inf,correlation.y=Inf,correlation.hjust=0.5,correlation.vjust=0.5,
-                     layers.below=NULL) {
+                     layers.below=NULL,
+                     dry=FALSE) {
   # R CMD check guard for non-standard evaluation
-  group <- NULL
+  group <- hjust <- vjust <- NULL
 
+  mode.slot.given=!is.null(mode.slot)
   if (is.grandR(data)) {
     if (!is.null(analysis)) {
       df=cbind(GetAnalysisTable(data,analyses = analysis,regex=FALSE,prefix.by.analysis = FALSE,gene.info = FALSE),GeneInfo(data))
@@ -526,6 +552,144 @@ PlotScatter=function(data,
   facet=substitute(facet)
   if (!is.null(facet)) {
     df$facet=eval(facet,df,parent.frame())
+  }
+
+  # ---- grid mode: x and/or y given as vectors of column names, or only mode.slot given ----
+  pf=parent.frame()
+  # logical selection of samples/cells (like the columns parameter of other functions, evaluated in Coldata) -> column names
+  coldata.selection=function(v,what) {
+    if (!is.grandR(data) || !is.logical(v) || length(v)!=ncol(data)) return(NULL)
+    sel=colnames(data)[!is.na(v) & v]
+    if (length(sel)==0) stop(sprintf("The %s parameter does not select any column!",what))
+    miss=setdiff(sel,names(df))
+    if (length(miss)>0) stop(sprintf("Selected columns are not available (%s parameter; did you specify analysis?): %s",what,paste(miss,collapse=",")))
+    sel
+  }
+  multi.cols=function(expr,colvar,what) {
+    if (!is.null(colvar)) {
+      sel=coldata.selection(colvar,paste0(what,"col"))
+      if (!is.null(sel)) return(sel)
+      if (length(colvar)<=1) return(NULL)
+      miss=setdiff(colvar,names(df))
+      if (length(miss)>0) stop(sprintf("Not a column (%scol parameter): %s",what,paste(miss,collapse=",")))
+      return(colvar)
+    }
+    if (is.null(expr) || (is.atomic(expr) && length(expr)==1)) return(NULL)
+    if (is.grandR(data)) {
+      sel=coldata.selection(tryCatch(eval(expr,Coldata(data),pf),error=function(e) NULL),what)
+      if (!is.null(sel)) return(sel)
+    }
+    v=tryCatch(eval(expr,df,pf),error=function(e) NULL)
+    if (!is.character(v) || length(v)<=1) return(NULL)
+    if (all(v %in% names(df))) return(v)
+    if (length(v)==nrow(df)) return(NULL) # a character vector of values (not column names); handled below
+    stop(sprintf("Not a column (%s parameter): %s",what,paste(setdiff(v,names(df)),collapse=",")))
+  }
+  x.multi=multi.cols(substitute(x),xcol,"x")
+  y.multi=multi.cols(substitute(y),ycol,"y")
+  x.missing=is.null(substitute(x)) && is.null(xcol)
+  y.missing=is.null(substitute(y)) && is.null(ycol)
+
+  triangle.cols=NULL
+  if (!is.null(x.multi) && y.missing) {
+    triangle.cols=x.multi
+  } else if (!is.null(y.multi) && x.missing) {
+    triangle.cols=y.multi
+  } else if (x.missing && y.missing && mode.slot.given && is.grandR(data) && is.null(analysis) && !IsSparse(data)) {
+    triangle.cols=colnames(data)
+  }
+
+  if (!is.null(triangle.cols) || !is.null(x.multi) || !is.null(y.multi)) {
+
+    if (dry) {
+      single.name=function(expr,colvar,default.index) {
+        if (!is.null(colvar)) return(colvar)
+        if (is.null(expr)) return(names(df)[default.index])
+        if (is.character(expr)) return(expr)
+        if (is.numeric(expr)) return(names(df)[expr])
+        paste(deparse(expr),collapse="")
+      }
+      if (!is.null(triangle.cols)) {
+        n=length(triangle.cols)
+        if (n<2) stop("At least two columns are needed for a scatter plot grid!")
+        re=matrix(NA_character_,nrow=n,ncol=n,dimnames=list(y=triangle.cols,x=triangle.cols))
+        ut=upper.tri(re)
+        re[ut]=sprintf("x=%s, y=%s",triangle.cols[col(re)[ut]],triangle.cols[row(re)[ut]])
+        diag(re)=triangle.cols
+      } else {
+        xs=if (is.null(x.multi)) single.name(substitute(x),xcol,1) else x.multi
+        ys=if (is.null(y.multi)) single.name(substitute(y),ycol,2) else y.multi
+        re=outer(ys,xs,function(yy,xx) sprintf("x=%s, y=%s",xx,yy))
+        dimnames(re)=list(y=ys,x=xs)
+      }
+      return(re)
+    }
+
+    cl.template=match.call()
+    cl.template[[1]]=sys.function()
+    cl.template$data=data # do not re-evaluate the data expression for each panel
+    cl.template$lim=NULL
+
+    pool.lim=function(cols,log.scale) {
+      v=unlist(lapply(cols,function(cc) df[[cc]]),use.names=FALSE)
+      v.t=if (log.scale) suppressWarnings(log10(v)) else v
+      v.t=v.t[is.finite(v.t)]
+      if (length(v.t)==0) return(NULL)
+      r=if (remove.outlier!=FALSE) grDevices::boxplot.stats(v.t,coef=remove.outlier)$stats[c(1,5)] else range(v.t)
+      if (log.scale) 10^r else r
+    }
+
+    # xc/yc: column name or NULL (keep x/y from the original call); xl/yl: label or NA (keep from original call)
+    make.panel=function(xc,yc,xl,yl,xlim.panel,ylim.panel) {
+      cl=cl.template
+      if (!is.null(xc)) { cl$x=NULL; cl$xcol=xc }
+      if (!is.null(yc)) { cl$y=NULL; cl$ycol=yc }
+      if (!is.na(xl)) cl$xlab=xl
+      if (!is.na(yl)) cl$ylab=yl
+      cl["xlim"]=list(xlim.panel)
+      cl["ylim"]=list(ylim.panel)
+      eval(cl,pf)
+    }
+
+    if (!is.null(triangle.cols)) {
+      n=length(triangle.cols)
+      if (n<2) stop("At least two columns are needed for a scatter plot grid!")
+      if (n*(n-1)/2>100) warning(sprintf("Creating a grid of %d scatter plots, this may take a while!",n*(n-1)/2))
+      labs=if (!is.null(xlab) && length(xlab)==n) xlab else triangle.cols
+      shared=if (!is.null(xlim)) xlim else if (!is.null(ylim)) ylim else pool.lim(triangle.cols,log.x||log.y)
+      plots=list()
+      for (i in seq_len(n)) for (j in seq_len(n)) {
+        plots[[length(plots)+1]]=if (i==j) {
+          ggplot()+annotate("text",x=0,y=0,label=labs[i],size=5,fontface="bold")+theme_void()
+        } else if (i<j) {
+          make.panel(triangle.cols[j],triangle.cols[i],"","",if (!is.null(xlim)) xlim else shared,if (!is.null(ylim)) ylim else shared)
+        } else {
+          patchwork::plot_spacer()
+        }
+      }
+      re=patchwork::wrap_plots(plots,ncol=n,byrow=TRUE,guides="collect")
+    } else {
+      nx=max(1,length(x.multi))
+      ny=max(1,length(y.multi))
+      if (nx*ny>100) warning(sprintf("Creating a grid of %d scatter plots, this may take a while!",nx*ny))
+      xlabs=if (!is.null(x.multi)) { if (!is.null(xlab) && length(xlab)==nx) xlab else x.multi } else NA
+      ylabs=if (!is.null(y.multi)) { if (!is.null(ylab) && length(ylab)==ny) ylab else y.multi } else NA
+      xlim.shared=if (!is.null(xlim) || is.null(x.multi)) xlim else pool.lim(x.multi,log.x)
+      ylim.shared=if (!is.null(ylim) || is.null(y.multi)) ylim else pool.lim(y.multi,log.y)
+      plots=list()
+      for (i in seq_len(ny)) for (j in seq_len(nx)) {
+        plots[[length(plots)+1]]=make.panel(
+          if (is.null(x.multi)) NULL else x.multi[j],
+          if (is.null(y.multi)) NULL else y.multi[i],
+          if (i==ny) xlabs[j] else "",
+          if (j==1) ylabs[i] else "",
+          xlim.shared,ylim.shared)
+      }
+      re=patchwork::wrap_plots(plots,ncol=nx,byrow=TRUE,guides="collect")
+    }
+    if (length(plots)==1) return(plots[[1]]) # e.g. a logical selection of a single column for both x and y
+    attr(re,"plots")=plots
+    return(re)
   }
 
   if (!is.data.frame(df)) stop("df must be a data frame (or at least coercable into a data frame)")
@@ -562,7 +726,7 @@ PlotScatter=function(data,
     if (length(A)==1 && is.character(A)) {
       if (A %in% names(df)) A=df[[A]] else stop("Cannot make heads or tails out of the x parameter. Try to use xcol to access a specific column!")
     }
-    if (length(A)==1) stop("Cannot make heads or tails out of the x parameter. Try to use xcol to access a specific column!")
+    if (length(A)!=nrow(df)) stop("Cannot make heads or tails out of the x parameter. Try to use xcol to access a specific column!")
   } else {
     stop("You must not specify both x and xcol!")
   }
@@ -580,15 +744,20 @@ PlotScatter=function(data,
     if (length(B)==1 && is.character(B)) {
       if (B %in% names(df)) B=df[[B]] else stop("Cannot make heads or tails out of the y parameter. Try to use ycol to access a specific column!")
     }
-    if (length(B)!=nrow(df)) stop("Cannot make heads or tails out of the y parameter. Try to use xcol to access a specific column!")
+    if (length(B)!=nrow(df)) stop("Cannot make heads or tails out of the y parameter. Try to use ycol to access a specific column!")
   } else {
     stop("You must not specify both y and ycol!")
   }
 
+  if (dry) {
+    nm=function(v) if (is.character(v)) v else if (is.numeric(v)) names(df)[v] else paste(deparse(v),collapse="")
+    return(matrix(sprintf("x=%s, y=%s",nm(x),nm(y)),nrow=1,ncol=1,dimnames=list(y=nm(y),x=nm(x))))
+  }
+
   if (is.null(xlab)) { if (is.character(x)) xlab=x else if (is.numeric(x)) xlab=names(df)[x] else xlab=deparse(x)}
   if (is.null(ylab)) { if (is.character(y)) ylab=y else if (is.numeric(y)) ylab=names(df)[y] else ylab=deparse(y)}
-  if (is.na(xlab[1]) || xlab=="") xlab=NULL
-  if (is.na(ylab[1]) || ylab=="") ylab=NULL
+  if (is.na(xlab[1]) || xlab[1]=="") xlab=NULL
+  if (is.na(ylab[1]) || ylab[1]=="") ylab=NULL
 
   df$A=A
   df$B=B
@@ -599,6 +768,8 @@ PlotScatter=function(data,
   df$B.trans=if(log.y) log10(df$B) else df$B
   df$A.trans.unclipped=df$A.trans
   df$B.trans.unclipped=df$B.trans
+  df$A.unclipped=df$A
+  df$B.unclipped=df$B
 
   set.coord=remove.outlier!=FALSE || !is.null(xlim) || !is.null(ylim)
   if (set.coord) {
@@ -692,7 +863,6 @@ PlotScatter=function(data,
         highlight.label = as.list(highlight.label)
         names(highlight.label)=names(highlight)
         for (col in names(highlight)) {
-          g=g+geom_point(data=df[highlight[[col]],],color=col,size=size*3)
           highlight.label[[col]] = sprintf("%s (n=%d)",highlight.label[[col]],nrow(df[highlight[[col]],]))
         }
         legend_data <- data.frame(
@@ -725,7 +895,7 @@ PlotScatter=function(data,
                      show.legend = TRUE,inherit.aes = FALSE) +
           scale_fill_manual(
             name = NULL,
-            values = setNames(names(highlight.label),unlist(highlight.label))
+            values = setNames("red",highlight.label)
           )+guides(fill = guide_legend(override.aes = list(shape = 21)))
 
 
@@ -762,6 +932,29 @@ PlotScatter=function(data,
       g=g+geom_text(data=cor.format,aes(x=correlation.x,y=correlation.y,label=label),inherit.aes=FALSE, parse=FALSE, hjust=correlation.hjust,vjust=correlation.vjust)
     }
   }
+  if (label.outliers) {
+    count.outliers=function(sub) {
+      a=sub$A.unclipped
+      b=sub$B.unclipped
+      ok=!is.na(a) & !is.na(b)
+      data.frame(side=c("left","right","bottom","top"),
+                 n=c(sum(ok & a<xlim[1]),sum(ok & a>xlim[2]),sum(ok & b<ylim[1]),sum(ok & b>ylim[2])))
+    }
+    outl=if (is.null(df$facet)) count.outliers(df) else plyr::ddply(df,plyr::.(facet),count.outliers)
+    outl=outl[outl$n>0,,drop=FALSE]
+    if (nrow(outl)>0) {
+      mid=function(lim,log.scale) if (log.scale && all(lim>0)) 10^mean(log10(lim)) else mean(lim)
+      low.x=if (log.x) 0 else -Inf # log10(0)=-Inf, i.e. the border of the panel
+      low.y=if (log.y) 0 else -Inf
+      outl$x=ifelse(outl$side=="left",low.x,ifelse(outl$side=="right",Inf,mid(xlim,log.x)))
+      outl$y=ifelse(outl$side=="bottom",low.y,ifelse(outl$side=="top",Inf,mid(ylim,log.y)))
+      outl$hjust=ifelse(outl$side=="left",-0.1,ifelse(outl$side=="right",1.1,0.5))
+      outl$vjust=ifelse(outl$side=="bottom",-0.3,ifelse(outl$side=="top",1.3,0.5))
+      outl$label=sprintf("n=%d",outl$n)
+      g=g+geom_label(data=outl,aes(x=x,y=y,label=label,hjust=hjust,vjust=vjust),inherit.aes=FALSE,size=3,color="grey30",show.legend=FALSE)
+    }
+  }
+
   if (set.coord) g=g+coord_cartesian(ylim=ylim,xlim=xlim)
   if (log.x) g=g+scale_x_log10()
   if (log.y) g=g+scale_y_log10()

@@ -366,6 +366,7 @@ merge_columns=function(re,add,addname) {
 
       re$data[[l1]]=m
     }
+    re$data = re$data[intersect(names(re$data),names(add$data))]
     for (n in setdiff(names(add$gene.info),"Gene")) {
       new.gene.info[[n]] = NA
       new.gene.info[rownames(add$gene.info),n] = if (is.factor(add$gene.info[[n]])) as.character(add$gene.info[[n]]) else add$gene.info[[n]]
@@ -405,6 +406,7 @@ merge_columns=function(re,add,addname) {
       }
     }
     for (n in intersect(names(re$data),names(add$data))) re$data[[n]]=cbind(re$data[[n]],add$data[[n]])
+    re$data = re$data[intersect(names(re$data),names(add$data))]
     # add analyses
     for (ana in Analyses(add))
       re=AddAnalysis(re,name=ana,add$analysis[[ana]])
@@ -1345,6 +1347,71 @@ GetSignificantGenes=function(data,analysis=NULL,regex=TRUE,criteria=NULL,as.tabl
   }
   re=re[order(re[,ncol(re)],decreasing=TRUE),,drop=FALSE]
   re
+}
+
+
+#' Stratify genes
+#'
+#' Stratify genes according to a given score and add to GeneInfo
+#'
+#' @param data the grandR object
+#' @param name the name in the gene info
+#' @param score the score used to stratify; can use the column names of the master table as variables,  should be a factor or numerical value per gene (see Details)
+#' @param mode.slot the mode.slot for data
+#' @param breaks if score is numerical, use these bin boundaries; if character, must be 1-99 (quantiles)
+#' @param labels labels for bins; should be one more as breaks (low/mid/high by default)
+#'
+#' @details The score parameter is used to define strata. If score is a numerical,
+#' the strata are define by binning according to breaks. If it is a factor, it defines
+#' strata. The columns of the "master" table can be used in the expression. The master
+#' table contains the gene info, all analysis tables, and data (from the given mode.slot) if
+#' data is not sparse
+#'
+#' @return a grandR object
+#'
+#' @export
+#'
+#' @examples
+#' sars <- ReadGRAND(system.file("extdata", "sars.tsv.gz", package = "grandR"),
+#'                   design=c(Design$Condition,Design$dur.4sU,Design$Replicate))
+#' sars <- subset(sars,Coldata(sars,Design$dur.4sU)==2)
+#' sars<-LFC(sars,mode="total",contrasts=GetContrasts(sars,contrast=c("Condition","Mock")))
+#' StratifyGenes(sars,name="LFC",score=`total.SARS vs Mock.LFC`)
+#'
+#' @concept diffexp
+StratifyGenes=function(data,name,score,mode.slot=NULL,breaks="50",labels=NULL) {
+  score=substitute(score)
+
+  if (is.null(name) || is.null(score)) stop("Must provide both score expression and name!")
+
+  if (IsSparse(data)) {
+    tab = GetAnalysisTable(data)
+  }
+  else {
+    if (is.null(mode.slot)) mode.slot = DefaultSlot(data)
+    tab = cbind(GetAnalysisTable(data, gene.info = FALSE),
+               GetTable(data, type = mode.slot), GeneInfo(data))
+  }
+
+  score = eval(score,envir=tab,enclos = parent.frame())
+
+  if (is.numeric(score)) {
+    if (is.character(breaks)) breaks=quantile(score,c(0,as.numeric(breaks)/100,1))
+    if (breaks[1]>min(score)) breaks=c(-Inf,breaks)
+    if (breaks[length(breaks)]<max(score)) breaks = c(breaks,Inf)
+    if (is.null(labels)) {
+      if (length(breaks)==3) {
+        labels=c("low","high")
+      } else if (length(breaks)==4) {
+        labels=c("low","mid","high")
+      } else stop("With more than 2 breaks, need to specify labels!")
+    }
+    strat = cut(score,breaks=breaks,labels=labels,include.lowest=TRUE)
+  } else {
+    strat = as.factor(score)
+  }
+  GeneInfo(data,name)=strat
+  data
 }
 
 

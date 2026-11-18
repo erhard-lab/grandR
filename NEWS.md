@@ -1,3 +1,30 @@
+# grandR 0.2.8
+
+## Major updates
+* PlotScatter can now draw a grid of scatter plots. Pass vectors of column names
+  as x/y (or xcol/ycol), or use logical expressions on the Coldata
+  (e.g. `x=Condition=="Mock"`). With only a mode.slot, it plots all samples
+  against each other in a pairs-like upper triangle. Panels share axis limits,
+  and `dry=TRUE` returns the grid layout without plotting.
+* New function StratifyGenes: puts genes into strata (by quantiles, fixed breaks
+  or a factor) using an expression over the analysis tables, data and gene info,
+  and stores the result in the GeneInfo
+
+## Smaller updates
+* PlotScatter: new parameter label.outliers adds "n=..." labels on each border
+  showing how many outliers are clipped there
+* PlotPCA: new parameter scale.var sizes the axes by explained variance, and
+  return.loadings also returns the PCA loadings
+* The default diverging color scale is now reversed RdBu (positive values in red)
+* Merging grandR objects column-wise now keeps only the data slots present in both objects
+
+## Bug fixes
+* PlotScatter: highlighted points were drawn twice when highlight.label was given
+* PlotScatter: fixed the legend color for highlight given as a vector (not a list)
+* PlotScatter: fixed error messages that pointed to xcol instead of ycol
+* PlotPCA no longer creates duplicate columns when the Coldata contains PC* columns
+* DESCRIPTION: removed Additional_repositories for presto (CRAN fix)
+
 # grandR 0.2.7
 
 ## Major updates
